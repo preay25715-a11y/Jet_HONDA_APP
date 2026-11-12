@@ -1,5 +1,7 @@
 # Jet_HONDA Tune
 
+> **อัปเดตล่าสุด:** เอาหน้า TUNE, ดูดไฟล์ และอัดไฟล์ออกแล้ว หน้าที่เหลือคือ Dash · Grid · Graph · AFR · Drag · DTC · Tools · Setup (ส่วนอธิบายหน้าที่ถูกเอาออกด้านล่างเป็นของเก่า)
+
 โปรแกรมดูด/อัดไฟล์ ECU Honda (Keihin K-line) ธีมน้ำเงิน-ดำ เชื่อมกับ Smart Gauge ได้
 เป็นไฟล์ HTML ไฟล์เดียว: `dist/Jet_HONDA_Tune.html` เปิดด้วย **Chrome / Edge** บนมือถือ Android หรือคอม
 

@@ -66,7 +66,7 @@
   $('#brand').onclick = () => go(0);
 
   /* ---------------- pages ---------------- */
-  const pages = $$('.page');
+  const pages = $$('.pages > .page');
   $('#nav').innerHTML = pages.map((p, i) => `<button data-p="${i}">${p.dataset.tab || p.dataset.name}</button>`).join('') + '<button id="bSet">Setup</button>';
   $('#seg').innerHTML = pages.map(() => '<i></i>').join('');
   let curPage = 0;
@@ -198,7 +198,7 @@
     log('info', '▶ ' + name);
     try { return await fn(); }
     catch (e) { log('err', name + ': ' + (e.message || e)); const x = st.pg; if (x && $('#' + x + 'prog').style.display !== 'none') { $('#' + x + 'pStage').innerHTML = '<span class="badc">✗ ' + esc(e.message || e) + '</span>'; $('#' + x + 'bCancel').style.display = 'none'; } toast(e.cancelled ? 'ยกเลิกแล้ว' : (e.message || String(e)), 5000); }
-    finally { st.busy = false; pills(); renderStats(); if (wasLive && name !== 'อัดไฟล์') startLive(); }
+    finally { st.busy = false; pills(); renderStats(); if (wasLive) startLive(); }
   }
 
   /* ---------------- ECU info / live ---------------- */
@@ -210,17 +210,7 @@
       renderEcu(); return s;
     });
   }
-  $('#bDetect').onclick = detect;
-  function renderEcu() {
-    const e = st.ecu, s = e ? e.state : null;
-    $('#ecuState').textContent = s || '—';
-    $('#ecuState').className = s === 'OK' || s === 'SECURE' ? 'okc' : s ? 'warn' : 'mut';
-    $('#ecuInfo').innerHTML = !e ? '<span>สถานะ</span><span>ยังไม่เชื่อมต่อ</span>' : [
-      ['สถานะ', P.STATE_TH[s] || s], ['ECU ID', e.ecuId ? P.hex(e.ecuId) : '—'],
-      ['ECU ID (ascii)', e.ecuId ? esc(String.fromCharCode(...e.ecuId.map((b) => (b > 31 && b < 127 ? b : 46)))) : '—'],
-      ['Flash count', st.fcount ? P.hex(st.fcount) : '—'], ['ช่องทาง', st.t ? st.t.name : '—'],
-    ].map(([k, v]) => `<span>${k}</span><span>${v}</span>`).join('');
-  }
+  function renderEcu() {}
   const ARC_LEN = 2 * Math.PI * 118 * 0.75;
   // centre of the round gauge: tap to switch km/h ⇄ AFR
   function showCenter(d) {
@@ -273,12 +263,6 @@
   function startLive() { if (!st.ecu || st.live) return; st.live = true; $('#bLive').textContent = '■ STOP'; $('#bLive').classList.add('on'); liveLoop(); }
   function stopLive() { st.live = false; $('#bLive').textContent = '▶ LIVE'; $('#bLive').classList.remove('on'); }
   $('#bLive').onclick = () => { if (!st.ecu) return toast('ยังไม่ได้เชื่อมต่อ'); st.live ? stopLive() : startLive(); };
-  $('#bTables').onclick = () => op('อ่านตารางทั้งหมด', async () => {
-    const t = await st.ecu.probeTables();
-    const el = $('#tables'); el.style.display = 'block';
-    el.textContent = Object.keys(t).length ? Object.entries(t).map(([k, v]) => 'T' + (+k).toString(16).toUpperCase().padStart(2, '0') + ': ' + P.hex(v)).join('\n') : 'ไม่มีตารางตอบกลับ';
-  });
-
   /* ---------------- DTC ---------------- */
   const dtcHtml = (l) => l.length ? l.map((k) => `<div class="dtc"><b>${k}</b><span>${esc(P.dtcText(k))}</span></div>`).join('') : '<div class="okc">ไม่มีโค้ด ✔</div>';
   $('#bDtc').onclick = () => op('อ่านโค้ด DTC', async () => { const r = await st.ecu.readDTC(); $('#dtcCur').innerHTML = dtcHtml(r.current); $('#dtcPast').innerHTML = dtcHtml(r.past); });
@@ -300,194 +284,15 @@
   const fbytes = (f) => new Uint8Array(f.data);
   async function refreshFiles() {
     st.files = await DB.all();
-    $('#flist').innerHTML = st.files.length ? st.files.map((f) => {
-      const u = fbytes(f), ok = P.binChecksumOK(u);
-      return `<div class="fi${st.sel && st.sel.id === f.id ? ' sel' : ''}" data-id="${f.id}"><span class="chip">▣</span><div style="flex:1;min-width:0"><b>${esc(f.name)}<span class="badge ${ok ? 'ok' : 'bad'}">${ok ? 'CKS OK' : 'CKS ✗'}</span></b><small>${kb(u.length)} · ${fmtDate(f.date)} · ผลรวม ${P.h8(P.binSum8(u))}${f.origin === 'read' ? ' · ดูดจากกล่อง' : ''}</small></div></div>`;
-    }).join('') : '<div class="mut">ยังไม่มีไฟล์ — ดูดจากกล่อง หรือเลือกไฟล์ .bin จากเครื่อง</div>';
-    $$('#flist .fi').forEach((el) => el.onclick = () => selectFile(el.dataset.id));
     const opts = '<option value="">—</option>' + st.files.map((f) => `<option value="${f.id}">${esc(f.name)}</option>`).join('');
     const a = $('#hxA').value, b = $('#hxB').value; $('#hxA').innerHTML = opts; $('#hxB').innerHTML = opts; $('#hxA').value = a; $('#hxB').value = b;
     (window.JetFileHooks || []).forEach((f) => { try { f(st.files); } catch (e) { console.error(e); } });
   }
   const layout = (f) => P.detectLayout(fbytes(f), f);
-  function curLayout() {
-    if (!st.sel) return null;
-    if (st.manual) return { start: parseHex($('#mStart').value), cks: parseHex($('#mCks').value), why: 'กำลังแก้เอง' };
-    return layout(st.sel);
-  }
-  function setManual(on) {
-    st.manual = on;
-    ['#mStart', '#mCks'].forEach((s) => ($(s).readOnly = !on));
-    $('#bManual').textContent = on ? '✔ บันทึกค่า' : '✏ แก้เอง';
-  }
   function selectFile(id) {
     st.sel = st.files.find((f) => f.id === id) || null;
-    $$('#flist .fi').forEach((el) => el.classList.toggle('sel', st.sel && el.dataset.id === st.sel.id));
     if (st.sel && !$('#hxA').value) $('#hxA').value = id;
-    setManual(false); renderSel();
   }
-  $('#bManual').onclick = async () => {
-    if (!st.sel) return toast('เลือกไฟล์ก่อน');
-    if (!st.manual) { setManual(true); $('#mStart').focus(); return; }
-    st.sel.startManual = parseHex($('#mStart').value); st.sel.cksManual = parseHex($('#mCks').value);
-    await DB.put(st.sel); setManual(false); renderSel(); toast('บันทึกค่าให้ไฟล์นี้แล้ว');
-  };
-  function renderSel() {
-    const f = st.sel;
-    $('#selName').textContent = f ? f.name : 'ยังไม่ได้เลือกไฟล์ — เลือกจากคลังด้านซ้าย';
-    if (!f) { $('#fileInfo').innerHTML = ''; $('#mStart').value = $('#mCks').value = ''; $('#autoWhy').textContent = ''; return; }
-    const u = fbytes(f), ok = P.binChecksumOK(u), L = curLayout();
-    if (!st.manual) { $('#mStart').value = P.hx(L.start, 5); $('#mCks').value = P.hx(L.cks, 5); }
-    const ms = f.startManual != null, mc = f.cksManual != null;
-    $('#aStart').textContent = ms ? 'ตั้งเอง' : 'AUTO'; $('#aStart').className = 'badge ' + (ms ? 'w' : 'ok');
-    $('#aCks').textContent = mc ? 'ตั้งเอง' : 'AUTO'; $('#aCks').className = 'badge ' + (mc ? 'w' : 'ok');
-    $('#autoWhy').innerHTML = esc(L.why || '') + (ms || mc ? ' · <a href="#" id="bAuto">คืนค่า AUTO</a>' : '');
-    if (ms || mc) $('#bAuto').onclick = async (e) => { e.preventDefault(); delete f.startManual; delete f.cksManual; await DB.put(f); renderSel(); };
-    const warn = [];
-    if (u.length % 64) warn.push('ขนาดไม่หารด้วย 64 — อัดไม่ได้');
-    if (!L.known && !ms && f.readStart == null) warn.push('ขนาดไฟล์ไม่อยู่ในตาราง — ตรวจ Start/Checksum ก่อนอัด');
-    if (L.cks >= u.length) warn.push('ตำแหน่ง checksum อยู่นอกไฟล์');
-    $('#fileInfo').innerHTML = [
-      ['ขนาด', kb(u.length) + ' (' + u.length + ' byte)'],
-      ['Checksum', ok ? '<span class="okc">ผ่าน ✔ (ผลรวม 0x00)</span>' : `<span class="badc">ไม่ผ่าน (ผลรวม ${P.h8(P.binSum8(u))})</span> — กด "แก้ Checksum" หรือให้แก้อัตโนมัติตอนอัด`],
-      ['ที่มา', f.origin === 'read' ? 'ดูดจากกล่อง' : f.origin === 'fix' ? 'แก้ checksum' : 'นำเข้าจากเครื่อง'],
-      ['CRC32', P.hx(P.crc32(u), 8)],
-      ['หมายเหตุ', warn.length ? `<span class="warn">${warn.join(' · ')}</span>` : '<span class="mut">—</span>'],
-    ].map(([k, v]) => `<span>${k}</span><span>${v}</span>`).join('');
-  }
-  $('#bImport').onclick = () => $('#fImport').click();
-  $('#fImport').onchange = async (e) => {
-    for (const file of e.target.files) {
-      const u = new Uint8Array(await file.arrayBuffer());
-      if (u.length > 4 * 1024 * 1024) { toast('ไฟล์ใหญ่เกิน'); continue; }
-      await addFile(file.name.replace(/\.bin$/i, ''), u, { origin: 'import' });
-    }
-    e.target.value = '';
-  };
-  $('#bDown').onclick = () => { if (!st.sel) return toast('เลือกไฟล์ก่อน'); download(st.sel.name + '.bin', fbytes(st.sel)); };
-  $('#bRen').onclick = async () => { if (!st.sel) return toast('เลือกไฟล์ก่อน'); const n = await askText('ชื่อไฟล์ใหม่', st.sel.name); if (n) { st.sel.name = n.trim(); await DB.put(st.sel); await refreshFiles(); renderSel(); } };
-  $('#bDel').onclick = async () => { if (!st.sel) return toast('เลือกไฟล์ก่อน'); if (!(await ask('ลบไฟล์ "' + st.sel.name + '" ออกจากคลัง?', true))) return; await DB.del(st.sel.id); st.sel = null; await refreshFiles(); renderSel(); };
-  $('#bFix').onclick = async () => {
-    if (!st.sel) return toast('เลือกไฟล์ก่อน');
-    const u = fbytes(st.sel), L = curLayout(), idx = L.cks;
-    if (P.binChecksumOK(u)) return toast('checksum ผ่านอยู่แล้ว');
-    try {
-      const o = P.binFixChecksum(u, idx), s = st.sel;
-      await addFile(s.name.replace(/_FIX$/, '') + '_FIX', o, { origin: 'fix', readStart: s.readStart, startManual: s.startManual, cksManual: s.cksManual });
-      toast('สร้างไฟล์ _FIX แล้ว (byte ' + P.hx(idx, 5) + ' = ' + P.h8(o[idx]) + ')');
-    } catch (e) { toast(e.message); }
-  };
-
-  /* ---------------- model select (READ page) ---------------- */
-  function fillModels() {
-    $('#model').innerHTML = models().map((m) => `<option value="${m.id}">${esc(m.name)}${m.src === 'family' ? ' ⚠' : ''}</option>`).join('');
-    $('#model').value = S.modelId; applyModel(false);
-  }
-  function applyModel(save) {
-    const m = models().find((x) => x.id === $('#model').value) || models()[0];
-    $('#modelNote').innerHTML = {
-      family: '⚠ ค่าตั้งต้นตระกูลกล่อง Keihin เล็ก — ระบบจะยืนยันขนาด/ตำแหน่งจริงจากกล่องให้เอง',
-      HondaECU: '✔ ค่าจากตาราง checksum ของโปรเจกต์ HondaECU', auto: 'ระบบหา Start Offset และขนาดไฟล์จากกล่องให้อัตโนมัติ', custom: 'ค้นหาอัตโนมัติจากกล่อง',
-    }[m.src] || '';
-    $('#rAuto').innerHTML = [['Start Offset', '<span class="okc">AUTO</span> (ลองที่ ' + P.hx(m.start || 0, 5) + ' ก่อน)'], ['ขนาดไฟล์', m.size ? m.size + ' KB' : '<span class="okc">AUTO</span> (ดูดจนกล่องหยุดตอบ)'], ['Checksum', '<span class="okc">AUTO</span> (หาจากไฟล์ที่ได้)']]
-      .map(([k, v]) => `<span>${k}</span><span>${v}</span>`).join('');
-    if (save) { S.modelId = m.id; saveS(); }
-  }
-  $('#model').onchange = () => applyModel(true);
-  ['#mStart', '#mCks'].forEach((s) => $(s).oninput = renderSel);
-
-  /* ---------------- progress (r = READ page, w = WRITE page) ---------------- */
-  function progShow(x, on, cancellable) { st.pg = x; $('#' + x + 'prog').style.display = on ? 'block' : 'none'; $('#' + x + 'bCancel').style.display = cancellable ? '' : 'none'; if (on) progSet(x, 0, 1, 0, ''); }
-  function progSet(x, n, total, ms, stage) {
-    const p = total ? n / total : 0;
-    $('#' + x + 'pPct').textContent = Math.floor(p * 100) + '%'; $('#' + x + 'pBar').style.width = (p * 100).toFixed(1) + '%';
-    if (stage != null) $('#' + x + 'pStage').textContent = stage;
-    if (ms) { const bps = n / (ms / 1000); $('#' + x + 'pSub').textContent = `${kb(n)} / ${kb(total)} · ${(bps / 1024).toFixed(2)} KB/s · เหลือ ~${Math.max(0, Math.round((total - n) / Math.max(bps, 1)))} วิ`; }
-  }
-  const stage = (x, s) => { $('#' + x + 'pStage').textContent = s; };
-  $('#rbCancel').onclick = $('#wbCancel').onclick = () => st.ecu && st.ecu.cancel();
-
-  /* ---------------- READ (ดูดไฟล์) ---------------- */
-  $('#bRead').onclick = () => op('ดูดไฟล์', async () => {
-    const m = models().find((x) => x.id === $('#model').value) || models()[0];
-    const max = m.size ? m.size * 1024 : 0x100000;
-    $('#rIdle').style.display = 'none'; $('#rDone').style.display = 'none';
-    progShow('r', true, true); progSet('r', 0, max, 0, 'ตรวจสถานะกล่อง…');
-    const s = await st.ecu.detect();
-    if (s === 'OFF' || s === 'UNKNOWN') throw new Error('ติดต่อกล่องไม่ได้ (' + s + ') — เช็คปลั๊ก/กุญแจ ON');
-    if (s === 'FLASH' || s.startsWith('RECOVER')) throw new Error('กล่องอยู่โหมดแฟลช/กู้ — ต้องอัดไฟล์ให้สำเร็จก่อนจึงดูดได้');
-    if (S.pw) { stage('r', 'ส่งรหัส Security Access…'); const ok = await st.ecu.unlock(P.parseHexBytes(S.pw)); log('info', 'Security: ' + (ok ? 'ผ่าน' : 'ไม่ตอบ')); }
-    stage('r', 'ค้นหา Start Offset อัตโนมัติ…');
-    const start = await st.ecu.probeStart([...new Set([m.start || 0, 0x0, 0x4000, 0x8000, 0x10000])]);
-    if (start == null) throw new Error('กล่องไม่ยอมให้อ่าน — ลองใส่รหัส Security ในตั้งค่า');
-    log('info', 'Start Offset = ' + P.hx(start, 5));
-    stage('r', 'กำลังดูดไฟล์… (เริ่มที่ ' + P.hx(start, 5) + ')');
-    const u = await st.ecu.readFlash({ start, maxBytes: max, onProgress: (n, t, ms) => progSet('r', n, m.size ? t : Math.max(n, 65536 * Math.ceil(n / 65536)), ms) });
-    if (!u.length) throw new Error('กล่องไม่ยอมให้อ่าน — ลองใส่รหัส Security ในตั้งค่า');
-    const ok = P.binChecksumOK(u), L = P.detectLayout(u, { readStart: start });
-    const name = (m.id !== 'auto' && m.id !== 'custom' ? m.name.split(' (')[0].replace(/\s+/g, '') : 'ECU') + '_' + new Date().toISOString().slice(2, 16).replace(/[-:T]/g, '');
-    const f = await addFile(name, u, { origin: 'read', readStart: start, ecuId: Array.from(st.ecu.ecuId || []) });
-    st.lastRead = f;
-    progSet('r', u.length, u.length, 0, `ดูดเสร็จ ${kb(u.length)} · checksum ${ok ? 'ผ่าน ✔' : 'ไม่ผ่าน ✗ (อาจอ่านไม่ครบ)'}`);
-    $('#rInfo').innerHTML = [['ไฟล์', esc(name)], ['ขนาด', kb(u.length)], ['Start Offset', P.hx(start, 5) + ' <span class="badge ok">AUTO</span>'],
-      ['Checksum', (ok ? '<span class="okc">ผ่าน</span>' : '<span class="badc">ไม่ผ่าน</span>') + ' · ตำแหน่ง ' + P.hx(L.cks, 5) + ' <span class="badge ok">AUTO</span>'],
-      ['ECU ID', st.ecu.ecuId ? P.hex(st.ecu.ecuId) : '—']].map(([k, v]) => `<span>${k}</span><span>${v}</span>`).join('');
-    $('#rDone').style.display = 'block'; $('#rbCancel').style.display = 'none';
-    toast('ดูดไฟล์สำเร็จ บันทึกเข้าคลังแล้ว');
-  });
-  $('#rDown').onclick = () => st.lastRead && download(st.lastRead.name + '.bin', fbytes(st.lastRead));
-  $('#rToW').onclick = () => { if (st.lastRead) selectFile(st.lastRead.id); go(pageOf('อัดไฟล์')); };
-
-  /* ---------------- WRITE (อัดไฟล์) ---------------- */
-  $('#bWrite').onclick = () => {
-    if (!st.sel) return toast('เลือกไฟล์ในคลังก่อน');
-    if (st.manual) return toast('กด "บันทึกค่า" ก่อน');
-    if (!st.ecu) { toast('ยังไม่ได้เชื่อมต่อ'); return modal('#mConnect', true); }
-    const u = fbytes(st.sel), ok = P.binChecksumOK(u), L = curLayout();
-    $('#wInfo').innerHTML = [['ไฟล์', esc(st.sel.name)], ['ขนาด', kb(u.length)], ['Start Offset', P.hx(L.start, 5)], ['ตำแหน่ง Checksum', P.hx(L.cks, 5)],
-      ['Checksum', ok ? '<span class="okc">ผ่าน</span>' : '<span class="badc">ไม่ผ่าน — ต้องติ๊กแก้อัตโนมัติ</span>'], ['ช่องทาง', st.t.name]]
-      .map(([k, v]) => `<span>${k}</span><span>${v}</span>`).join('');
-    $$('.wc').forEach((c) => (c.checked = false)); $('#wFix').checked = !ok; upd();
-    modal('#mWrite', true);
-  };
-  const upd = () => { $('#wGo').disabled = !$$('.wc').every((c) => c.checked); };
-  $$('.wc').forEach((c) => c.onchange = upd);
-  $('#wGo').onclick = () => {
-    modal('#mWrite', false);
-    op('อัดไฟล์', async () => {
-      const L = curLayout();
-      let u = fbytes(st.sel);
-      if (!P.binChecksumOK(u)) { if (!$('#wFix').checked) throw new Error('checksum ไม่ผ่าน'); u = P.binFixChecksum(u, L.cks); log('info', 'แก้ checksum ที่ ' + P.hx(L.cks, 5) + ' ก่อนส่ง'); }
-      progShow('w', true, true); window.onbeforeunload = () => 'กำลังอัดไฟล์!';
-      let wl = null; try { wl = navigator.wakeLock && await navigator.wakeLock.request('screen'); } catch (e) {} if (window.JetApp) JetApp.keepScreen(true);
-      try {
-        const ok = await st.ecu.writeFlash(u, {
-          start: L.start, block: +S.block, eraseWait: +S.eraseWait, fast: st.t.kind === 'demo',
-          onStage: (s) => { stage('w', s); log('info', s); if (/ลบ|erase/.test(s)) $('#wbCancel').style.display = 'none'; },
-          onProgress: (n, t, ms) => progSet('w', n, t, ms),
-        });
-        $('#wbCancel').style.display = 'none';
-        if (ok) { progSet('w', 1, 1, 0); toast('อัดไฟล์สำเร็จ ✔', 6000); } else toast('อัดเสร็จแต่การตรวจท้ายไม่ผ่าน — ลองอัดซ้ำ', 6000);
-        await P.sleep(300); await st.ecu.detect(); renderEcu();
-      } finally { window.onbeforeunload = null; try { wl && wl.release(); } catch (e) {} if (window.JetApp) JetApp.keepScreen(false); }
-    });
-  };
-
-  /* ---------------- send to Smart Gauge ---------------- */
-  $('#bGauge').onclick = async () => {
-    if (!st.sel) return toast('เลือกไฟล์ก่อน');
-    if (!st.gauge) { toast('ยังไม่ได้เชื่อมเกจ — แตะ GAUGE ด้านบน'); return; }
-    if (st.busy) return toast('กำลังทำงานอื่นอยู่');
-    let u = fbytes(st.sel);
-    if (!P.binChecksumOK(u) && await ask('checksum ไม่ผ่าน — แก้ checksum ก่อนส่งไปเกจ?')) u = P.binFixChecksum(u, curLayout().cks);
-    const wasLive = st.live; stopLive(); st.busy = true; while (st.liveRunning) await P.sleep(10);
-    progShow('w', true, false); stage('w', 'ส่งไฟล์ไปเกจ…'); const t0 = Date.now();
-    try {
-      await st.gauge.sendFile(st.sel.name, u, (n, t) => progSet('w', n, t, Date.now() - t0));
-      stage('w', 'ส่งไฟล์ถึงเกจแล้ว ✔ กดปุ่ม FLASH ที่หน้าเกจเพื่อเริ่มแฟลช'); toast('ส่งไฟล์ไปเกจแล้ว'); log('info', 'ส่ง ' + st.sel.name + ' → เกจ CRC ' + P.hx(P.crc32(u), 8));
-    } catch (e) { toast(e.message, 5000); log('err', e.message); }
-    finally { st.busy = false; if (wasLive) startLive(); }
-  };
 
   /* ---------------- EEPROM ---------------- */
   const hexDump = (u, base, cmp) => {
@@ -553,17 +358,12 @@
 
   /* ---------------- settings ---------------- */
   $('#bSet').onclick = () => {
-    $('#sWake').value = S.wake; $('#sTo').value = S.timeout; $('#sErase').value = S.eraseWait; $('#sBlock').value = S.block; $('#sPw').value = S.pw;
-    $('#sModels').value = JSON.stringify(models().map((m) => Object.assign({}, m, { start: P.hx(m.start), cks: P.hx(m.cks) })), null, 1);
     modal('#mSet', true);
   };
   $('#sSave').onclick = () => {
     try {
-      if (S.pw !== $('#sPw').value) P.parseHexBytes($('#sPw').value);
-      const ms = JSON.parse($('#sModels').value).map((m) => Object.assign(m, { start: parseHex(m.start), cks: parseHex(m.cks), size: +m.size || 0 }));
-      Object.assign(S, { wake: $('#sWake').value, timeout: +$('#sTo').value || 350, eraseWait: +$('#sErase').value || 0, block: +$('#sBlock').value, pw: $('#sPw').value.trim(), models: ms });
-      saveS(); if (st.ecu) st.ecu.timeout = S.timeout; if (st.t && st.t.wakeMode) st.t.wakeMode = S.wake;
-      fillModels(); modal('#mSet', false); toast('บันทึกแล้ว');
+      saveS();
+      modal('#mSet', false); toast('บันทึกแล้ว');
     } catch (e) { toast('ผิดพลาด: ' + e.message, 4000); }
   };
   $('#sReset').onclick = async () => { if (await ask('คืนค่าตั้งค่าทั้งหมด?', true)) { localStorage.removeItem(LS); location.reload(); } };
@@ -588,7 +388,7 @@
     const hideSplash = () => { const el = $('#splash'); if (!el || el.classList.contains('out')) return; el.classList.add('out'); setTimeout(() => el.remove(), 600); };
     setTimeout(hideSplash, 6000); // fail-safe
     sp(15, 'โหลดธีมและหน้าจอ…');
-    applyTheme(); applyLogo(); go(0); fillModels(); pills(); renderEcu(); showCenter();
+    applyTheme(); applyLogo(); go(0); pills(); renderEcu(); showCenter();
     sp(45, 'เปิดคลังไฟล์ ECU…');
     try { await DB.open(); await refreshFiles(); } catch (e) { toast('เปิดคลังไฟล์ไม่ได้: ' + e.message); }
     sp(75, 'เตรียมโปรโตคอล K-LINE…');

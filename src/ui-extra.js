@@ -1,6 +1,6 @@
 /* =====================================================================
  * Jet_HONDA Tune — ui-extra.js
- * GRID · GRAPH · TUNE (map editor 2D/3D) · AFR LOG · DRAG LOG · GPS · TOOLS
+ * GRID · GRAPH · AFR LOG · DRAG LOG · GPS · TOOLS
  * ===================================================================== */
 (function () {
   'use strict';
@@ -8,7 +8,6 @@
   const { st, S, $, $$, toast, esc } = C;
   const H = (window.JetHooks = window.JetHooks || []);
   const PH = (window.JetPageHooks = window.JetPageHooks || []);
-  const FH = (window.JetFileHooks = window.JetFileHooks || []);
   const LSget = (k, d) => { try { const v = localStorage.getItem(k); return v == null ? d : JSON.parse(v); } catch (e) { return d; } };
   const LSset = (k, v) => { try { localStorage.setItem(k, JSON.stringify(v)); return true; } catch (e) { return false; } };
   let curTab = 'Dash';
@@ -192,362 +191,7 @@
     };
   }
 
-  /* ================= TUNE ================= */
-  const tune = { file: null, base: null, buf: null, xdfName: '', tables: [], ti: 0, data: null, sel: null, anchor: null, range: false, undo: [], redo: [], clip: null, showAfr: false, view: '2d', live: true, liveCell: null, yaw: -0.75, pitch: 0.62, zoom: 1.3 };
-  window.JetTune = tune;
-  const cur = () => tune.tables[tune.ti] || null;
-  const tSize = (t) => T.cellAddr(t.z, t.z.rows - 1, t.z.cols - 1) + t.z.bits / 8;
-  const fitsBin = (t) => tune.buf && tSize(t) <= tune.buf.length && t.z.addr >= 0;
-  function serDefs(tabs) { return tabs.map((t) => JSON.parse(JSON.stringify(t, (k, v) => (k === 'eq' ? undefined : v)))); }
-  function reviveDefs(arr) { return (arr || []).map((t) => { t.z.eq = T.makeEq(t.z.eqText); if (t.x) t.x.eq = T.makeEq(t.x.eqText); if (t.y) t.y.eq = T.makeEq(t.y.eqText); return t; }); }
-  // restore last XDF / manual tables
-  (function restoreDefs() {
-    const x = LSget('jht.xdf', null);
-    if (x && x.text) { try { tune.tables = T.parseXDF(x.text); tune.xdfName = x.name; } catch (e) { /* ignore */ } }
-    const man = reviveDefs(LSget('jht.tdefs', []));
-    tune.tables = tune.tables.concat(man);
-  })();
-
-  function setTables(tabs, name, xdfText) {
-    tune.tables = tabs.concat(reviveDefs(LSget('jht.tdefs', []))); tune.xdfName = name; tune.ti = 0;
-    if (xdfText != null && !LSset('jht.xdf', { name, text: xdfText })) toast('XDF ใหญ่เกิน จำไว้ไม่ได้ — ต้องโหลดใหม่ทุกครั้งที่เปิดแอป', 4000);
-    fillMaps(); loadTable();
-  }
-  function fillMaps() {
-    $('#tMap').innerHTML = tune.tables.length ? tune.tables.map((t, i) => `<option value="${i}">${esc(t.title)} ${t.z.rows}×${t.z.cols}${tune.buf && !fitsBin(t) ? ' ⚠เกินไฟล์' : ''}</option>`).join('') : '<option>— ยังไม่มีตาราง —</option>';
-    $('#tMap').value = tune.ti;
-    $('#tBin').textContent = 'BIN: ' + (tune.file ? tune.file.name : '—') + (tune.undo.length ? ' *' : '');
-    $('#tXdf').textContent = 'XDF: ' + (tune.xdfName || '—');
-  }
-  $('#tMap').onchange = () => { tune.ti = +$('#tMap').value; tune.sel = null; loadTable(); };
-  function loadTable() {
-    const t = cur();
-    tune.data = t && fitsBin(t) ? T.readTable(tune.buf, t) : null;
-    tune.info = tune.data ? axisInfo(t, tune.data.xs, tune.data.ys) : null;
-    afrAxesChanged(true);
-    renderTune();
-  }
-  function setBin(f) {
-    tune.file = f; tune.base = new Uint8Array(C.fbytes(f)); tune.buf = new Uint8Array(tune.base); tune.undo = []; tune.redo = []; tune.sel = null;
-    fillMaps(); loadTable();
-  }
-  FH.push((files) => {
-    if (tune.file && !files.find((f) => f.id === tune.file.id)) { tune.file = null; tune.buf = null; tune.data = null; fillMaps(); renderTune(); }
-    if (!tune.file && files.length) setBin(files[0]);
-  });
-
-  const EMPTY = $('#tEmpty').innerHTML;
-  const heat = (n) => `hsl(${Math.round(232 * (1 - n))},88%,${54 + 6 * Math.sin(n * 3.14)}%)`;
   const fmtAx = (v) => (Math.abs(v) >= 100 ? Math.round(v) : +(+v).toFixed(1));
-  const inSel = (r, c) => tune.sel && r >= tune.sel.r0 && r <= tune.sel.r1 && c >= tune.sel.c0 && c <= tune.sel.c1;
-  function renderTune() {
-    fillMaps();
-    const t = cur(), d = tune.data, tab = $('#mtab'), cv = $('#t3c');
-    $('#tEmpty').style.display = d ? 'none' : '';
-    if (!d) { tab.innerHTML = ''; cv.hidden = true; $('#tEmpty').innerHTML = EMPTY; if (tune.file && t && !fitsBin(t)) $('#tEmpty').innerHTML = `ตาราง "${esc(t.title)}" อยู่ที่ ${P.hx(t.z.addr, 5)} เกินขนาดไฟล์ ${tune.file.name} — XDF ไม่ตรงกับไฟล์นี้`; return; }
-    tab.hidden = tune.view === '3d'; cv.hidden = tune.view !== '3d';
-    $('#t3d').textContent = tune.view === '3d' ? '2D' : '3D'; $('#t3d').classList.toggle('on', tune.view === '3d');
-    $('#tAfr').classList.toggle('on', tune.showAfr); $('#tLive').classList.toggle('on', tune.live); $('#tRange').classList.toggle('on', tune.range);
-    if (tune.view === '3d') { draw3d(); updSelInfo(); return; }
-    let mn = Infinity, mx = -Infinity; for (const row of d.vals) for (const v of row) { if (v < mn) mn = v; if (v > mx) mx = v; }
-    const dec = Math.min(4, Math.max(0, t.z.dec == null ? 2 : t.z.dec));
-    const baseT = T.readTable(tune.base, t).vals;
-    const I = tune.info;
-    let h = `<thead><tr><th class="corner" title="${t.z.rows}×${t.z.cols}">${cornerLab(I)}</th>${d.xs.map((x, c) => `<th class="xh" data-c="${c}">${colLab(I, x)}</th>`).join('')}</tr></thead><tbody>`;
-    for (let r = 0; r < t.z.rows; r++) {
-      h += `<tr><th class="yh" data-r="${r}">${rowLab(I, d.ys[r])}</th>`;
-      for (let c = 0; c < t.z.cols; c++) {
-        const v = d.vals[r][c]; let txt = v.toFixed(dec), bg = heat(mx > mn ? (v - mn) / (mx - mn) : 0.5), cls = '';
-        if (tune.showAfr && afr.log) { const a = afr.log.get(r, c); if (a) { txt = a.avg.toFixed(1); bg = afrColor(a.avg); cls += ' afrv'; } else cls += ' dim'; }
-        if (inSel(r, c)) cls += ' sel';
-        if (Math.abs(v - baseT[r][c]) > 1e-9) cls += ' chg';
-        h += `<td data-r="${r}" data-c="${c}" class="${cls}" style="background:${bg}">${txt}</td>`;
-      }
-      h += '</tr>';
-    }
-    tab.innerHTML = h + '</tbody>';
-    tune.liveCell = null; markLive(true); updSelInfo(); axisNote();
-  }
-  function updSelInfo() {
-    const s = tune.sel, d = tune.data;
-    if (!s || !d) { $('#tSelInfo').textContent = tune.range && tune.anchor ? 'แตะช่องสุดท้ายของช่วง' : ''; return; }
-    let n = 0, sum = 0, mn = Infinity, mx = -Infinity;
-    for (let r = s.r0; r <= s.r1; r++) for (let c = s.c0; c <= s.c1; c++) { const v = d.vals[r][c]; n++; sum += v; mn = Math.min(mn, v); mx = Math.max(mx, v); }
-    const I = tune.info;
-    $('#tSelInfo').textContent = n === 1 ? `ช่อง [${rowLab(I, d.ys[s.r0])}, ${colLab(I, d.xs[s.c0])}] = ${+mn.toFixed(4)}` : `เลือก ${n} ช่อง · min ${+mn.toFixed(3)} · max ${+mx.toFixed(3)} · เฉลี่ย ${+(sum / n).toFixed(3)}`;
-  }
-  // ---- selection
-  const rect = (a, b) => ({ r0: Math.min(a.r, b.r), r1: Math.max(a.r, b.r), c0: Math.min(a.c, b.c), c1: Math.max(a.c, b.c) });
-  let drag = null, dragMoved = false;
-  $('#mtab').addEventListener('pointerdown', (e) => {
-    const td = e.target.closest('td'); if (!td || e.pointerType !== 'mouse') return;
-    drag = { r: +td.dataset.r, c: +td.dataset.c }; dragMoved = false;
-  });
-  $('#mtab').addEventListener('pointermove', (e) => {
-    if (!drag) return; const td = document.elementFromPoint(e.clientX, e.clientY); const c = td && td.closest && td.closest('#mtab td');
-    if (c && (+c.dataset.r !== drag.r || +c.dataset.c !== drag.c || dragMoved)) { dragMoved = true; tune.sel = rect(drag, { r: +c.dataset.r, c: +c.dataset.c }); paintSel(); }
-  });
-  window.addEventListener('pointerup', () => { drag = null; });
-  $('#mtab').addEventListener('click', (e) => {
-    const td = e.target.closest('td'), th = e.target.closest('th'), t = cur(); if (!t || !tune.data) return;
-    if (td) {
-      if (dragMoved) { dragMoved = false; return; }   // end of a mouse drag-selection
-      const p = { r: +td.dataset.r, c: +td.dataset.c };
-      if (tune.range && tune.anchor) { tune.sel = rect(tune.anchor, p); tune.anchor = null; }
-      else { tune.sel = rect(p, p); tune.anchor = tune.range ? p : null; }
-      paintSel();
-    } else if (th) {
-      if (th.classList.contains('xh')) { const c = +th.dataset.c; tune.sel = { r0: 0, r1: t.z.rows - 1, c0: c, c1: c }; }
-      else if (th.classList.contains('yh')) { const r = +th.dataset.r; tune.sel = { r0: r, r1: r, c0: 0, c1: t.z.cols - 1 }; }
-      else tune.sel = { r0: 0, r1: t.z.rows - 1, c0: 0, c1: t.z.cols - 1 };
-      paintSel();
-    }
-  });
-  $('#mtab').addEventListener('dblclick', async (e) => {
-    const td = e.target.closest('td'); if (!td) return;
-    const r = +td.dataset.r, c = +td.dataset.c; tune.sel = rect({ r, c }, { r, c }); paintSel();
-    const I = tune.info;
-    const v = await C.askText(`ค่าใหม่ของช่อง ${rowLab(I, tune.data.ys[r])} · ${colLab(I, tune.data.xs[c])}`, String(+tune.data.vals[r][c].toFixed(4)));
-    if (v != null && v !== '' && !isNaN(+v)) applyFn(() => +v);
-  });
-  function paintSel() {
-    $$('#mtab td.sel').forEach((e) => e.classList.remove('sel'));
-    if (tune.sel) for (let r = tune.sel.r0; r <= tune.sel.r1; r++) for (let c = tune.sel.c0; c <= tune.sel.c1; c++) { const e = $(`#mtab td[data-r="${r}"][data-c="${c}"]`); if (e) e.classList.add('sel'); }
-    updSelInfo();
-  }
-  $('#tRange').onclick = () => { tune.range = !tune.range; tune.anchor = null; $('#tRange').classList.toggle('on', tune.range); toast(tune.range ? 'โหมดช่วง: แตะช่องแรก แล้วแตะช่องสุดท้าย' : 'ปิดโหมดช่วง'); };
-
-  // ---- editing with undo (stores raw values → exact undo)
-  function commit(cells) {   // cells: [{r,c,v}]
-    const t = cur(), z = t.z, ch = [];
-    for (const { r, c, v } of cells) {
-      if (!isFinite(v)) continue;
-      const a = T.cellAddr(z, r, c), old = T.rawGet(tune.buf, z, a);
-      T.rawSet(tune.buf, z, a, T.toRaw(z, v));
-      const nw = T.rawGet(tune.buf, z, a);
-      if (nw !== old) ch.push({ a, old, nw });
-    }
-    if (!ch.length) { toast('ค่าไม่เปลี่ยน (อาจชนขอบค่าสูงสุด/ต่ำสุด)'); return 0; }
-    tune.undo.push({ ti: tune.ti, ch }); tune.redo = [];
-    tune.data = T.readTable(tune.buf, t); renderTune();
-    return ch.length;
-  }
-  function applyFn(fn) {
-    const s = tune.sel, d = tune.data; if (!s || !d) { toast('เลือกช่องก่อน'); return; }
-    const cells = []; for (let r = s.r0; r <= s.r1; r++) for (let c = s.c0; c <= s.c1; c++) cells.push({ r, c, v: fn(d.vals[r][c], r, c) });
-    commit(cells);
-  }
-  function undoRedo(from, to, useOld) {
-    const e = from.pop(); if (!e) return toast(useOld ? 'ไม่มีอะไรให้ย้อน' : 'ไม่มีอะไรให้ทำซ้ำ');
-    const t = tune.tables[e.ti]; for (const x of e.ch) T.rawSet(tune.buf, t.z, x.a, useOld ? x.old : x.nw);
-    to.push(e); tune.ti = e.ti; tune.data = T.readTable(tune.buf, t); renderTune();
-  }
-  $('#tUndo').onclick = () => undoRedo(tune.undo, tune.redo, true);
-  $('#tRedo').onclick = () => undoRedo(tune.redo, tune.undo, false);
-  $('#tCopy').onclick = () => {
-    const s = tune.sel, d = tune.data; if (!s || !d) return toast('เลือกช่องก่อน');
-    tune.clip = []; for (let r = s.r0; r <= s.r1; r++) { const row = []; for (let c = s.c0; c <= s.c1; c++) row.push(d.vals[r][c]); tune.clip.push(row); }
-    toast(`คัดลอก ${tune.clip.length}×${tune.clip[0].length} ช่อง`);
-  };
-  $('#tPaste').onclick = () => {
-    const s = tune.sel, t = cur(); if (!tune.clip) return toast('ยังไม่ได้ COPY'); if (!s) return toast('เลือกช่องมุมซ้ายบนที่จะวาง');
-    const cells = []; tune.clip.forEach((row, i) => row.forEach((v, j) => { const r = s.r0 + i, c = s.c0 + j; if (r < t.z.rows && c < t.z.cols) cells.push({ r, c, v }); }));
-    if (commit(cells)) toast('วางแล้ว ' + cells.length + ' ช่อง');
-  };
-  $('#tRevert').onclick = async () => {
-    if (!tune.buf || !tune.undo.length) return toast('ยังไม่มีการแก้');
-    if (!(await C.ask('ยกเลิกการแก้ทั้งหมดในไฟล์นี้?', true))) return;
-    tune.buf = new Uint8Array(tune.base); tune.undo = []; tune.redo = []; loadTable();
-  };
-  $('#tSave').onclick = async () => {
-    if (!tune.file || !tune.buf) return toast('ยังไม่ได้เปิดไฟล์');
-    if (!tune.undo.length) return toast('ยังไม่มีการแก้');
-    const lay = P.detectLayout(tune.buf, tune.file);
-    let out = tune.buf;
-    try { if (!P.binChecksumOK(out)) out = P.binFixChecksum(out, lay.cks); } catch (e) { return toast('แก้ checksum ไม่ได้: ' + e.message); }
-    const base = tune.file.name.replace(/_T\d+$/, ''), n = (C.st.files.filter((f) => f.name.startsWith(base + '_T')).length || 0) + 1;
-    const name = await C.askText('ชื่อไฟล์ใหม่ (checksum แก้ให้แล้ว)', base + '_T' + n);
-    if (!name) return;
-    const keep = { readStart: tune.file.readStart, startManual: tune.file.startManual, cksManual: tune.file.cksManual };
-    const f = await C.addFile(name, out, Object.assign({ origin: 'tune' }, keep));
-    setBin(f);
-    toast('บันทึก "' + name + '" แล้ว — ไปหน้า "อัดไฟล์" เพื่ออัดลงกล่อง', 5000);
-  };
-
-  // ---- adjust popover
-  $('#tAdj').onclick = () => { const p = $('#tAdjPop'); p.hidden = !p.hidden; if (!p.hidden) { $('#tAdjHint').textContent = tune.sel ? '' : 'เลือกช่องในตารางก่อน'; $('#tVal').focus(); } };
-  $$('#tAdjPop [data-op]').forEach((b) => b.onclick = () => {
-    const op = b.dataset.op, v = parseFloat($('#tVal').value), s = tune.sel, d = tune.data;
-    if (op === 'close') { $('#tAdjPop').hidden = true; return; }
-    if (!s || !d) return toast('เลือกช่องก่อน');
-    const need = ['set', 'add', 'sub', 'pct+', 'pct-', 'mul'].includes(op);
-    if (need && isNaN(v)) return toast('ใส่ตัวเลขก่อน');
-    if (op === 'set') applyFn(() => v);
-    else if (op === 'add') applyFn((x) => x + v);
-    else if (op === 'sub') applyFn((x) => x - v);
-    else if (op === 'pct+') applyFn((x) => x * (1 + v / 100));
-    else if (op === 'pct-') applyFn((x) => x * (1 - v / 100));
-    else if (op === 'mul') applyFn((x) => x * v);
-    else if (op === 'smooth') {
-      const V = d.vals; applyFn((x, r, c) => { let n = 0, sm = 0; for (let i = -1; i <= 1; i++) for (let j = -1; j <= 1; j++) { const rr = r + i, cc = c + j; if (rr >= s.r0 && rr <= s.r1 && cc >= s.c0 && cc <= s.c1) { n++; sm += V[rr][cc]; } } return sm / n; });
-    } else if (op === 'interp') {
-      const V = d.vals, a = V[s.r0][s.c0], b = V[s.r0][s.c1], c2 = V[s.r1][s.c0], e = V[s.r1][s.c1];
-      applyFn((x, r, c) => { const u = s.c1 > s.c0 ? (c - s.c0) / (s.c1 - s.c0) : 0, w = s.r1 > s.r0 ? (r - s.r0) / (s.r1 - s.r0) : 0; return (a * (1 - u) + b * u) * (1 - w) + (c2 * (1 - u) + e * u) * w; });
-    }
-  });
-
-  // ---- AFR overlay / FIT
-  $('#tAfr').onclick = () => { tune.showAfr = !tune.showAfr; renderTune(); if (tune.showAfr && (!afr.log || !afr.log.filled())) toast('ยังไม่มี AFR log — เปิด REC ที่หน้า AFR แล้ววิ่งเก็บค่าก่อน', 4000); };
-  $('#tFit').onclick = async () => {
-    const t = cur(), d = tune.data; if (!t || !d) return toast('เปิดตารางก่อน');
-    if (!afr.log || !afr.log.filled()) return toast('ยังไม่มี AFR log ของตารางนี้ — ไปหน้า AFR แล้วกด REC เก็บค่าก่อน', 4500);
-    if (!T.isFuel(t) && !(await C.ask(`"${t.title}" อาจไม่ใช่ตารางน้ำมัน — ใช้ FIT ต่อ?`, true))) return;
-    const s = tune.sel || { r0: 0, r1: t.z.rows - 1, c0: 0, c1: t.z.cols - 1 }, cfg = { cruise: +S.afrCruise || 14.2, wot: +S.afrWot || 12.8, wotTps: +S.afrWotTps || 50 };
-    const I = tune.info;
-    const cells = []; let sumPct = 0;
-    for (let r = s.r0; r <= s.r1; r++) for (let c = s.c0; c <= s.c1; c++) {
-      const a = afr.log.get(r, c); if (!a || a.n < (+S.fitMinN || 3)) continue;
-      const ld = I.rpmRows ? d.xs[c] : d.ys[r];
-      const tgt = I.load === 'TPS' ? T.afrTarget(ld, cfg) : (ld >= 85 ? cfg.wot : cfg.cruise), f = T.fitFactor(a.avg, tgt, +S.fitMax || 15);
-      cells.push({ r, c, v: d.vals[r][c] * f }); sumPct += (f - 1) * 100;
-    }
-    if (!cells.length) return toast(`ไม่มีช่องที่มี AFR ≥ ${+S.fitMinN || 3} ครั้งในช่วงที่เลือก`);
-    const msg = `FIT จะแก้ ${cells.length} ช่อง เฉลี่ย ${sumPct >= 0 ? '+' : ''}${(sumPct / cells.length).toFixed(1)}% (เป้า AFR เดินทาง ${cfg.cruise} · เต็มคันเร่ง ${cfg.wot}, จำกัด ±${+S.fitMax || 15}%/ครั้ง) — ทำต่อ?`;
-    if (!(await C.ask(msg))) return;
-    const n = commit(cells); if (n) toast('FIT แล้ว ' + n + ' ช่อง — กด ↶ เพื่อย้อนได้');
-  };
-  $('#tAxis').onclick = () => {
-    const p = $('#tAxisPop'); p.hidden = !p.hidden; if (p.hidden) return;
-    const o = LSget(axKey(cur()), {}); $('#axRpm').value = o.rpm || ''; $('#axMul').value = o.mul || ''; $('#axLoad').value = o.load || '';
-    const I = tune.info; $('#axNow').textContent = I ? `ตอนนี้: รอบอยู่${I.rpmRows ? 'แนวตั้ง (แถว)' : 'แนวนอน (คอลัมน์)'} · ×${I.mul} · โหลด = ${I.load}` : 'ยังไม่ได้เปิดตาราง';
-  };
-  $$('#tAxisPop select').forEach((el) => el.onchange = () => {
-    const t = cur(); if (!t) return;
-    const o = { rpm: $('#axRpm').value || undefined, mul: +$('#axMul').value || undefined, load: $('#axLoad').value || undefined };
-    LSset(axKey(t), o); tune.warned = true; loadTable(); $('#tAxis').click(); $('#tAxis').click();
-  });
-  $('#axClose').onclick = () => { $('#tAxisPop').hidden = true; };
-  $('#t3d').onclick = () => { tune.view = tune.view === '3d' ? '2d' : '3d'; renderTune(); };
-  $('#tLive').onclick = () => { tune.live = !tune.live; renderTune(); };
-
-  // ---- live cell
-  const tCur = Cursor($('#twrap'), $('#mtab'));
-  const fresh = () => last.RPM != null && Date.now() - (last.t || 0) < 3000;
-  function liveRC(d0, xs, ys) { return d0 && tune.info && fresh() ? livePos(tune.info, xs, ys) : null; }
-  function markLive() {
-    const d = tune.data; if (!d) { tCur.hide(); return; }
-    const p = liveRC(d, d.xs, d.ys), I = tune.info;
-    $('#tLiveInfo').textContent = p ? `● ${fmtRpm(p.rpm)} rpm · ${I.load} ${(+p.ld).toFixed(1)} · ${rowLab(I, d.ys[p.r])}/${colLab(I, d.xs[p.c])}` : (last.RPM != null ? 'ไม่มีข้อมูลสด' : '');
-    if (tune.view === '3d') { tCur.hide(); if (curTab === 'Tune') draw3d(); return; }
-    if (!p || !tune.live || curTab !== 'Tune') { if (!p || !tune.live) tCur.hide(); return; }
-    const v = bilerp(d.vals, Math.max(0, Math.min(d.vals.length - 1, p.fr)), Math.max(0, Math.min(d.vals[0].length - 1, p.fc)));
-    tCur.show(p, `${fmtRpm(p.rpm)} rpm · ${I.load} ${(+p.ld).toFixed(1)}${I.unit} → ${(+v).toFixed(3)}`, drag ? Date.now() : tune.userT);
-  }
-  function axisNote() {
-    const I = tune.info; if (!I) return;
-    if (I.scaled && !tune.warned) { tune.warned = true; toast(`แกนรอบในไฟล์ถูกย่อ — แสดงเป็น ×${I.mul} ให้แล้ว (ตรวจ/แก้ได้ที่ปุ่ม "แกน")`, 4500); }
-  }
-
-  // ---- 3D surface
-  function draw3d() {
-    const cv = $('#t3c'), d = tune.data, t = cur(); if (!d || !t) return;
-    const box = $('#twrap').getBoundingClientRect(), dpr = window.devicePixelRatio || 1, W = box.width - 4, Hh = box.height - 4;
-    cv.width = Math.round(W * dpr); cv.height = Math.round(Hh * dpr); cv.style.width = W + 'px'; cv.style.height = Hh + 'px';
-    const g = cv.getContext('2d'); g.setTransform(dpr, 0, 0, dpr, 0, 0); g.clearRect(0, 0, W, Hh);
-    const R = t.z.rows, Cc = t.z.cols; let mn = Infinity, mx = -Infinity; for (const row of d.vals) for (const v of row) { mn = Math.min(mn, v); mx = Math.max(mx, v); }
-    const zn = (v) => (mx > mn ? (v - mn) / (mx - mn) : 0.5);
-    const cy = Math.cos(tune.yaw), sy = Math.sin(tune.yaw), cp = Math.cos(tune.pitch), sp = Math.sin(tune.pitch);
-    const raw = (c, r, v) => { const x = c / (Cc - 1) - 0.5, y = 0.5 - r / (R - 1), z = zn(v) * 0.55; const X = x * cy - y * sy, Y = x * sy + y * cy; return { x: X, y: Y * sp - z * cp, d: Y * cp + z * sp }; };
-    // auto-fit the projected surface into the canvas (then apply user zoom)
-    let x0 = Infinity, x1 = -Infinity, y0 = Infinity, y1 = -Infinity;
-    for (let r = 0; r < R; r += Math.max(1, R - 1)) for (let c = 0; c < Cc; c += Math.max(1, Cc - 1)) for (const v of [mn, mx]) { const q = raw(c, r, v); x0 = Math.min(x0, q.x); x1 = Math.max(x1, q.x); y0 = Math.min(y0, q.y); y1 = Math.max(y1, q.y); }
-    const mL = 40, mT = 30, sc = Math.min((W - 2 * mL) / (x1 - x0 || 1), (Hh - mT - 30) / (y1 - y0 || 1)) * tune.zoom;
-    const ox = W / 2 - ((x0 + x1) / 2) * sc, oy = mT + (Hh - mT - 30) / 2 - ((y0 + y1) / 2) * sc;
-    const prj = (c, r, v) => { const q = raw(c, r, v); return { x: ox + q.x * sc, y: oy + q.y * sc, d: q.d }; };
-    const P2 = []; for (let r = 0; r < R; r++) { P2.push([]); for (let c = 0; c < Cc; c++) P2[r].push(prj(c, r, d.vals[r][c])); }
-    const quads = [];
-    for (let r = 0; r < R - 1; r++) for (let c = 0; c < Cc - 1; c++) { const q = [P2[r][c], P2[r][c + 1], P2[r + 1][c + 1], P2[r + 1][c]]; quads.push({ q, d: (q[0].d + q[1].d + q[2].d + q[3].d) / 4, v: (d.vals[r][c] + d.vals[r][c + 1] + d.vals[r + 1][c] + d.vals[r + 1][c + 1]) / 4 }); }
-    quads.sort((a, b) => b.d - a.d);
-    for (const o of quads) { g.beginPath(); g.moveTo(o.q[0].x, o.q[0].y); for (let i = 1; i < 4; i++) g.lineTo(o.q[i].x, o.q[i].y); g.closePath(); g.fillStyle = heat(zn(o.v)); g.fill(); g.strokeStyle = 'rgba(0,0,0,.45)'; g.lineWidth = 0.7; g.stroke(); }
-    g.fillStyle = '#9fb5da'; g.font = '12px Lexend, sans-serif';
-    const a0 = prj(0, 0, mn), a1 = prj(Cc - 1, 0, mn), b1 = prj(0, R - 1, mn);
-    const I = tune.info, xn = I.rpmRows ? I.load : 'RPM', yn = I.rpmRows ? 'RPM' : I.load;
-    g.fillText(colLab(I, d.xs[0]), a0.x - 8, a0.y + 16); g.fillText(colLab(I, d.xs[Cc - 1]) + ' ' + xn, a1.x - 10, a1.y + 16); g.fillText(rowLab(I, d.ys[R - 1]) + ' ' + yn, b1.x - 40, b1.y + 14);
-    g.fillText(`${t.title} · ${+mn.toFixed(2)} – ${+mx.toFixed(2)}`, 12, 18);
-    const p = liveRC(d, d.xs, d.ys);
-    if (p && tune.live) { const r = Math.min(R - 1, Math.max(0, p.r)), c = Math.min(Cc - 1, Math.max(0, p.c)), q = P2[r][c], v = bilerp(d.vals, Math.max(0, Math.min(R - 1, p.fr)), Math.max(0, Math.min(Cc - 1, p.fc)));
-      g.strokeStyle = '#fff'; g.lineWidth = 2; g.beginPath(); g.moveTo(q.x, q.y); g.lineTo(q.x, q.y + 70); g.stroke();
-      g.fillStyle = '#ff3fd2'; g.beginPath(); g.arc(q.x, q.y, 7, 0, 7); g.fill(); g.strokeStyle = '#fff'; g.stroke();
-      g.fillStyle = '#d63fb8'; const lab = 'LIVE ' + (+v).toFixed(3); g.fillRect(q.x + 10, q.y - 28, g.measureText(lab).width + 16, 22); g.fillStyle = '#fff'; g.fillText(lab, q.x + 18, q.y - 13); }
-  }
-  ['pointerdown', 'wheel', 'touchstart', 'keydown'].forEach((ev) => $('#twrap').addEventListener(ev, () => { tune.userT = Date.now(); }, { passive: true }));
-  let rot = null;
-  const ptr = new Map(); let pinch = null;
-  $('#t3c').addEventListener('pointerdown', (e) => {
-    ptr.set(e.pointerId, { x: e.clientX, y: e.clientY }); $('#t3c').setPointerCapture(e.pointerId);
-    if (ptr.size === 2) { const [a, b] = [...ptr.values()]; pinch = { d: Math.hypot(a.x - b.x, a.y - b.y), z: tune.zoom }; rot = null; }
-    else rot = { x: e.clientX, y: e.clientY, yaw: tune.yaw, pitch: tune.pitch };
-  });
-  $('#t3c').addEventListener('pointermove', (e) => {
-    if (ptr.has(e.pointerId)) ptr.set(e.pointerId, { x: e.clientX, y: e.clientY });
-    if (pinch && ptr.size === 2) { const [a, b] = [...ptr.values()]; tune.zoom = Math.max(0.5, Math.min(3, pinch.z * Math.hypot(a.x - b.x, a.y - b.y) / (pinch.d || 1))); draw3d(); return; }
-    if (!rot) return; tune.yaw = rot.yaw + (e.clientX - rot.x) / 160; tune.pitch = Math.max(0.15, Math.min(1.45, rot.pitch + (e.clientY - rot.y) / 200)); draw3d();
-  });
-  const up = (e) => { ptr.delete(e.pointerId); if (ptr.size < 2) pinch = null; rot = null; };
-  $('#t3c').addEventListener('pointerup', up); $('#t3c').addEventListener('pointercancel', up);
-  $('#t3c').addEventListener('wheel', (e) => { e.preventDefault(); tune.zoom = Math.max(0.5, Math.min(2.5, tune.zoom * (e.deltaY < 0 ? 1.1 : 0.9))); draw3d(); }, { passive: false });
-
-  // ---- file / XDF / manual table modal
-  const fm = document.createElement('div'); fm.className = 'modal'; fm.id = 'mTune';
-  fm.innerHTML = `<div class="card" style="max-width:720px"><h2>ไฟล์ & ตาราง (TUNE)</h2>
-    <div class="grid g2"><div><h3>1) เลือกไฟล์ .bin จากคลัง</h3><div class="flist" id="tfList" style="max-height:38vh"></div></div>
-    <div><h3>2) นิยามตาราง</h3>
-      <div class="row"><button class="btn pri" id="tfXdf">📄 โหลดไฟล์ XDF</button><input type="file" id="tfXdfIn" accept=".xdf,.XDF,.xml,text/xml" hidden></div>
-      <div class="row" style="margin-top:8px"><button class="btn" id="tfDemo">ใช้ XDF ตัวอย่าง (DEMO)</button></div>
-      <div class="row" style="margin-top:8px"><button class="btn" id="tfMan">➕ กำหนดตารางเอง</button><button class="btn red" id="tfManClr">ล้างตารางที่กำหนดเอง</button></div>
-      <p class="mut" style="font-size:12.5px">XDF ปัจจุบัน: <b id="tfXdfName">—</b> · ${'${n}'} ตาราง</p></div></div>
-    <div class="row" style="margin-top:12px;justify-content:flex-end"><button class="btn" data-close>ปิด</button></div></div>`;
-  document.body.appendChild(fm);
-  fm.querySelector('[data-close]').onclick = () => C.modal('#mTune', false);
-  fm.addEventListener('click', (e) => { if (e.target === fm) C.modal('#mTune', false); });
-  function fillFileModal() {
-    $('#tfList').innerHTML = st.files.length ? st.files.map((f) => `<div class="fi${tune.file && tune.file.id === f.id ? ' sel' : ''}" data-id="${f.id}"><span class="chip">▣</span><div><b>${esc(f.name)}</b><small>${C.kb(f.data.byteLength)}</small></div></div>`).join('') : '<div class="mut">คลังว่าง — ดูดไฟล์หรือนำเข้าที่หน้า "อัดไฟล์" ก่อน</div>';
-    $$('#tfList .fi').forEach((el) => el.onclick = async () => {
-      if (tune.undo.length && !(await C.ask('ไฟล์ปัจจุบันยังไม่ได้บันทึก — เปลี่ยนไฟล์และทิ้งการแก้?', true))) return;
-      setBin(st.files.find((f) => f.id === el.dataset.id)); fillFileModal();
-    });
-    fm.querySelector('p.mut').innerHTML = `XDF ปัจจุบัน: <b>${esc(tune.xdfName || '—')}</b> · ${tune.tables.length} ตาราง`;
-  }
-  $('#tFile').onclick = () => { fillFileModal(); C.modal('#mTune', true); };
-  $('#tfXdf').onclick = () => $('#tfXdfIn').click();
-  $('#tfXdfIn').onchange = async (e) => {
-    const f = e.target.files[0]; e.target.value = ''; if (!f) return;
-    try {
-      const txt = await f.text(), tabs = T.parseXDF(txt);
-      if (!tabs.length) return toast('ไม่พบตาราง (XDFTABLE) ในไฟล์นี้');
-      setTables(tabs, f.name, txt); fillFileModal(); toast(`โหลด ${f.name}: ${tabs.length} ตาราง`);
-    } catch (er) { toast('อ่าน XDF ไม่ได้: ' + er.message, 4000); }
-  };
-  $('#tfDemo').onclick = () => { setTables(T.parseXDF(P.DEMO_XDF), 'DEMO K03-H01.xdf', P.DEMO_XDF); fillFileModal(); toast('ใช้ XDF ตัวอย่าง — ตรงกับไฟล์ที่ดูดจากโหมด DEMO'); };
-  $('#tfManClr').onclick = () => { LSset('jht.tdefs', []); setTables(tune.tables.filter((t) => !t.manual), tune.xdfName); fillFileModal(); };
-  $('#tfMan').onclick = async () => {
-    const q = async (m, d) => { const v = await C.askText(m, d); if (v == null) throw 0; return v.trim(); };
-    try {
-      const title = await q('ชื่อตาราง', 'Fuel');
-      const addr = C.parseHex(await q('ตำแหน่งในไฟล์ (hex)', '0x4000'));
-      const rc = (await q('ขนาด แถว×คอลัมน์ (เช่น 29x25)', '29x25')).toLowerCase().split(/[x×*, ]+/).map(Number);
-      const typ = (await q('ชนิดข้อมูล: 8, 16 (big-endian), 16le, 16s (มีเครื่องหมาย)', '16')).toLowerCase();
-      const eq = await q('สูตรแปลงค่า (ใช้ X) เช่น X*0.001', 'X');
-      const ya = await q('แกน Y (RPM) ตำแหน่ง hex, ชนิด, สูตร — เว้นว่าง = 0,1,2…', '');
-      const xa = await q('แกน X (TPS) ตำแหน่ง hex, ชนิด, สูตร — เว้นว่าง = 0,1,2…', '');
-      const bits = parseInt(typ, 10) || 8, ax = (s, n) => { if (!s) return null; const [a, ty, ...e] = s.split(','); return { count: n, addr: C.parseHex(a), bits: parseInt(ty, 10) || 8, lsb: /le/.test(ty || ''), signed: /s/.test(ty || ''), eqText: (e.join(',') || 'X').trim(), labels: null }; };
-      const def = { title: title + ' (เอง)', manual: true, z: { addr, rows: rc[0] || 1, cols: rc[1] || 1, bits, lsb: /le/.test(typ), signed: /s/.test(typ), eqText: eq || 'X', dec: 3 }, y: ax(ya, rc[0] || 1), x: ax(xa, rc[1] || 1) };
-      const all = LSget('jht.tdefs', []); all.push(def); LSset('jht.tdefs', all);
-      const keep = tune.tables.filter((t) => !t.manual);
-      tune.tables = keep.concat(reviveDefs(JSON.parse(JSON.stringify(all)))); tune.ti = tune.tables.length - 1; fillMaps(); loadTable(); fillFileModal();
-      toast('เพิ่มตาราง "' + def.title + '" แล้ว');
-    } catch (e) { if (e !== 0) toast('ข้อมูลไม่ถูกต้อง'); }
-  };
 
   /* ================= AFR LOG ================= */
   const DEF_Y = [840, 1100, 1200, 1300, 1400, 1500, 1600, 1800, 2000, 2250, 2500, 2750, 3000, 3250, 3500, 4000, 4500, 5000, 5500, 6000, 6500, 7000, 7500, 7750, 8000, 8500, 9000, 9500, 9800];
@@ -557,11 +201,10 @@
   const afrColor = (v) => { const stops = [[10.5, [210, 40, 60]], [11.5, [225, 70, 55]], [12.8, [215, 150, 40]], [14.0, [70, 190, 110]], [14.7, [40, 175, 120]], [15.6, [40, 130, 200]], [16.5, [70, 90, 220]], [18, [110, 70, 210]]];
     if (v <= stops[0][0]) return `rgb(${stops[0][1]})`; for (let i = 1; i < stops.length; i++) if (v <= stops[i][0]) { const [a, ca] = stops[i - 1], [b, cb] = stops[i], k = (v - a) / (b - a); return `rgb(${ca.map((x, j) => Math.round(x + (cb[j] - x) * k))})`; } return `rgb(${stops[stops.length - 1][1]})`; };
   function afrAxesChanged(force) {
-    const d = tune.data, t = cur();
-    const xs = d ? d.xs : DEF_X, ys = d ? d.ys : DEF_Y, sig = ys.length + 'x' + xs.length + ':' + ys[0] + '-' + ys[ys.length - 1] + ':' + xs[0] + '-' + xs[xs.length - 1];
-    afr.info = d ? tune.info : axisInfo(null, xs, ys);
-    if (sig === afr.sig && afr.log) { afr.title = d ? t.title : 'ค่าเริ่มต้น (RPM × TPS)'; if (force && curTab === 'AFR') renderAfr(); return; }
-    afrSave(); afr.xs = xs; afr.ys = ys; afr.sig = sig; afr.title = d ? t.title : 'ค่าเริ่มต้น (RPM × TPS)';
+    const xs = DEF_X, ys = DEF_Y, sig = ys.length + 'x' + xs.length + ':' + ys[0] + '-' + ys[ys.length - 1] + ':' + xs[0] + '-' + xs[xs.length - 1];
+    afr.info = axisInfo(null, xs, ys);
+    if (sig === afr.sig && afr.log) { afr.title = 'ค่าเริ่มต้น (RPM × TPS)'; if (force && curTab === 'AFR') renderAfr(); return; }
+    afrSave(); afr.xs = xs; afr.ys = ys; afr.sig = sig; afr.title = 'ค่าเริ่มต้น (RPM × TPS)';
     const o = LSget('jht.afr.' + sig, null); afr.log = o ? T.AfrLog.from(o) : new T.AfrLog(ys.length, xs.length);
     if (curTab === 'AFR') renderAfr();
   }
@@ -661,17 +304,15 @@
   (function settings() {
     const card = $('#mSet .card'), anchor = card.querySelector('h3:last-of-type');
     const blk = document.createElement('div');
-    blk.innerHTML = `<h3 style="margin-top:16px">TUNE / AFR / GPS</h3><div class="grid g3">
+    blk.innerHTML = `<h3 style="margin-top:16px">AFR / GPS</h3><div class="grid g3">
       <label class="f">AFR เป้า (เดินทาง)<input id="sAfrC" type="number" step="0.1"></label>
       <label class="f">AFR เป้า (เต็มคันเร่ง)<input id="sAfrW" type="number" step="0.1"></label>
       <label class="f">เต็มคันเร่งเมื่อ TPS ≥ (%)<input id="sAfrT" type="number"></label>
-      <label class="f">FIT แก้ได้สูงสุด ±%/ครั้ง<input id="sFitM" type="number"></label>
-      <label class="f">FIT ใช้ช่องที่มีข้อมูล ≥ (ครั้ง)<input id="sFitN" type="number"></label>
       <label class="f">แหล่ง GPS<select id="sGps"><option value="auto">AUTO (เกจก่อน)</option><option value="gauge">เกจเท่านั้น</option><option value="phone">มือถือเท่านั้น</option></select></label></div>`;
     card.insertBefore(blk, anchor);
-    $('#bSet').addEventListener('click', () => { $('#sAfrC').value = S.afrCruise || 14.2; $('#sAfrW').value = S.afrWot || 12.8; $('#sAfrT').value = S.afrWotTps || 50; $('#sFitM').value = S.fitMax || 15; $('#sFitN').value = S.fitMinN || 3; $('#sGps').value = gps.src; });
+    $('#bSet').addEventListener('click', () => { $('#sAfrC').value = S.afrCruise || 14.2; $('#sAfrW').value = S.afrWot || 12.8; $('#sAfrT').value = S.afrWotTps || 50; $('#sGps').value = gps.src; });
     $('#sSave').addEventListener('click', () => {
-      Object.assign(S, { afrCruise: +$('#sAfrC').value || 14.2, afrWot: +$('#sAfrW').value || 12.8, afrWotTps: +$('#sAfrT').value || 50, fitMax: Math.min(30, +$('#sFitM').value || 15), fitMinN: +$('#sFitN').value || 3, gpsSrc: $('#sGps').value });
+      Object.assign(S, { afrCruise: +$('#sAfrC').value || 14.2, afrWot: +$('#sAfrW').value || 12.8, afrWotTps: +$('#sAfrT').value || 50, gpsSrc: $('#sGps').value });
       gps.src = S.gpsSrc; if (gps.src === 'gauge') gps.stopPhone(); C.saveS();
     });
   })();
@@ -687,21 +328,19 @@
       raf = false;
       if (curTab === 'Grid') renderGrid();
       else if (curTab === 'Graph') { renderGraphCards(); drawGraph(); }
-      else if (curTab === 'Tune') markLive();
       else if (curTab === 'AFR') { afrInfo(); if (afr.dirty && Date.now() - (afr.lastRender || 0) > 1000) { afr.lastRender = Date.now(); renderAfr(); } else afrLiveMark(); }
       else if (curTab === 'Drag') renderDrag();
     });
   });
   setInterval(() => { if (curTab === 'Drag') renderDrag(); }, 1000);
   PH.push((tab) => {
-    curTab = tab; $('#tAdjPop').hidden = true;
+    curTab = tab;
     if (tab === 'Grid') renderGrid();
     if (tab === 'Graph') { renderGraphCards(); requestAnimationFrame(drawGraph); }
-    if (tab === 'Tune') { fillMaps(); requestAnimationFrame(renderTune); }
     if (tab === 'AFR') renderAfr();
     if (tab === 'Drag') { if (gps.src !== 'gauge') gps.ensurePhone(); renderDrag(); }
     if (tab === 'Tools') subShow(curSub);
   });
-  window.addEventListener('resize', () => { if (curTab === 'Graph') drawGraph(); if (curTab === 'Tune' && tune.view === '3d') draw3d(); });
-  fillMaps(); afrAxesChanged();
+  window.addEventListener('resize', () => { if (curTab === 'Graph') drawGraph(); });
+  afrAxesChanged();
 })();
