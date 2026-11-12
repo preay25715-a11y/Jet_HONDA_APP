@@ -75,6 +75,34 @@
 ตัวอย่าง: ping `FE 04 72 8C` → `0E 04 72 7C`, ตาราง 11 `72 05 71 11 07`
 
 
+## ฟังก์ชันจูน / เกจ (เพิ่มเติม)
+| แท็บ | ทำอะไร | แหล่งข้อมูล |
+|---|---|---|
+| **Grid** | เกจ 12 ช่อง: TPS, W.TEMP, BATT, AFR, INJ, IGN, RPM, MAP, SPD, EOT, IAT, O2 | ECU (ตาราง 0x11) + เกจ (AFR/EOT/O2) |
+| **Graph** | การ์ด RPM/TPS/GPS/AFR พร้อม min/max และกราฟเส้นย้อนหลัง 30 วินาที | ECU + เกจ |
+| **Tune** | แก้ตารางแมพจากไฟล์ .bin ด้วย XDF: ตั้งค่า, ±, ±%, ×, เกลี่ย, ไล่ค่า, Undo/Redo, Copy/Paste, ดับเบิลแตะเพื่อใส่ค่า, มุมมอง 3D (ลากหมุน/บีบซูม), LIVE ชี้ช่องที่เครื่องวิ่งอยู่, ทับ AFR, FIT | ไฟล์ในคลัง + XDF |
+| **AFR** | บันทึก AFR เฉลี่ยลงช่อง RPM×TPS (REC/ล้าง) แตะช่องเพื่อดู n/เฉลี่ย/min/max | AFR จากเกจ (wideband) |
+| **Drag** | จับเวลา 201/402/500/1000 m, 0-100 km/h, ความเร็วสูงสุด, 3 รอบ | GPS เกจ (แนะนำ 10Hz) หรือ GPS มือถือ |
+| **Tools** | EEPROM · Hex/เทียบไฟล์ · Log | — |
+
+### Tune — ขั้นตอน
+1. ดูดไฟล์ หรือนำเข้า .bin → แท็บ **Tune** → **ไฟล์ ▾** → เลือกไฟล์
+2. **โหลด XDF** ของรุ่นนั้น (รองรับ XDF ของ TunerPro: XDFTABLE/XDFCONSTANT, 8/16/32-bit, signed, LSB-first, column-major, BASEOFFSET, สูตร MATH)
+   ไม่มี XDF ให้ใช้ **กำหนดตารางเอง** (ใส่ address, ขนาด, ชนิด, สูตร, แกน)
+3. แก้ค่า → **✅** บันทึกเป็นไฟล์ใหม่ (แก้ checksum ให้อัตโนมัติ) → แท็บ **อัดไฟล์** เพื่ออัดลงกล่อง
+4. **FIT**: ใช้ AFR log ปรับตารางน้ำมัน `ค่าใหม่ = ค่าเดิม × AFR ที่วัดได้ / AFR เป้า` (เป้าเดินทาง/เต็มคันเร่ง และจำกัด ±% ต่อครั้งในตั้งค่า)
+   ใช้เฉพาะช่องที่มีข้อมูล ≥ 3 ครั้ง — ใช้ได้กับตารางที่ค่ามากขึ้น = น้ำมันมากขึ้นเท่านั้น
+   ถ้าไม่ได้เลือกช่องไว้ FIT จะใช้กับทั้งตาราง
+
+> ตำแหน่งตารางในไฟล์ของแต่ละรุ่นต้องมาจาก XDF ที่ถูกต้อง โปรแกรมไม่เดา address ให้ ถ้าตารางเกินขนาดไฟล์ จะขึ้น ⚠ และไม่ยอมแก้
+
+### คำสั่งเซ็นเซอร์เกจ (MFB-LINK 0x20 SENSORS)
+คำตอบ: status + 18 byte (little-endian)
+`afr u16 ×100 · gpsSpeed u16 ×10 (km/h) · sats u8 · satsInView u8 · lat i32 ×1e7 · lon i32 ×1e7 · eot+40 u8 · o2 u8 ×100 (V) · reserved · flags`
+flags: bit0 AFR ถูกต้อง, bit1 GPS fix, bit2 EOT, bit3 O2
+ในเฟิร์มแวร์เกจ ให้เขียนฟังก์ชัน `void mfbGetSensors(MfbSensors &s)` เติมค่าจากเซ็นเซอร์จริงของเกจ เกจรุ่นที่ยังไม่รองรับคำสั่งนี้ แอปจะหยุดถามเอง
+แท็บ Drag จะเลือก GPS เกจก่อน ถ้าไม่มีจึงใช้ GPS มือถือ (~1Hz แม่นยำน้อยกว่า) เปลี่ยนได้ที่ปุ่ม "แหล่ง"
+
 ## แอป Android (APK)
 โฟลเดอร์ `android/` เป็นแอป Android แบบ native ที่ห่อหน้าโปรแกรมเดียวกันไว้ข้างใน และมีตัวเชื่อม (JetBridge) ที่เขียนให้ใช้ฮาร์ดแวร์ได้จริง
 - **USB OTG**: ใช้ไลบรารี usb-serial-for-android รองรับชิป FTDI, CH340/CH341/CH9102, CP210x, PL2303 และ ESP32 (CDC)
@@ -104,7 +132,9 @@ APK เซ็นด้วยคีย์ `android/app/jet-release.jks` (รห�
 ```
 src/proto.js       เฟรม, checksum, MFB-LINK, DTC, ถอดค่า live, ฐานข้อมูลรุ่น
 src/ecu.js         คำสั่ง ECU ทั้งหมด (detect / read / write / DTC / EEPROM / security)
-src/sim.js         กล่องจำลองสำหรับ DEMO และชุดทดสอบ
+src/sim.js         กล่องจำลองสำหรับ DEMO และชุดทดสอบ (มีแมพ น้ำมัน/ไฟจุด + เซ็นเซอร์ AFR/GPS จำลอง)
+src/tune.js        XDF parser, อ่าน/เขียนตาราง, AFR log, FIT, ตัวจับเวลา Drag
+src/ui-extra.js    หน้า Grid / Graph / Tune / AFR / Drag / Tools
 src/transports.js  Web Serial (สาย USB) และ Smart Gauge (BLE / USB)
 src/app.js, style.css, index.html   UI
 

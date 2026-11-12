@@ -10,24 +10,32 @@
 <style>/*@@CSS@@*/</style>
 </head>
 <body>
+<div id="splash">
+  <div class="sp-in">
+    <img class="sp-logo" src="@@LOGO_B@@" alt="เปรียว จูนเนอร์">
+    <div class="sp-title">Jet_HONDA <span>TUNE</span></div>
+    <div class="sp-sub">K-LINE ECU · READ · WRITE · LIVE</div>
+    <div class="sp-bar"><i id="spBar"></i></div>
+    <div class="sp-msg" id="spMsg">กำลังเริ่มระบบ…</div>
+  </div>
+</div>
 <div class="app">
   <div class="top">
     <div class="hl">
       <button class="status" id="bConnect" title="เชื่อมต่อ"><span class="dot" id="dLink"></span><span id="tLink">OFFLINE</span></button>
       <span class="chipst" id="tEcu">ECU —</span>
+      <span class="chipst" id="tGps">GPS</span>
       <button class="chipst" id="pGauge" style="background:none;cursor:pointer"><span id="tGauge">GAUGE</span></button>
       <span class="dot" id="dEcu" hidden></span><span class="dot" id="dGauge" hidden></span>
     </div>
     <div class="brand" id="brand" title="Jet_HONDA Tune">
       <span id="brandCustom"></span>
       <span id="brandDefault" style="display:flex;align-items:center;gap:9px">
-      <svg viewBox="0 0 64 64" aria-hidden="true"><defs><linearGradient id="lg" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#fff"/><stop offset=".45" stop-color="#8cc8ff"/><stop offset="1" stop-color="#2f7cf6"/></linearGradient></defs>
-        <path d="M32 3 57 17.5v29L32 61 7 46.5v-29Z" fill="#0a1426" stroke="url(#lg)" stroke-width="3"/>
-        <path d="M14 38 50 20 40 30 52 30 18 47 28 37Z" fill="url(#lg)"/>
-        <path d="M27 18h12v3h-4v15a7 7 0 0 1-7 7h-3v-3h3a4 4 0 0 0 4-4V21h-5Z" fill="#fff" opacity=".92"/></svg>
+      <img class="brand-logo" src="@@LOGO_S@@" alt="เปรียว จูนเนอร์">
       <div class="logo">Jet_HONDA<small>TUNE</small></div></span>
     </div>
     <div class="hr">
+      <button class="mini" id="bLive">▶ LIVE</button>
       <button class="mini" id="bDemo">DEMO</button>
       <span class="clock" id="clock">--:--</span>
     </div>
@@ -36,13 +44,14 @@
 
   <div class="pages">
     <!-- 0 ECU / LIVE -->
-    <section class="page show" data-name="ECU" data-tab="Dash">
+    <section class="page show dashpage" data-name="DASH" data-tab="Dash">
       <div class="dash">
         <div class="dcol">
           <div class="card tile"><span class="k">Coolant</span><span class="v"><b id="vECT">--</b><small>°C</small></span></div>
           <div class="card tile"><span class="k">Intake</span><span class="v"><b id="vIAT">--</b><small>°C</small></span></div>
           <div class="card tile"><span class="k">MAP</span><span class="v"><b id="vMAP">--</b><small>kPa</small></span></div>
         </div>
+        <div class="mid">
         <div class="gauge">
           <svg viewBox="0 0 300 300" aria-hidden="true">
             <defs><linearGradient id="ga" x1="0" y1="1" x2="0" y2="0"><stop offset="0" stop-color="#8cc8ff"/><stop offset="1" stop-color="var(--ac)"/></linearGradient>
@@ -51,7 +60,9 @@
             <path id="arcBg" d="M 66.6 233.4 A 118 118 0 1 1 233.4 233.4" fill="none" stroke="#11264a" stroke-width="16" stroke-linecap="round"/>
             <path id="arc" d="M 66.6 233.4 A 118 118 0 1 1 233.4 233.4" fill="none" stroke="url(#ga)" stroke-width="16" stroke-linecap="round" filter="url(#gl)" stroke-dasharray="0 999"/>
           </svg>
-          <div class="gc"><span class="rpm"><b id="vRPM" style="font-weight:500">0</b> rpm</span><span class="spd" id="vSPD">0</span><span class="unit">km/h</span></div>
+          <div class="gc"><span class="rpm"><b id="vRPM" style="font-weight:500">0</b> rpm</span><span class="spd" id="vSPD">0</span><span class="unit" id="vUnit">km/h ⇄</span></div>
+        </div>
+          <div class="card wide"><span class="k">Throttle</span><span class="v"><b id="vTPS">--</b><small>%</small></span><div class="track"><i id="tpsBar"></i></div></div>
         </div>
         <div class="dcol">
           <div class="card tile"><span class="k">Battery</span><span class="v"><b id="vBATT">--</b><small>V</small></span></div>
@@ -59,18 +70,78 @@
           <div class="card tile"><span class="k">Ignition</span><span class="v"><b id="vIGN">--</b><small>°</small></span></div>
         </div>
       </div>
-      <div class="card wide"><span class="k">Throttle</span><span class="v"><b id="vTPS">--</b><small>%</small></span><div class="track"><i id="tpsBar"></i></div></div>
-      <div class="card" style="margin-top:14px">
-        <h3>ECU <span id="ecuState" class="mut">—</span></h3>
-        <div class="kv" id="ecuInfo"><span>สถานะ</span><span>ยังไม่เชื่อมต่อ</span></div>
-        <div class="row" style="margin-top:14px">
-          <button class="btn" id="bDetect">ตรวจกล่อง</button>
-          <button class="btn grn" id="bLive">▶ LIVE</button>
-          <button class="btn" id="bTables">ตารางดิบ</button>
-        </div>
-        <div class="hex" id="tables" style="margin-top:12px;max-height:180px;display:none"></div>
-        <p class="mut" style="font-size:12.5px;margin:12px 0 0">บิดกุญแจ ON (ไม่ต้องสตาร์ท) · เสียบปลั๊กเช็ค 4 ขา/DLC · แบตต้องเต็ม</p>
+    </section>
+
+    <!-- GRID -->
+    <section class="page dashpage" data-name="GRID" data-tab="Grid"><div class="ggrid" id="ggrid"></div></section>
+
+    <!-- GRAPH -->
+    <section class="page dashpage" data-name="GRAPH" data-tab="Graph">
+      <div class="gcards" id="gcards"></div>
+      <div class="card gchart"><canvas id="gcv"></canvas>
+        <div class="gleg"><span class="mut" id="gWin">ย้อนหลัง 30 วินาที</span><button class="mini" id="gPause">⏸ หยุดกราฟ</button><button class="mini" id="gReset">รีเซ็ต min/max</button></div></div>
+    </section>
+
+    <!-- TUNE -->
+    <section class="page tunepage" data-name="TUNE" data-tab="Tune">
+      <div class="ttool">
+        <button class="tb" id="tFile">ไฟล์ ▾</button>
+        <select id="tMap" class="tsel"></select>
+        <button class="tb" id="tAxis" title="ตั้งแกนรอบ / แกนโหลด">แกน ▾</button>
+        <button class="tb grn" id="tSave" title="บันทึกเป็นไฟล์ใหม่ในคลัง">✅</button>
+        <button class="tb red" id="tRevert" title="ยกเลิกการแก้ทั้งหมด">❌</button>
+        <button class="tb" id="tAdj">✎ ปรับค่า</button>
+        <button class="tb" id="tRange" title="แตะช่องแรก แล้วแตะช่องสุดท้าย">⬚ ช่วง</button>
+        <button class="tb" id="tUndo" title="ย้อนกลับ">↶</button><button class="tb" id="tRedo" title="ทำซ้ำ">↷</button>
+        <button class="tb" id="tCopy">COPY</button><button class="tb" id="tPaste">PASTE</button>
+        <button class="tb" id="tAfr" title="แสดง AFR ที่บันทึกไว้บนตาราง">AFR</button>
+        <button class="tb" id="tFit" title="แก้น้ำมันตาม AFR log">FIT</button>
+        <button class="tb" id="t3d">3D</button>
+        <button class="tb" id="tLive">● LIVE</button>
       </div>
+      <div class="tinfo"><span id="tBin">BIN: —</span><span id="tXdf">XDF: —</span><span class="sp1"></span><span id="tSelInfo"></span><span id="tLiveInfo"></span></div>
+      <div class="twrap" id="twrap">
+        <div class="tempty" id="tEmpty">กด <b>ไฟล์ ▾</b> → เลือกไฟล์ .bin จากคลัง แล้วโหลดไฟล์ <b>.xdf</b> ของรุ่นนั้น (หรือกำหนดตารางเอง)<br><span class="mut">โหมด DEMO: ดูดไฟล์ก่อน แล้วเลือก "ใช้ XDF ตัวอย่าง"</span></div>
+        <table class="mtab" id="mtab"></table>
+        <canvas id="t3c" hidden></canvas>
+      </div>
+      <div class="tpop" id="tAxisPop" hidden>
+        <div class="mut" id="axNow" style="font-size:12.5px;margin-bottom:6px"></div>
+        <div class="row">
+          <label class="f">แกนรอบ (RPM)<select id="axRpm"><option value="">อัตโนมัติ</option><option value="rows">แนวตั้ง (แถว)</option><option value="cols">แนวนอน (คอลัมน์)</option></select></label>
+          <label class="f">ตัวคูณแกนรอบ<select id="axMul"><option value="">อัตโนมัติ</option><option value="1">×1</option><option value="10">×10</option><option value="50">×50</option><option value="100">×100</option><option value="1000">×1000</option></select></label>
+          <label class="f">แกนโหลด<select id="axLoad"><option value="">อัตโนมัติ</option><option value="TPS">TPS (%)</option><option value="MAP">MAP (kPa)</option></select></label>
+          <button class="tb" id="axClose" style="align-self:flex-end">ปิด</button>
+        </div>
+      </div>
+      <div class="tpop" id="tAdjPop" hidden>
+        <div class="row"><input id="tVal" type="number" step="any" placeholder="ค่า" style="width:110px"><span class="mut" id="tAdjHint" style="font-size:12px"></span></div>
+        <div class="row" style="margin-top:8px">
+          <button class="tb" data-op="set">= ตั้งค่า</button><button class="tb" data-op="add">+ บวก</button><button class="tb" data-op="sub">− ลบ</button>
+          <button class="tb" data-op="pct+">+ %</button><button class="tb" data-op="pct-">− %</button><button class="tb" data-op="mul">× คูณ</button>
+          <button class="tb" data-op="smooth">เกลี่ย</button><button class="tb" data-op="interp">ไล่ค่า</button><button class="tb" data-op="close">ปิด</button>
+        </div>
+      </div>
+    </section>
+
+    <!-- AFR LOG -->
+    <section class="page tunepage" data-name="AFR LOG" data-tab="AFR">
+      <div class="ttool"><b class="atitle">AFR LOG</b><span id="aInfo" class="mut ainfo"></span><span class="sp1"></span>
+        <button class="tb" id="aRec">● REC</button><button class="tb red" id="aClr">ล้าง</button></div>
+      <div class="twrap"><table class="mtab afr" id="atab"></table></div>
+      <div class="ascale"><i class="abar"></i><span>11.5 รวย · 14.7 · 16.5 บาง</span><span class="sp1"></span><span class="mut">ช่องมืด = ยังไม่มีข้อมูล · กรอบขาว = ตำแหน่งเครื่องตอนนี้ · แตะช่อง = ดูรายละเอียด</span></div>
+    </section>
+
+    <!-- DRAG LOG -->
+    <section class="page dashpage" data-name="DRAG LOG" data-tab="Drag">
+      <div class="card dgps"><span class="gsig" id="dSig"><i></i><i></i><i></i></span><b class="gtxt">GPS</b><span id="dSat" class="mut">—</span><span id="dSpdAcc"></span><span class="sp1"></span><button class="mini" id="dSrc">แหล่ง: AUTO</button><b id="dState" class="dstate">READY</b></div>
+      <div class="dmain">
+        <div class="card dtab"><table id="dTable"></table></div>
+        <div class="card drun"><div class="mut dlbl">LOG RUN</div><div class="druns" id="dRuns"></div>
+          <div class="dbig" id="dBig">0.0000 s</div><div class="ddist" id="dDist">0 m</div>
+          <button class="btn red" id="dReset">RESET LOG</button></div>
+      </div>
+      <div class="card dbar"><div class="dsegs" id="dSegs"></div><div class="dsv" id="dSv">0 KM/H</div></div>
     </section>
 
     <!-- 1 READ -->
@@ -123,7 +194,6 @@
             <label class="f"><span class="lh">ตำแหน่ง Checksum <span id="aCks" class="badge ok">AUTO</span></span><input id="mCks" readonly></label>
           </div>
           <div class="row" style="margin-top:6px"><span id="autoWhy" class="mut" style="font-size:12.5px;flex:1"></span><button class="btn" id="bManual" style="padding:5px 10px;font-size:13px">✏ แก้เอง</button></div>
-          <div id="fileInfo" class="kv" style="margin-top:10px"></div>
           <button class="btn big red" id="bWrite" style="width:100%;margin-top:14px">⚡ อัดไฟล์ลงกล่อง</button>
           <div class="row" style="margin-top:10px">
             <button class="btn" id="bFix">🔧 แก้ Checksum</button>
@@ -132,6 +202,7 @@
             <button class="btn" id="bRen">✏ เปลี่ยนชื่อ</button>
             <button class="btn red" id="bDel">🗑</button>
           </div>
+          <div id="fileInfo" class="kv k2" style="margin-top:10px"></div>
           <div class="prog" id="wprog" style="display:none">
             <div class="pct" id="wpPct">0%</div>
             <div class="pbar"><i id="wpBar"></i></div>
@@ -144,16 +215,32 @@
     </section>
 
     <!-- 2 DTC -->
-    <section class="page" data-name="DTC" data-tab="Codes">
+    <section class="page" data-name="ECU / DTC" data-tab="ECU">
       <div class="grid g2">
-        <div class="card tab"><h3>โค้ดปัจจุบัน (CURRENT)</h3><div id="dtcCur" class="mut">กด "อ่านโค้ด"</div></div>
-        <div class="card tab"><h3>โค้ดที่เคยเกิด (PAST)</h3><div id="dtcPast" class="mut">—</div></div>
+      <div class="card">
+          <h3>ECU <span id="ecuState" class="mut">—</span></h3>
+          <div class="kv" id="ecuInfo"><span>สถานะ</span><span>ยังไม่เชื่อมต่อ</span></div>
+          <div class="row" style="margin-top:14px">
+            <button class="btn" id="bDetect">ตรวจกล่อง</button>
+            <button class="btn" id="bTables">ตารางดิบ</button>
+          </div>
+          <div class="hex" id="tables" style="margin-top:12px;max-height:180px;display:none"></div>
+          <p class="mut" style="font-size:12.5px;margin:12px 0 0">บิดกุญแจ ON (ไม่ต้องสตาร์ท) · เสียบปลั๊กเช็ค 4 ขา/DLC · แบตต้องเต็ม</p>
+        </div>
+  
+        <div class="card">
+          <h3>โค้ดปัญหา (DTC)</h3>
+          <div class="mut" style="font-size:13px;margin-bottom:4px">ปัจจุบัน</div><div id="dtcCur" class="mut">กด "อ่านโค้ด"</div>
+          <div class="mut" style="font-size:13px;margin:10px 0 4px">ที่เคยเกิด</div><div id="dtcPast" class="mut">—</div>
+          <div class="row" style="margin-top:12px"><button class="btn" id="bDtc">อ่านโค้ด</button><button class="btn red" id="bDtcClr">ลบโค้ด</button></div>
+        </div>
       </div>
-      <div class="row" style="margin-top:12px"><button class="btn big" id="bDtc">อ่านโค้ด</button><button class="btn big red" id="bDtcClr">ลบโค้ด</button></div>
     </section>
 
     <!-- 3 EEPROM -->
-    <section class="page" data-name="EEPROM" data-tab="EEPROM">
+    <section class="page" data-name="TOOLS" data-tab="Tools">
+      <div class="subtabs"><button data-sub="ee" class="on">EEPROM</button><button data-sub="hex">Hex / เทียบไฟล์</button><button data-sub="log">Log</button></div>
+      <div class="sub" data-sub="ee">
       <div class="card">
         <h2>EEPROM (256/512 byte)</h2>
         <div class="row">
@@ -166,10 +253,8 @@
         <p class="warn" style="font-size:13px">EEPROM เก็บค่าเรียนรู้/เลขไมล์บางรุ่น — อ่านเก็บไว้ก่อนเขียนหรือฟอร์แมตทุกครั้ง</p>
         <div class="hex" id="eeHex" style="max-height:52vh">ยังไม่มีข้อมูล</div>
       </div>
-    </section>
-
-    <!-- 4 TOOLS -->
-    <section class="page" data-name="HEX / COMPARE" data-tab="Hex">
+      </div>
+      <div class="sub" data-sub="hex" hidden>
       <div class="card">
         <div class="row">
           <label class="f">ไฟล์ A<select id="hxA"></select></label>
@@ -181,15 +266,18 @@
         <div id="hxSum" class="mut" style="margin:8px 0;font-size:13.5px"></div>
         <div class="hex" id="hx" style="max-height:58vh"></div>
       </div>
-    </section>
-
-    <!-- 5 LOG -->
-    <section class="page" data-name="LOG" data-tab="Log">
+      </div>
+      <div class="sub" data-sub="log" hidden style="height:calc(100% - 46px)">
       <div class="card" style="height:100%;display:flex;flex-direction:column">
         <div class="row" style="margin-bottom:8px"><label class="chk" style="margin:0"><input type="checkbox" id="logFrames"> แสดงเฟรม TX/RX</label><button class="btn" id="bLogClr">ล้าง</button><button class="btn" id="bLogSave">บันทึก log</button><span id="stats" class="mut"></span></div>
         <div class="log" id="log"></div>
       </div>
+      </div>
     </section>
+
+    <!-- 4 TOOLS -->
+
+    <!-- 5 LOG -->
   </div>
 
   <div class="nav" id="nav"></div>
@@ -206,22 +294,6 @@
   <div class="row"><div class="sp"></div><button class="btn" id="bDisc">ตัดการเชื่อมต่อ</button><button class="btn" data-close>ปิด</button></div>
 </div></div>
 
-<!-- smart gauge -->
-<div class="modal" id="mGauge"><div class="card">
-  <h2>🔗 SMART GAUGE</h2>
-  <div class="kv" id="gInfo"></div>
-  <div class="row" style="margin-top:12px">
-    <button class="btn" id="gBle">📶 เชื่อม Bluetooth</button>
-    <button class="btn" id="gUsb">🧩 เชื่อม USB</button>
-    <button class="btn grn" id="gList">📂 ไฟล์ในเกจ</button>
-    <button class="btn red" id="gOff">ตัดเกจ</button>
-  </div>
-  <label class="chk"><input type="checkbox" id="gAuto"> เชื่อมเกจตัวเดิมอัตโนมัติเมื่อเปิดโปรแกรม (Chrome ที่รองรับ)</label>
-  <label class="chk"><input type="checkbox" id="gKl"> ใช้เกจเป็นตัวต่อ K-line ด้วย (ดูด/อัด/LIVE ผ่านเกจ ไม่ต้องใช้สาย USB)</label>
-  <div id="gFiles" style="margin-top:10px"></div>
-  <p class="mut" style="font-size:12.5px">ส่งไฟล์จากหน้า FLASH → 📤 ส่งไปเกจ แล้วกดปุ่ม FLASH ที่หน้าเกจ · เกจต้องลงเฟิร์มแวร์ bridge (โฟลเดอร์ firmware)</p>
-  <div class="row"><div class="sp"></div><button class="btn" data-close>ปิด</button></div>
-</div></div>
 
 <!-- write confirm -->
 <div class="modal" id="mWrite"><div class="card">
@@ -240,8 +312,20 @@
 <!-- settings -->
 <div class="modal" id="mSet"><div class="card">
   <h2>SETTING</h2>
-  <h3>ธีมสี</h3>
-  <div class="themes" id="themes"></div>
+  <h3 style="margin-top:6px">🔗 เชื่อมต่อจอ SMART GAUGE</h3>
+  <div class="gsect">
+    <div class="kv" id="gInfo"></div>
+    <div class="row" style="margin-top:10px">
+      <button class="btn pri" id="gBle">📶 เชื่อม Bluetooth</button>
+      <button class="btn" id="gUsb">🧩 เชื่อม USB</button>
+      <button class="btn" id="gTest">⚡ ทดสอบ</button>
+      <button class="btn" id="gList">📂 ไฟล์ในเกจ</button>
+      <button class="btn red" id="gOff">ตัดเกจ</button>
+    </div>
+    <label class="chk"><input type="checkbox" id="gKl"> ใช้เกจเป็นตัวต่อ K-line ด้วย (ดูด / อัด / LIVE ผ่านเกจ ไม่ต้องใช้สาย USB)</label>
+    <div class="hex" id="gFiles" style="display:none;max-height:140px;margin-top:6px"></div>
+    <p class="mut" style="font-size:12px;margin:6px 0 0">เกจต้องลงเฟิร์มแวร์ MFB-LINK (โฟลเดอร์ firmware/) · ชื่อ Bluetooth ขึ้นต้นด้วย MFB หรือ Jet · AFR / GPS / EOT / O2 มาจากเกจ</p>
+  </div>
   <h3 style="margin-top:16px">K-LINE</h3>
   <div class="grid g2">
     <label class="f">วิธีปลุกกล่อง (สาย USB)<select id="sWake"><option value="break">BREAK 70ms (FTDI แนะนำ)</option><option value="baud">Low-baud 0x00 (CH340/อื่นๆ)</option></select></label>
@@ -253,6 +337,13 @@
   <h3 style="margin-top:16px">ฐานข้อมูลรุ่น (JSON แก้ได้)</h3>
   <textarea id="sModels" rows="7" style="width:100%;font-family:monospace;font-size:12px"></textarea>
   <div class="row" style="margin-top:12px"><button class="btn red" id="sReset">คืนค่าเริ่มต้น</button><div class="sp"></div><button class="btn" data-close>ปิด</button><button class="btn grn" id="sSave">บันทึก</button></div>
+</div></div>
+
+<!-- in-app dialog -->
+<div class="modal" id="mDlg"><div class="card" style="max-width:460px">
+  <div id="dMsg" style="font-size:17px;line-height:1.5;margin-bottom:14px"></div>
+  <input id="dIn" style="width:100%;margin-bottom:14px">
+  <div class="row" style="justify-content:flex-end"><button class="btn" id="dNo">ยกเลิก</button><button class="btn pri" id="dOk">ตกลง</button></div>
 </div></div>
 
 <div class="toast" id="toast"></div>

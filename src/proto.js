@@ -81,7 +81,7 @@
    * response type = request | 0x80, payload[0] = status (0 = OK)      */
   P.LINK = {
     PING: 0x01, WAKE: 0x02, TXRX: 0x03, SENSE: 0x04,
-    FILE_BEGIN: 0x10, FILE_CHUNK: 0x11, FILE_END: 0x12, FILE_LIST: 0x13,
+    FILE_BEGIN: 0x10, FILE_CHUNK: 0x11, FILE_END: 0x12, FILE_LIST: 0x13, SENSORS: 0x20,
     ST_OK: 0, ST_TIMEOUT: 1, ST_ERR: 2,
   };
   P.linkEncode = (type, payload) => {
@@ -221,6 +221,29 @@
     }
     return { start, cks, why: why.join(' · '), known: !!L };
   };
+
+  /* ---------- Smart-Gauge sensor block (LINK 0x20) ----------
+   * afr u16/100, gpsSpeed u16/10, sats, satsView, lat i32/1e7, lon i32/1e7, eot+40, o2/100, flags
+   * flags: b0 AFR valid, b1 GPS fix, b2 EOT valid, b3 O2 valid                                  */
+  P.decodeSensors = (p) => {
+    if (!p || p.length < 18) return null;
+    const u16 = (i) => p[i] | (p[i + 1] << 8), i32 = (i) => (p[i] | (p[i + 1] << 8) | (p[i + 2] << 16) | (p[i + 3] << 24));
+    const f = p[17];
+    return { afr: u16(0) / 100, spd: u16(2) / 10, sats: p[4], satsView: p[5], lat: i32(6) / 1e7, lon: i32(10) / 1e7, eot: p[14] - 40, o2: p[15] / 100,
+      afrOk: !!(f & 1), gpsOk: !!(f & 2), eotOk: !!(f & 4), o2Ok: !!(f & 8), fix: !!(f & 2), t: Date.now() };
+  };
+
+  /* ---------- XDF that matches the DEMO ECU image ---------- */
+  P.DEMO_XDF = `<XDFFORMAT version="1.60"><XDFHEADER><deftitle>Jet_HONDA DEMO K03-H01</deftitle><BASEOFFSET offset="0" subtract="0" /></XDFHEADER>
+<XDFTABLE uniqueid="0x1"><title>น้ำมัน 1-4 (Fuel)</title>
+<XDFAXIS id="x"><EMBEDDEDDATA mmedaddress="0x3F80" mmedelementsizebits="16" mmedcolcount="25" /><indexcount>25</indexcount><MATH equation="X/10"><VAR id="X" /></MATH></XDFAXIS>
+<XDFAXIS id="y"><EMBEDDEDDATA mmedaddress="0x3F00" mmedelementsizebits="16" mmedrowcount="29" /><indexcount>29</indexcount><MATH equation="X"><VAR id="X" /></MATH></XDFAXIS>
+<XDFAXIS id="z"><EMBEDDEDDATA mmedaddress="0x4000" mmedelementsizebits="16" mmedrowcount="29" mmedcolcount="25" /><decimalpl>3</decimalpl><MATH equation="X*0.001"><VAR id="X" /></MATH></XDFAXIS></XDFTABLE>
+<XDFTABLE uniqueid="0x2"><title>ไฟจุดระเบิด (Ignition)</title>
+<XDFAXIS id="x"><EMBEDDEDDATA mmedaddress="0x3F80" mmedelementsizebits="16" mmedcolcount="25" /><indexcount>25</indexcount><MATH equation="X/10"><VAR id="X" /></MATH></XDFAXIS>
+<XDFAXIS id="y"><EMBEDDEDDATA mmedaddress="0x3F00" mmedelementsizebits="16" mmedrowcount="29" /><indexcount>29</indexcount><MATH equation="X"><VAR id="X" /></MATH></XDFAXIS>
+<XDFAXIS id="z"><EMBEDDEDDATA mmedaddress="0x4600" mmedelementsizebits="8" mmedrowcount="29" mmedcolcount="25" /><decimalpl>1</decimalpl><MATH equation="X/2-10"><VAR id="X" /></MATH></XDFAXIS></XDFTABLE>
+</XDFFORMAT>`;
 
   P.sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 

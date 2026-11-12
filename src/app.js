@@ -20,7 +20,24 @@
   const parseHex = (s) => { const v = parseInt(String(s).replace(/^0x/i, ''), 16); return isNaN(v) ? 0 : v; };
   const download = (name, data, type) => { if (window.JetApp) { const u = typeof data === 'string' ? new TextEncoder().encode(data) : data; const r = JetApp.saveFile(name, u, type); toast(r ? 'บันทึกแล้ว: ' + r : 'บันทึกไฟล์ไม่สำเร็จ', 4000); return; } const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob([data], { type: type || 'application/octet-stream' })); a.download = name; a.click(); setTimeout(() => URL.revokeObjectURL(a.href), 2000); };
   const modal = (id, on) => $(id).classList.toggle('show', on);
+  $$('.modal').forEach((m) => m.addEventListener('click', (e) => { if (e.target === m && m.id !== 'mDlg') m.classList.remove('show'); }));
   $$('[data-close]').forEach((b) => b.onclick = () => b.closest('.modal').classList.remove('show'));
+
+  /* ---------------- in-app dialogs (work inside the Android WebView) ---------------- */
+  function dlg(msg, opt) {
+    opt = opt || {};
+    return new Promise((res) => {
+      $('#dMsg').textContent = msg;
+      const inp = $('#dIn'); inp.style.display = opt.input != null ? '' : 'none'; inp.value = opt.input || '';
+      $('#dOk').textContent = opt.ok || 'ตกลง'; $('#dOk').className = 'btn ' + (opt.danger ? 'red' : 'pri');
+      const done = (v) => { modal('#mDlg', false); $('#dOk').onclick = $('#dNo').onclick = null; res(v); };
+      $('#dOk').onclick = () => done(opt.input != null ? inp.value : true);
+      $('#dNo').onclick = () => done(opt.input != null ? null : false);
+      modal('#mDlg', true); if (opt.input != null) setTimeout(() => inp.focus(), 50);
+    });
+  }
+  const ask = (m, danger) => dlg(m, { danger, ok: danger ? 'ยืนยัน' : 'ตกลง' });
+  const askText = (m, def) => dlg(m, { input: def || '' });
 
   /* ---------------- log ---------------- */
   const logEl = $('#log'); let logN = 0;
@@ -38,11 +55,8 @@
   $('#bLogSave').onclick = () => download('jet-honda-tune-log.txt', logEl.innerText, 'text/plain');
 
   /* ---------------- theme ---------------- */
-  const THEMES = [['#2a7bff', 'น้ำเงิน'], ['#00c8ff', 'ฟ้า'], ['#7a5cff', 'ม่วง'], ['#3dff2a', 'เขียวนีออน'], ['#ff2a3a', 'แดง']];
-  function applyTheme() { document.documentElement.style.setProperty('--ac', S.theme); }
-  $('#themes').innerHTML = THEMES.map(([c, n]) => `<div style="text-align:center"><button data-c="${c}" style="background:${c};color:${c}"></button><div class="mut" style="font-size:12px;margin-top:5px">${n}</div></div>`).join('');
-  $$('#themes button').forEach((b) => b.onclick = () => { S.theme = b.dataset.c; applyTheme(); saveS(); markTheme(); });
-  const markTheme = () => $$('#themes button').forEach((b) => b.classList.toggle('on', b.dataset.c === S.theme));
+  // theme picker removed — app always uses the blue/black theme
+  function applyTheme() { S.theme = DEF.theme; document.documentElement.style.setProperty('--ac', DEF.theme); }
 
   /* ---------------- logo ---------------- */
   function applyLogo() {   // custom-logo option removed: always show the built-in logo
@@ -61,7 +75,7 @@
     pages.forEach((p, k) => p.classList.toggle('show', k === i));
     $$('#nav button[data-p]').forEach((b, k) => b.classList.toggle('on', k === i));
     $$('#seg i').forEach((b, k) => b.classList.toggle('on', k === i));
-    if (pages[i].dataset.tab === 'Hex') renderHex();
+    (window.JetPageHooks || []).forEach((f) => { try { f(pages[i].dataset.tab); } catch (e) { console.error(e); } });
   }
   $$('#nav button[data-p]').forEach((b) => b.onclick = () => go(+b.dataset.p));
   const pageOf = (tab) => pages.findIndex((p) => p.dataset.tab === tab);
@@ -95,7 +109,52 @@
     if (!('serial' in navigator) && !window.JetApp) $$('#mConnect .opt[data-c$="usb"]').forEach((o) => (o.style.opacity = .45));
     modal('#mConnect', true);
   };
-  $('#pGauge').onclick = () => { if (!st.gauge) connect('gauge-only'); else toast('เชื่อมเกจอยู่แล้ว'); };
+  $('#pGauge').onclick = () => { $('#bSet').click(); };
+
+  /* ---------------- Smart Gauge section (in SETTING) ---------------- */
+  function renderGauge() {
+    const g = st.gauge, s = st.sens, fresh = s && Date.now() - s.t < 3000, ok = (b) => (b ? '<span class="okc">✓</span>' : '<span class="mut">✗</span>');
+    const via = !g ? '—' : g.kind === 'demo' ? 'DEMO (จำลอง)' : g.via === 'usb' ? 'สาย USB' : 'Bluetooth';
+    $('#gInfo').innerHTML = [
+      ['สถานะ', g ? '<span class="okc">เชื่อมแล้ว</span>' : '<span class="badc">ยังไม่เชื่อม</span>'], ['ชื่อ', g ? esc(g.name || '') : '—'],
+      ['ช่องทาง', via], ['เฟิร์มแวร์', g ? esc(g.fw || '—') : '—'],
+      ['เป็นตัวต่อ K-line', g && st.t === g ? '<span class="okc">ใช่</span>' : 'ไม่'], ['เซ็นเซอร์', g ? (fresh ? `AFR ${ok(s.afrOk)} GPS ${ok(s.gpsOk)}${s.gpsOk ? ' (' + s.sats + ')' : ''} EOT ${ok(s.eotOk)} O2 ${ok(s.o2Ok)}` : g.noSensors ? 'เฟิร์มแวร์ไม่รองรับ' : 'รอข้อมูล…') : '—'],
+    ].map(([k, v]) => `<span>${k}</span><span>${v}</span>`).join('');
+    $('#gKl').checked = S.gaugeKl != null ? !!S.gaugeKl : !!(g && st.t === g);
+    $('#gOff').disabled = !g;
+  }
+  $('#bSet').addEventListener('click', renderGauge);
+  setInterval(() => { if ($('#mSet').classList.contains('show')) renderGauge(); }, 1000);
+  $('#gKl').onchange = () => { S.gaugeKl = $('#gKl').checked; saveS(); };
+  const gConnect = async (via) => {
+    const kl = $('#gKl').checked;
+    if (kl && st.t && st.t.kind === 'usb' && !(await ask('ตอนนี้ต่อสาย K-line USB อยู่ — เปลี่ยนไปใช้เกจเป็นตัวต่อ K-line แทน?'))) return;
+    await connect(kl ? (via === 'usb' ? 'gauge-usb' : 'gauge-ble') : (via === 'usb' ? 'gauge-only-usb' : 'gauge-only'));
+    renderGauge();
+  };
+  $('#gBle').onclick = () => gConnect('ble');
+  $('#gUsb').onclick = () => gConnect('usb');
+  $('#gOff').onclick = async () => {
+    if (!st.gauge) return;
+    if (st.gauge === st.t) await disconnect(); else { try { await st.gauge.close(); } catch (e) {} st.gauge = null; st.sens = null; }
+    pills(); renderGauge(); toast('ตัดการเชื่อมต่อเกจแล้ว');
+  };
+  $('#gTest').onclick = async () => {
+    const g = st.gauge; if (!g) return toast('ยังไม่ได้เชื่อมเกจ');
+    if (st.busy) return toast('กำลังทำงานอื่นอยู่');
+    const t0 = performance.now();
+    const pong = g.request ? await g.request(P.LINK.PING, [], 2000) : true;
+    const rtt = Math.round(performance.now() - t0);
+    const s = g.sensors ? await g.sensors() : null; if (s) st.sens = s;
+    renderGauge();
+    toast(pong ? `เกจตอบกลับใน ${rtt} ms · ` + (s ? `AFR ${s.afrOk ? s.afr.toFixed(1) : '✗'} · GPS ${s.gpsOk ? Math.round(s.spd) + ' km/h' : '✗'}` : 'ยังไม่รองรับคำสั่งเซ็นเซอร์') : 'เกจไม่ตอบ — ตรวจเฟิร์มแวร์ / ระยะ Bluetooth', 4500);
+  };
+  $('#gList').onclick = async () => {
+    const g = st.gauge; if (!g) return toast('ยังไม่ได้เชื่อมเกจ');
+    const box = $('#gFiles'); box.style.display = 'block'; box.textContent = 'กำลังอ่าน…';
+    const list = g.fileList ? await g.fileList() : (g.files || []).map((f) => ({ name: '/ecu/' + f.name + '.bin', size: f.size }));
+    box.textContent = !list ? 'อ่านรายการไฟล์ไม่ได้' : list.length ? list.map((f) => `${f.name}  ${(f.size / 1024).toFixed(1)} KB`).join('\n') : 'ยังไม่มีไฟล์ในเกจ';
+  };
   $('#bDemo').onclick = () => (st.t && st.t.kind === 'demo') ? disconnect() : connect('demo');
   $$('#mConnect .opt').forEach((o) => o.onclick = () => { modal('#mConnect', false); connect(o.dataset.c); });
   $('#bDisc').onclick = () => { modal('#mConnect', false); disconnect(); };
@@ -108,8 +167,11 @@
   }
   async function connect(kind) {
     try {
-      if (kind === 'gauge-only') {
-        const g = new GaugeLink('ble'); await g.open(); st.gauge = g; g.onLost = () => { st.gauge = null; pills(); };
+      if (kind === 'gauge-only' || kind === 'gauge-only-usb') {
+        const via = kind === 'gauge-only-usb' ? 'usb' : 'ble';
+        if (via === 'usb' && window.JetApp && st.t && st.t.kind === 'usb') throw new Error('มือถือมีพอร์ต USB เดียว (ใช้กับสาย K-line อยู่) — ต่อเกจด้วย Bluetooth แทน');
+        if (st.gauge && st.gauge !== st.t) { try { await st.gauge.close(); } catch (e) {} }
+        const g = new GaugeLink(via); await g.open(); st.gauge = g; g.onLost = () => { if (st.gauge === g) st.gauge = null; pills(); toast('เกจหลุดการเชื่อมต่อ'); };
         log('info', 'เชื่อมเกจแล้ว ' + (g.fw || '')); toast('เชื่อมเกจแล้ว'); pills(); return;
       }
       await disconnect();
@@ -123,7 +185,7 @@
       st.ecu = new HondaECU(t, { log, timeout: S.timeout });
       log('info', 'เชื่อมต่อ ' + t.name + (t.fw ? ' · ' + t.fw : ''));
       pills(); await detect();
-      if (kind === 'demo') startLive();
+      if (st.ecu && ['OK', 'SECURE', 'READ'].includes(st.ecu.state)) startLive();
     } catch (e) { log('err', e.message || e); toast(e.message || String(e), 4000); pills(); }
   }
 
@@ -160,9 +222,23 @@
     ].map(([k, v]) => `<span>${k}</span><span>${v}</span>`).join('');
   }
   const ARC_LEN = 2 * Math.PI * 118 * 0.75;
+  // centre of the round gauge: tap to switch km/h ⇄ AFR
+  function showCenter(d) {
+    d = d || st.last || {};
+    const afr = S.center === 'afr', v = afr ? d.AFR : d.SPD, el = $('#vSPD');
+    if (v != null) el.textContent = afr ? (+v).toFixed(1) : Math.round(v);
+    else if (afr) el.textContent = '--';
+    el.style.color = !afr || v == null ? '' : v < 11.5 ? '#ff6b7a' : v > 15.5 ? '#ffb020' : '#7dffb8';
+    $('#vUnit').textContent = afr ? 'AFR ⇄' : 'km/h ⇄';
+  }
+  $('.gauge').addEventListener('click', () => {
+    S.center = S.center === 'afr' ? 'spd' : 'afr'; saveS(); showCenter();
+    if (S.center === 'afr' && (!st.last || st.last.AFR == null)) toast('ยังไม่มีค่า AFR — ต้องต่อ Smart Gauge ที่มีไวด์แบนด์ (หรือเปิด DEMO)', 3500);
+  });
   function showLive(d) {
     const f = (k, n) => { const el = $('#v' + k); if (el && d[k] != null) el.textContent = n == null ? d[k] : (+d[k]).toFixed(n); };
-    f('ECT', 0); f('IAT', 0); f('MAP', 0); f('BATT', 1); f('INJ', 2); f('IGN', 1); f('TPS', 1); f('SPD', 0);
+    f('ECT', 0); f('IAT', 0); f('MAP', 0); f('BATT', 1); f('INJ', 2); f('IGN', 1); f('TPS', 1);
+    showCenter(d);
     if (d.RPM != null) {
       $('#vRPM').textContent = Math.round(d.RPM).toLocaleString('en-US');
       const p = Math.max(0, Math.min(1, d.RPM / (S.rpmMax || 12000)));
@@ -170,13 +246,25 @@
     }
     if (d.TPS != null) $('#tpsBar').style.width = Math.max(0, Math.min(100, d.TPS)) + '%';
   }
+  // merge gauge sensors (AFR wideband / GPS / EOT / O2) and phone GPS into a live sample
+  async function mergeSensors(d) {
+    if (st.gauge && st.gauge.sensors) {
+      const s = await st.gauge.sensors();
+      if (s) { st.sens = s; if (s.afrOk) d.AFR = s.afr; if (s.eotOk) d.EOT = s.eot; if (s.o2Ok) d.O2 = s.o2; }
+    }
+    const g = window.JetGps && JetGps.current();
+    if (g) { d.GPS = g.spd; d.gpsSrc = g.src; }
+    d.t = Date.now();
+    return d;
+  }
+  function emitLive(d) { (window.JetHooks || []).forEach((f) => { try { f(d); } catch (e) { console.error(e); } }); }
   async function liveLoop() {
     st.liveRunning = true;
     let fails = 0;
     while (st.live && st.ecu && !st.busy) {
       try {
         const d = await st.ecu.readLive();
-        if (d) { fails = 0; showLive(d); } else if (++fails > 5) { log('err', 'LIVE: กล่องไม่ตอบ'); stopLive(); }
+        if (d) { fails = 0; await mergeSensors(d); showLive(d); emitLive(d); } else if (++fails > 5) { log('err', 'LIVE: กล่องไม่ตอบ'); stopLive(); }
       } catch (e) { stopLive(); }
       await P.sleep(40);
     }
@@ -194,7 +282,7 @@
   /* ---------------- DTC ---------------- */
   const dtcHtml = (l) => l.length ? l.map((k) => `<div class="dtc"><b>${k}</b><span>${esc(P.dtcText(k))}</span></div>`).join('') : '<div class="okc">ไม่มีโค้ด ✔</div>';
   $('#bDtc').onclick = () => op('อ่านโค้ด DTC', async () => { const r = await st.ecu.readDTC(); $('#dtcCur').innerHTML = dtcHtml(r.current); $('#dtcPast').innerHTML = dtcHtml(r.past); });
-  $('#bDtcClr').onclick = () => { if (confirm('ลบโค้ดทั้งหมดในกล่อง?')) op('ลบโค้ด', async () => { toast((await st.ecu.clearDTC()) ? 'ลบโค้ดแล้ว' : 'ลบไม่สำเร็จ'); $('#bDtc').click(); }); };
+  $('#bDtcClr').onclick = async () => { if (await ask('ลบโค้ดทั้งหมดในกล่อง?', true)) op('ลบโค้ด', async () => { toast((await st.ecu.clearDTC()) ? 'ลบโค้ดแล้ว' : 'ลบไม่สำเร็จ'); const r = await st.ecu.readDTC(); $('#dtcCur').innerHTML = dtcHtml(r.current); $('#dtcPast').innerHTML = dtcHtml(r.past); }); };
 
   /* ---------------- file library (IndexedDB) ---------------- */
   const DB = {
@@ -219,6 +307,7 @@
     $$('#flist .fi').forEach((el) => el.onclick = () => selectFile(el.dataset.id));
     const opts = '<option value="">—</option>' + st.files.map((f) => `<option value="${f.id}">${esc(f.name)}</option>`).join('');
     const a = $('#hxA').value, b = $('#hxB').value; $('#hxA').innerHTML = opts; $('#hxB').innerHTML = opts; $('#hxA').value = a; $('#hxB').value = b;
+    (window.JetFileHooks || []).forEach((f) => { try { f(st.files); } catch (e) { console.error(e); } });
   }
   const layout = (f) => P.detectLayout(fbytes(f), f);
   function curLayout() {
@@ -276,8 +365,8 @@
     e.target.value = '';
   };
   $('#bDown').onclick = () => { if (!st.sel) return toast('เลือกไฟล์ก่อน'); download(st.sel.name + '.bin', fbytes(st.sel)); };
-  $('#bRen').onclick = async () => { if (!st.sel) return; const n = prompt('ชื่อไฟล์ใหม่', st.sel.name); if (n) { st.sel.name = n.trim(); await DB.put(st.sel); await refreshFiles(); renderSel(); } };
-  $('#bDel').onclick = async () => { if (!st.sel || !confirm('ลบไฟล์ "' + st.sel.name + '" ออกจากคลัง?')) return; await DB.del(st.sel.id); st.sel = null; await refreshFiles(); renderSel(); };
+  $('#bRen').onclick = async () => { if (!st.sel) return toast('เลือกไฟล์ก่อน'); const n = await askText('ชื่อไฟล์ใหม่', st.sel.name); if (n) { st.sel.name = n.trim(); await DB.put(st.sel); await refreshFiles(); renderSel(); } };
+  $('#bDel').onclick = async () => { if (!st.sel) return toast('เลือกไฟล์ก่อน'); if (!(await ask('ลบไฟล์ "' + st.sel.name + '" ออกจากคลัง?', true))) return; await DB.del(st.sel.id); st.sel = null; await refreshFiles(); renderSel(); };
   $('#bFix').onclick = async () => {
     if (!st.sel) return toast('เลือกไฟล์ก่อน');
     const u = fbytes(st.sel), L = curLayout(), idx = L.cks;
@@ -390,7 +479,7 @@
     if (!st.gauge) { toast('ยังไม่ได้เชื่อมเกจ — แตะ GAUGE ด้านบน'); return; }
     if (st.busy) return toast('กำลังทำงานอื่นอยู่');
     let u = fbytes(st.sel);
-    if (!P.binChecksumOK(u) && confirm('checksum ไม่ผ่าน — แก้ checksum ก่อนส่งไปเกจ?')) u = P.binFixChecksum(u, curLayout().cks);
+    if (!P.binChecksumOK(u) && await ask('checksum ไม่ผ่าน — แก้ checksum ก่อนส่งไปเกจ?')) u = P.binFixChecksum(u, curLayout().cks);
     const wasLive = st.live; stopLive(); st.busy = true; while (st.liveRunning) await P.sleep(10);
     progShow('w', true, false); stage('w', 'ส่งไฟล์ไปเกจ…'); const t0 = Date.now();
     try {
@@ -425,10 +514,10 @@
     const f = e.target.files[0]; e.target.value = ''; if (!f) return;
     const u = new Uint8Array(await f.arrayBuffer());
     if (u.length !== 256 && u.length !== 512) return toast('ไฟล์ EEPROM ต้อง 256 หรือ 512 byte');
-    if (!confirm('เขียน EEPROM จากไฟล์ ' + f.name + ' ?')) return;
+    if (!(await ask('เขียน EEPROM จากไฟล์ ' + f.name + ' ?', true))) return;
     op('เขียน EEPROM', async () => { await st.ecu.eepromWrite(u); toast('เขียน EEPROM สำเร็จ'); st.ee = u; showEe(); });
   };
-  const fmt = (ff) => { if (confirm('ฟอร์แมต EEPROM เป็น ' + (ff ? 'FF' : '00') + ' ? ข้อมูลเดิมจะหายทั้งหมด')) op('ฟอร์แมต EEPROM', async () => toast((await st.ecu.eepromFormat(ff)) ? 'ฟอร์แมตแล้ว' : 'ไม่สำเร็จ')); };
+  const fmt = async (ff) => { if (await ask('ฟอร์แมต EEPROM เป็น ' + (ff ? 'FF' : '00') + ' ? ข้อมูลเดิมจะหายทั้งหมด', true)) op('ฟอร์แมต EEPROM', async () => toast((await st.ecu.eepromFormat(ff)) ? 'ฟอร์แมตแล้ว' : 'ไม่สำเร็จ')); };
   $('#bEeFF').onclick = () => fmt(true); $('#bEe00').onclick = () => fmt(false);
 
   /* ---------------- HEX / COMPARE ---------------- */
@@ -464,7 +553,7 @@
 
   /* ---------------- settings ---------------- */
   $('#bSet').onclick = () => {
-    markTheme(); $('#sWake').value = S.wake; $('#sTo').value = S.timeout; $('#sErase').value = S.eraseWait; $('#sBlock').value = S.block; $('#sPw').value = S.pw;
+    $('#sWake').value = S.wake; $('#sTo').value = S.timeout; $('#sErase').value = S.eraseWait; $('#sBlock').value = S.block; $('#sPw').value = S.pw;
     $('#sModels').value = JSON.stringify(models().map((m) => Object.assign({}, m, { start: P.hx(m.start), cks: P.hx(m.cks) })), null, 1);
     modal('#mSet', true);
   };
@@ -477,21 +566,36 @@
       fillModels(); modal('#mSet', false); toast('บันทึกแล้ว');
     } catch (e) { toast('ผิดพลาด: ' + e.message, 4000); }
   };
-  $('#sReset').onclick = () => { if (confirm('คืนค่าตั้งค่าทั้งหมด?')) { localStorage.removeItem(LS); location.reload(); } };
+  $('#sReset').onclick = async () => { if (await ask('คืนค่าตั้งค่าทั้งหมด?', true)) { localStorage.removeItem(LS); location.reload(); } };
 
   function renderStats() { if (st.ecu) $('#stats').textContent = `TX ${st.ecu.stats.tx} · RX ${st.ecu.stats.rx} · retry ${st.ecu.stats.retry} · bad ${st.ecu.stats.bad}`; }
   setInterval(renderStats, 1500);
 
   window.JetBack = () => {
-    const m = document.querySelector('.modal.show'); if (m) { m.classList.remove('show'); return true; }
+    const m = document.querySelector('.modal.show'); if (m) { if (m.id === 'mDlg') $('#dNo').click(); else m.classList.remove('show'); return true; }
     if (!pages[0].classList.contains('show')) { go(0); return true; }
     return false;
   };
 
+  /* ---------------- API for ui-extra.js ---------------- */
+  window.JetCore = { st, S, saveS, $, $$, P, toast, ask, askText, dlg, op, go, pageOf, fbytes, addFile, refreshFiles, log, esc, kb, download, modal,
+    startLive, stopLive, renderHex, mergeSensors, emitLive, models, parseHex };
+
   /* ---------------- boot ---------------- */
   (async () => {
-    applyTheme(); applyLogo(); go(0); fillModels(); pills(); renderEcu();
+    const t0 = Date.now();
+    const sp = (pct, msg) => { $('#spBar').style.width = pct + '%'; if (msg) $('#spMsg').textContent = msg; };
+    const hideSplash = () => { const el = $('#splash'); if (!el || el.classList.contains('out')) return; el.classList.add('out'); setTimeout(() => el.remove(), 600); };
+    setTimeout(hideSplash, 6000); // fail-safe
+    sp(15, 'โหลดธีมและหน้าจอ…');
+    applyTheme(); applyLogo(); go(0); fillModels(); pills(); renderEcu(); showCenter();
+    sp(45, 'เปิดคลังไฟล์ ECU…');
     try { await DB.open(); await refreshFiles(); } catch (e) { toast('เปิดคลังไฟล์ไม่ได้: ' + e.message); }
+    sp(75, 'เตรียมโปรโตคอล K-LINE…');
+    await P.sleep(250);
+    sp(100, window.JetApp ? 'พร้อม · USB OTG + Bluetooth' : 'พร้อมใช้งาน');
+    await P.sleep(Math.max(300, 1900 - (Date.now() - t0)));
+    hideSplash();
     log('info', window.JetApp ? 'Jet_HONDA Tune (Android APP) พร้อมใช้งาน · USB OTG + Bluetooth' : 'Jet_HONDA Tune พร้อมใช้งาน · Web Serial: ' + ('serial' in navigator ? 'มี' : 'ไม่มี') + ' · Bluetooth: ' + ('bluetooth' in navigator ? 'มี' : 'ไม่มี'));
   })();
 })();

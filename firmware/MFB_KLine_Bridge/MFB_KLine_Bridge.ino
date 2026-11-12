@@ -35,7 +35,7 @@
 #define NUS_TX  "6e400003-b5a3-f393-e0a9-e50e24dcca9e"
 
 enum { L_PING = 0x01, L_WAKE = 0x02, L_TXRX = 0x03, L_SENSE = 0x04,
-       L_FBEGIN = 0x10, L_FCHUNK = 0x11, L_FEND = 0x12, L_FLIST = 0x13 };
+       L_FBEGIN = 0x10, L_FCHUNK = 0x11, L_FEND = 0x12, L_FLIST = 0x13, L_SENSORS = 0x20 };
 
 HardwareSerial KL(2);
 static BLECharacteristic *txChr = nullptr;
@@ -53,6 +53,11 @@ static Parser pUsb, pBle;
 static bool busy = false;
 bool mfbBridgeBusy() { return busy; }
 __attribute__((weak)) void mfbOnFileReceived(const char *path, uint32_t size) { (void)path; (void)size; }
+
+// ---- sensors the gauge owns (wideband AFR, GPS, EOT, O2) ----
+// Fill this from your gauge firmware (override this weak function). Leave *Ok=false for what you don't have.
+struct MfbSensors { float afr; float gpsKmh; uint8_t sats, satsView; double lat, lon; int eotC; float o2V; bool afrOk, gpsOk, eotOk, o2Ok; };
+__attribute__((weak)) void mfbGetSensors(MfbSensors &s) { memset(&s, 0, sizeof(s)); }
 
 static void sendFrame(uint8_t ch, uint8_t type, const uint8_t *p, uint16_t n) {
   uint8_t h[5] = { 0x55, 0xAA, type, (uint8_t)(n & 0xFF), (uint8_t)(n >> 8) };
@@ -136,6 +141,16 @@ static void handle(uint8_t ch, uint8_t type, uint8_t *p, uint16_t n) {
       if (!ok) LittleFS.remove(fPath);
       reply(ch, type, ok ? 0 : 2);
       if (ok) mfbOnFileReceived(fPath, fSize);
+    } break;
+    case L_SENSORS: {
+      MfbSensors s; mfbGetSensors(s);
+      uint8_t p[18]; uint16_t a = (uint16_t)(s.afr * 100 + 0.5f), v = (uint16_t)(s.gpsKmh * 10 + 0.5f);
+      int32_t la = (int32_t)(s.lat * 1e7), lo = (int32_t)(s.lon * 1e7);
+      p[0] = a & 255; p[1] = a >> 8; p[2] = v & 255; p[3] = v >> 8; p[4] = s.sats; p[5] = s.satsView;
+      memcpy(p + 6, &la, 4); memcpy(p + 10, &lo, 4);      // ESP32 is little-endian
+      p[14] = (uint8_t)constrain(s.eotC + 40, 0, 255); p[15] = (uint8_t)constrain((int)(s.o2V * 100 + 0.5f), 0, 255);
+      p[16] = 0; p[17] = (s.afrOk ? 1 : 0) | (s.gpsOk ? 2 : 0) | (s.eotOk ? 4 : 0) | (s.o2Ok ? 8 : 0);
+      reply(ch, type, 0, p, 18);
     } break;
     case L_FLIST: {
       String s; File d = LittleFS.open("/ecu"); File f = d ? d.openNextFile() : File();

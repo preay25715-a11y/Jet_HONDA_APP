@@ -12,10 +12,18 @@
     let s = 0x1234;
     const rnd = () => ((s = (s * 1103515245 + 12345) & 0x7FFFFFFF) >> 16) & 0xFF;
     for (let i = 0; i < size; i++) b[i] = i < size * 0.7 ? rnd() : 0xFF;
-    // a 29x25 16-bit fuel table at 0x4000 for realism
+    // demo maps (same layout as DEMO_XDF below): RPM axis, TPS axis, fuel 29x25 (16-bit BE, X*0.001), ignition 29x25 (8-bit, X/2-10)
+    const RPM = [840, 1100, 1200, 1300, 1400, 1500, 1600, 1800, 2000, 2250, 2500, 2750, 3000, 3250, 3500, 4000, 4500, 5000, 5500, 6000, 6500, 7000, 7500, 7750, 8000, 8500, 9000, 9500, 9800];
+    const TPS = [0, 0.4, 0.8, 1.2, 1.9, 2.5, 3.0, 3.5, 4.0, 4.9, 5.9, 7.9, 9.9, 11.9, 13.9, 15.9, 18.6, 20.9, 26.4, 31.8, 39.5, 44.7, 50.0, 59.3, 72.0];
+    const w16 = (o, v) => { if (o + 1 < size) { b[o] = (v >> 8) & 255; b[o + 1] = v & 255; } };
+    RPM.forEach((v, i) => w16(0x3F00 + i * 2, v));
+    TPS.forEach((v, i) => w16(0x3F80 + i * 2, Math.round(v * 10)));
     for (let r = 0; r < 29; r++) for (let c = 0; c < 25; c++) {
-      const v = Math.round(2000 + c * 330 + r * 40 + Math.sin(r / 3) * 120);
-      const o = 0x4000 + (r * 25 + c) * 2; if (o + 1 < size) { b[o] = v >> 8; b[o + 1] = v & 0xFF; }
+      const rn = r / 28, sT = Math.pow(TPS[c] / 72, 0.55);
+      const lo = 4.72 - 2.6 * Math.sqrt(rn), hi = 9.9 + 1.5 * rn - 0.4 * rn * rn + Math.sin(r / 2.5) * 0.12;
+      w16(0x4000 + (r * 25 + c) * 2, Math.round((lo * (1 - sT) + hi * sT) * 1000));
+      const ign = 12 + rn * 22 - sT * 8 + Math.sin(c / 4) * 0.8;
+      if (0x4600 + r * 25 + c < size) b[0x4600 + r * 25 + c] = Math.round((ign + 10) * 2);
     }
     b.set(Array.from('MFB-DEMO K03-H01').map((c) => c.charCodeAt(0)), 0x10);
     return P.binFixChecksum(b, 0);
@@ -121,19 +129,33 @@
       }
       return null;
     }
+    // demo ride: idle 4s → full throttle 14s → coast 8s (26s loop)
+    dyn() {
+      const s = (Date.now() - this.t0) / 1000, ph = s % 26;
+      let spd, tps, rpm;
+      if (ph < 4) { spd = 0; tps = 0; rpm = 1500 + Math.sin(s * 3) * 30; }
+      else if (ph < 18) { const t = ph - 4; spd = 168 * (1 - Math.exp(-t / 6)); tps = 92 + Math.sin(s * 9) * 3; rpm = 4500 + ((spd * 97) % 5200); }
+      else { const t = ph - 18, v0 = 168 * (1 - Math.exp(-14 / 6)); spd = Math.max(0, v0 * (1 - t / 7)); tps = 0; rpm = 1500 + spd * 30; }
+      const wot = tps > 50;
+      return { spd, tps, rpm: Math.round(Math.min(rpm, 10500)), map: wot ? 95 : 32, inj: wot ? 6.0 + Math.sin(s * 5) * 0.1 : 2.1, ign: wot ? 27.9 : 12,
+        afr: wot ? 12.7 + Math.sin(s * 7) * 0.35 + (rpm > 8000 ? 0.6 : 0) : 14.6 + Math.sin(s * 2) * 0.4, eot: 78, o2: wot ? 0.81 : 0.45 + Math.sin(s * 4) * 0.35 };
+    }
+    // Smart-Gauge sensor block (AFR wideband + GPS) — same fields as LINK SENSORS
+    async sensors() {
+      if (this.latency) await P.sleep(this.latency);
+      const d = this.dyn(), now = Date.now();
+      if (this.gpsT) { const dt = (now - this.gpsT) / 1000; this.lat += (d.spd / 3.6) * dt / 111320; }
+      else this.lat = 13.7563;
+      this.gpsT = now;
+      return { afr: +d.afr.toFixed(2), spd: +d.spd.toFixed(1), sats: 19, satsView: 26, fix: true, lat: this.lat, lon: 100.5018, eot: d.eot, o2: +d.o2.toFixed(2), afrOk: true, gpsOk: true, eotOk: true, o2Ok: true, t: now };
+    }
     table(t) {
       if (t === 0x00) return [0x4B, 0x30, 0x33, 0x48, 0x01, 0x10, 0x22];  // "K03H"..
       if (t === 0x11) {
-        const s = (Date.now() - this.t0) / 1000;
-        const ph = (s % 14) / 14, wot = ph > 0.35 && ph < 0.85;
-        const rpm = Math.round(wot ? 3000 + (ph - 0.35) * 2 * 6800 : 1500 + Math.sin(s * 3) * 30);
-        const tps = wot ? 92 + Math.sin(s * 9) * 3 : 0;
-        const map = wot ? 95 : 32;
-        const spd = Math.round(wot ? (ph - 0.35) * 2 * 120 : Math.max(0, 40 - (ph > 0.85 ? (ph - 0.85) * 260 : 40)));
-        const inj = Math.round((wot ? 6.0 + Math.sin(s * 5) * 0.1 : 2.1) * 250);
-        const ign = wot ? 27.9 : 12;
-        return [rpm >> 8, rpm & 255, Math.round((0.5 + tps / 100 * 4) * 51.2), Math.round(tps * 1.6),
-          120, 79 + 40, 150, 34 + 40, 140, map, 0, 0, 141, spd, inj >> 8, inj & 255, Math.round((ign + 64) * 2), 0, 0, 0];
+        const d = this.dyn();
+        const inj = Math.round(d.inj * 250);
+        return [d.rpm >> 8, d.rpm & 255, Math.round((0.5 + d.tps / 100 * 4) * 51.2), Math.round(d.tps * 1.6),
+          120, 79 + 40, 150, 34 + 40, 140, d.map, 0, 0, 141, Math.round(d.spd), inj >> 8, inj & 255, Math.round((d.ign + 64) * 2), 0, 0, 0];
       }
       if (t === 0x17) return [0x00, 0x51, 0x00, 0x00];
       if (t === 0xD1) return [0x01, 0x00, 0x00, 0x00, 0x00];

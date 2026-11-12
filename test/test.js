@@ -61,5 +61,27 @@ const { SimTransport } = require('../src/sim.js');
   assert(await e2.unlock(P.parseHexBytes('01 02 03 04 05 06 07 08')));
   assert.strictEqual((await e2.readFlash({ start: 0x8000, maxBytes: 64 })).length, 64);
   console.log('✔ security unlock');
+
+  // ---- tune engine
+  const T = require('../src/tune.js'); const { makeImage } = require('../src/sim.js');
+  const im = makeImage(65536), tabs = T.parseXDF(P.DEMO_XDF);
+  assert.strictEqual(tabs.length, 2); const ft = T.readTable(im, tabs[0]);
+  assert.strictEqual(ft.ys[0], 840); assert.strictEqual(ft.xs[24], 72); assert(Math.abs(ft.vals[0][0] - 4.72) < 0.002);
+  const im2 = new Uint8Array(im); assert.strictEqual(T.writeCell(im2, tabs[0], 5, 5, 6.5), 6.5);
+  assert.strictEqual(T.readTable(im2, tabs[0]).vals[5][5], 6.5);
+  // little-endian, signed, column-major, BASEOFFSET subtract, labels axis, nonlinear eq
+  const x2 = `<XDFFORMAT><XDFHEADER><BASEOFFSET offset="0x8000" subtract="1" /></XDFHEADER><XDFTABLE><title>t</title>
+   <XDFAXIS id="x"><indexcount>3</indexcount><LABEL index="0" value="10"/><LABEL index="1" value="20"/><LABEL index="2" value="30"/></XDFAXIS>
+   <XDFAXIS id="z"><EMBEDDEDDATA mmedtypeflags="0x07" mmedaddress="0x8010" mmedelementsizebits="16" mmedrowcount="2" mmedcolcount="3"/><MATH equation="X*X*X/1000"><VAR id="X"/></MATH></XDFAXIS></XDFTABLE></XDFFORMAT>`;
+  const t2 = T.parseXDF(x2)[0]; assert.strictEqual(t2.z.addr, 0x10); assert(t2.z.lsb && t2.z.signed && t2.z.colMajor);
+  const b2 = new Uint8Array(64); T.rawSet(b2, t2.z, T.cellAddr(t2.z, 1, 2), -300);
+  assert.strictEqual(T.rawGet(b2, t2.z, 0x10 + (2 * 2 + 1) * 2), -300); assert.strictEqual(b2[0x10 + 10], 0xD4);
+  assert.deepStrictEqual(T.readTable(b2, t2).xs, [10, 20, 30]);
+  T.writeCell(b2, t2, 0, 0, 343); assert.strictEqual(T.rawGet(b2, t2.z, 0x10), 70);
+  const lg = new T.AfrLog(2, 2); lg.add(0, 1, 13); lg.add(0.4, 1.2, 14); assert.strictEqual(lg.get(0, 1).avg, 13.5);
+  assert.strictEqual(T.fitFactor(14, 13, 15).toFixed(4), (14 / 13).toFixed(4)); assert.strictEqual(T.fitFactor(20, 13, 15), 1.15);
+  const sens = P.decodeSensors([0x76, 0x04, 0xD0, 0x04, 19, 26, 0x40, 0x6C, 0x32, 0x08, 0x08, 0x61, 0xE7, 0x3B, 118, 81, 0, 0x0F]);
+  assert.strictEqual(sens.afr, 11.42); assert.strictEqual(sens.spd, 123.2); assert(sens.gpsOk && sens.afrOk); assert.strictEqual(sens.eot, 78);
+  console.log('✔ tune engine (XDF / LE / signed / col-major / AFR log / fit / sensors)');
   console.log('\nALL TESTS PASSED');
 })().catch((e) => { console.error('FAIL', e); process.exit(1); });

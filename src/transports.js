@@ -181,6 +181,13 @@
     }
     async wake() { await this.request(P.LINK.WAKE, [], 1500); }
     async sense() { const r = await this.request(P.LINK.SENSE, [], 800); return r ? !!r[1] : null; }
+    // AFR wideband + GPS + EOT + O2 from the gauge (null if firmware too old)
+    async sensors() {
+      if (this.noSensors) return null;
+      const r = await this.request(P.LINK.SENSORS, [], 700);
+      if (!r || r[0] !== 0) { this.sensorFails = (this.sensorFails || 0) + 1; if (this.sensorFails > 3) this.noSensors = true; return null; }
+      this.sensorFails = 0; return P.decodeSensors(r.slice(1));
+    }
     async txrx(frame, ml, timeout) {
       const r = await this.request(P.LINK.TXRX, [ml, timeout & 0xFF, timeout >> 8, ...frame], timeout + 1200);
       if (!r || r[0] !== P.LINK.ST_OK) return null;
