@@ -1,0 +1,1766 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#05080f">
+<title>Jet_HONDA Tune</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Lexend:wght@400;500;600;700;800&family=Kanit:wght@300;400;500;600&display=swap" rel="stylesheet">
+<style>:root{--ac:#2f7cf6;--ac2:#8cc8ff;--bg:#050a14;--panel:#0a1426;--card:#0c1a33;--line:#1c3358;--tx:#e9f1ff;--mut:#7d93b8;--ok:#2fd18b;--warn:#ffb020;--bad:#ff4d5e;
+--disp:'Lexend','Kanit',system-ui,sans-serif;--body:'Kanit','Lexend',system-ui,sans-serif;--r:22px}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+html,body{margin:0;height:100%;background:radial-gradient(ellipse at 50% -10%,#0d2246 0%,var(--bg) 60%);color:var(--tx);font-family:var(--body);overflow:hidden}
+button{font-family:inherit;color:inherit;cursor:pointer}
+a{color:var(--ac2)}
+.app{display:flex;flex-direction:column;height:100%;max-width:1400px;margin:0 auto;padding:10px 14px 0}
+
+/* ---------- header ---------- */
+.top{display:grid;grid-template-columns:1fr auto 1fr;align-items:center;gap:10px;padding:4px 10px 0}
+.hl{display:flex;align-items:center;gap:10px;min-width:0}
+.hr{display:flex;align-items:center;gap:10px;justify-content:flex-end}
+.status{display:flex;align-items:center;gap:10px;background:none;border:0;padding:4px 2px;font-size:19px;font-weight:600;color:#c7d6ef;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:100%}
+.dot{width:12px;height:12px;border-radius:50%;background:#53627d;flex:none}
+.dot.on{background:var(--ok);box-shadow:0 0 10px var(--ok)}.dot.mid{background:var(--warn);box-shadow:0 0 10px var(--warn)}.dot.bad{background:var(--bad)}
+.chipst{font-size:12px;padding:3px 9px;border-radius:999px;border:1px solid var(--line);color:var(--mut);white-space:nowrap;font-family:var(--disp)}
+.chipst.on{color:var(--ok);border-color:#1f6b4d}.chipst.mid{color:var(--warn);border-color:#6b5320}
+.brand{display:flex;align-items:center;gap:9px;cursor:pointer}
+.brand svg{height:34px;width:34px;flex:none}
+.brand img{height:38px;max-width:200px;object-fit:contain}
+.logo{font-family:var(--disp);font-weight:700;font-size:24px;letter-spacing:.5px;color:var(--ac2);line-height:1;white-space:nowrap}
+.logo small{font-size:12px;letter-spacing:3px;color:var(--mut);margin-left:6px;font-weight:600}
+.clock{font-family:var(--disp);font-size:22px;color:#c7d6ef;font-weight:500}
+.mini{background:transparent;border:1px solid var(--line);border-radius:12px;padding:6px 12px;font-size:13px;color:var(--mut);font-family:var(--disp)}
+.mini.on{border-color:var(--ac);color:var(--ac2);background:#0f2447}
+.seg{display:flex;gap:6px;padding:10px 10px 0}
+.seg i{flex:1;height:8px;border-radius:5px;background:#132644}
+.seg i.on{background:var(--ac);box-shadow:0 0 10px color-mix(in srgb,var(--ac) 60%,#0000)}
+
+/* ---------- pages ---------- */
+.pages{flex:1;position:relative;margin-top:12px;min-height:0;background:var(--panel);border:1.5px solid var(--line);border-bottom:0;border-radius:var(--r) var(--r) 0 0}
+.page{position:absolute;inset:0;overflow:auto;display:none;padding:16px}
+.page.show{display:block;animation:fade .2s}
+@keyframes fade{from{opacity:0}}
+.page::-webkit-scrollbar{width:8px}.page::-webkit-scrollbar-thumb{background:#2a4573;border-radius:4px}
+.card{background:var(--card);border:1.5px solid var(--line);border-radius:var(--r);padding:16px 20px;position:relative}
+.card h3{margin:0 0 10px;font-size:15px;color:var(--mut);font-weight:500;display:flex;justify-content:space-between;align-items:center}
+.card h2{margin:0 0 12px;font-size:20px;font-weight:600}
+.grid{display:grid;gap:14px}
+.g4{grid-template-columns:repeat(4,1fr)}.g3{grid-template-columns:repeat(3,1fr)}.g2{grid-template-columns:1fr 1fr}
+.split{display:grid;grid-template-columns:minmax(260px,1fr) 1.35fr;gap:14px;min-height:100%}
+
+/* ---------- dashboard ---------- */
+.dash{display:grid;grid-template-columns:1fr 1.25fr 1fr;gap:14px;align-items:stretch}
+.dcol{display:flex;flex-direction:column;gap:14px}
+.tile{padding:14px 22px;flex:1;display:flex;flex-direction:column;justify-content:center;min-height:118px}
+.tile .k{font-size:19px;color:#a9bddf;font-family:var(--disp)}
+.tile .v{font-family:var(--disp);font-weight:700;font-size:clamp(30px,4.2vw,50px);line-height:1.05;margin-top:2px}
+.tile .v small{font-size:.45em;color:#9fb5da;font-weight:400;margin-left:4px}
+.gauge{display:flex;align-items:center;justify-content:center;position:relative;min-height:300px}
+.gauge svg{width:100%;max-width:360px;height:auto}
+.gauge .gc{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;pointer-events:none}
+.gauge .rpm{font-family:var(--disp);font-size:clamp(18px,2.4vw,30px);color:var(--ac2);font-weight:500}
+.gauge .spd{font-family:var(--disp);font-size:clamp(64px,10vw,124px);font-weight:800;line-height:.95;letter-spacing:-2px;text-shadow:0 0 22px #5aa0ff55}
+.gauge .unit{font-family:var(--disp);font-size:clamp(14px,1.8vw,22px);color:#9fb5da;margin-top:6px}
+.wide{display:flex;align-items:center;gap:24px;margin-top:14px;padding:14px 26px}
+.wide .k{font-size:19px;color:#a9bddf;font-family:var(--disp);white-space:nowrap}
+.wide .v{font-family:var(--disp);font-weight:700;font-size:36px;white-space:nowrap}
+.wide .v small{font-size:.5em;color:#9fb5da;font-weight:400;margin-left:3px}
+.track{flex:1;height:7px;border-radius:4px;background:#14284a;overflow:hidden}
+.track i{display:block;height:100%;width:0;background:linear-gradient(90deg,var(--ac),var(--ac2));border-radius:4px;transition:width .15s}
+
+/* ---------- controls ---------- */
+.btn{border:1.5px solid var(--line);background:#0f1f3b;border-radius:16px;padding:10px 18px;font-weight:500;font-size:15px;transition:.15s;white-space:nowrap}
+.btn:hover{border-color:var(--ac)}
+.btn:active{transform:scale(.97)}
+.btn.on{border-color:var(--ac);background:#123060;color:#fff}
+.btn.grn{border-color:#1f6b4d;background:#0d2a24;color:#bff5dc}
+.btn.red{border-color:#7a2633;background:#2a0f17;color:#ffd0d6}
+.btn.pri{border-color:var(--ac);background:linear-gradient(180deg,#2b6fe0,#1d4fb0);color:#fff}
+.btn.big{font-size:19px;padding:15px 22px;border-radius:18px;font-weight:600}
+.btn:disabled{opacity:.35;pointer-events:none}
+.row{display:flex;gap:10px;align-items:center;flex-wrap:wrap}
+label.f{display:flex;flex-direction:column;gap:5px;font-size:13px;color:var(--mut)}
+input,select,textarea{background:#081226;color:var(--tx);border:1.5px solid var(--line);border-radius:12px;padding:9px 12px;font-family:inherit;font-size:15px;outline:none}
+input:focus,select:focus,textarea:focus{border-color:var(--ac)}
+input[readonly]{background:#0a1a34;color:var(--ac2);font-family:var(--disp)}
+.kv{display:grid;grid-template-columns:auto 1fr;gap:6px 16px;font-size:14.5px}.kv>span:nth-child(odd){color:var(--mut)}
+label.f .lh{display:flex;align-items:center;gap:4px}
+.warn{color:var(--warn)}.okc{color:var(--ok)}.badc{color:var(--bad)}.mut{color:var(--mut)}
+.badge{font-size:11px;padding:2px 8px;border-radius:999px;border:1px solid;margin-left:6px;font-family:var(--disp);font-weight:500}
+.badge.ok{color:var(--ok);border-color:#1f6b4d}.badge.bad{color:var(--bad);border-color:#7a2633}.badge.w{color:var(--warn);border-color:#6b5320}
+
+/* ---------- file list ---------- */
+.flist{display:flex;flex-direction:column;gap:10px;overflow:auto;max-height:calc(100vh - 290px)}
+.fi{display:flex;align-items:center;gap:12px;padding:12px 14px;border:1.5px solid var(--line);border-radius:16px;background:#091630;cursor:pointer}
+.fi.sel{border-color:var(--ac);background:#0f2447}
+.fi .chip{font-size:20px;color:var(--ac2)}
+.fi b{font-size:15.5px;display:block;font-weight:600}.fi small{color:var(--mut);font-size:12.5px}
+
+/* ---------- progress ---------- */
+.prog{margin-top:14px}
+.prog .pct{font-family:var(--disp);font-size:52px;font-weight:800;text-align:center}
+.pbar{height:10px;border-radius:6px;background:#14284a;overflow:hidden}
+.pbar i{display:block;height:100%;width:0;background:linear-gradient(90deg,var(--ac),var(--ac2));transition:width .2s}
+.stage{text-align:center;margin-top:9px;font-size:15px}
+
+/* ---------- hex / log / dtc ---------- */
+.hex{font-family:ui-monospace,Consolas,monospace;font-size:12.5px;line-height:1.55;white-space:pre;overflow:auto;background:#06101f;border-radius:14px;padding:12px;border:1px solid var(--line)}
+.hex .a{color:var(--ac2)}.hex .d{background:#ff4d5e70;color:#fff;border-radius:2px}.hex .z{color:#4a5d7d}
+.log{font-family:ui-monospace,Consolas,monospace;font-size:12px;white-space:pre-wrap;flex:1;overflow:auto;background:#06101f;border-radius:14px;padding:12px;min-height:200px}
+.log .tx{color:#7fb2ff}.log .rx{color:var(--ok)}.log .er{color:var(--bad)}.log .in{color:var(--warn)}
+.dtc{display:flex;gap:14px;align-items:center;padding:12px 14px;border-radius:14px;background:#091630;border:1px solid var(--line);border-left:4px solid var(--bad);margin-bottom:9px}
+.dtc b{font-family:var(--disp);font-size:22px;min-width:70px}
+
+/* ---------- bottom tab bar ---------- */
+.nav{display:flex;justify-content:space-around;align-items:center;gap:4px;background:var(--panel);border:1.5px solid var(--line);border-top:1.5px solid var(--line);border-radius:0 0 var(--r) var(--r);padding:10px 12px 12px;margin-bottom:10px}
+.nav button{flex:1;max-width:170px;border:2px solid transparent;background:none;border-radius:18px;padding:12px 6px;font-family:var(--disp);font-size:clamp(14px,1.6vw,20px);font-weight:600;color:#8ea6cf}
+.nav button.on{border-color:var(--ac);color:#fff;background:#0b1a33;box-shadow:0 0 16px -4px var(--ac)}
+
+/* ---------- modal / misc ---------- */
+.modal{position:fixed;inset:0;background:#000a;display:none;align-items:center;justify-content:center;z-index:50;padding:14px}
+.modal.show{display:flex}
+.modal .card{max-width:640px;width:100%;max-height:92vh;overflow:auto;background:var(--panel)}
+.opt{display:flex;gap:14px;align-items:center;padding:14px;border:1.5px solid var(--line);border-radius:16px;margin-bottom:10px;cursor:pointer;background:#091630}
+.opt:hover{border-color:var(--ac)}.opt .ic{font-size:28px}.opt b{font-size:16.5px;font-weight:600}.opt small{display:block;color:var(--mut)}
+.chk{display:flex;gap:10px;align-items:flex-start;margin:8px 0;font-size:14.5px}.chk input{width:20px;height:20px;accent-color:var(--ac)}
+.themes{display:flex;gap:16px;flex-wrap:wrap}.themes button{width:50px;height:50px;border-radius:50%;border:3px solid #0000}
+.themes button.on{border-color:#fff}
+.toast{position:fixed;bottom:110px;left:50%;transform:translateX(-50%);background:#0f1f3b;border:1.5px solid var(--ac);padding:11px 20px;border-radius:16px;z-index:60;display:none;font-size:15px;box-shadow:0 10px 30px #0008}
+@media (max-width:860px){
+ .dash{grid-template-columns:1fr 1fr}.dash .gauge{grid-column:1/-1;order:-1}
+ .split{grid-template-columns:1fr}.flist{max-height:none}.g3,.g4{grid-template-columns:1fr 1fr}
+ .logo{font-size:18px}.logo small{display:none}.clock{font-size:17px}.status{font-size:15px}
+ .nav button{font-size:13px;padding:10px 2px}
+}
+@media (max-width:620px){
+ .top{grid-template-columns:1fr auto;row-gap:6px}
+ .top .brand{grid-column:1/-1;order:-1;justify-content:center}
+ .hl{flex-wrap:wrap}.status{font-size:14px}
+ .gauge{min-height:240px}.gauge svg{max-width:280px}
+ .nav{overflow-x:auto;justify-content:flex-start}.nav button{flex:none;white-space:nowrap;padding:9px 12px}
+ .tile{min-height:96px;padding:12px 16px}.wide{gap:12px;padding:12px 16px}.wide .v{font-size:26px}
+}
+</style>
+</head>
+<body>
+<div class="app">
+  <div class="top">
+    <div class="hl">
+      <button class="status" id="bConnect" title="เชื่อมต่อ"><span class="dot" id="dLink"></span><span id="tLink">OFFLINE</span></button>
+      <span class="chipst" id="tEcu">ECU —</span>
+      <button class="chipst" id="pGauge" style="background:none;cursor:pointer"><span id="tGauge">GAUGE</span></button>
+      <span class="dot" id="dEcu" hidden></span><span class="dot" id="dGauge" hidden></span>
+    </div>
+    <div class="brand" id="brand" title="Jet_HONDA Tune">
+      <span id="brandCustom"></span>
+      <span id="brandDefault" style="display:flex;align-items:center;gap:9px">
+      <svg viewBox="0 0 64 64" aria-hidden="true"><defs><linearGradient id="lg" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#fff"/><stop offset=".45" stop-color="#8cc8ff"/><stop offset="1" stop-color="#2f7cf6"/></linearGradient></defs>
+        <path d="M32 3 57 17.5v29L32 61 7 46.5v-29Z" fill="#0a1426" stroke="url(#lg)" stroke-width="3"/>
+        <path d="M14 38 50 20 40 30 52 30 18 47 28 37Z" fill="url(#lg)"/>
+        <path d="M27 18h12v3h-4v15a7 7 0 0 1-7 7h-3v-3h3a4 4 0 0 0 4-4V21h-5Z" fill="#fff" opacity=".92"/></svg>
+      <div class="logo">Jet_HONDA<small>TUNE</small></div></span>
+    </div>
+    <div class="hr">
+      <button class="mini" id="bDemo">DEMO</button>
+      <span class="clock" id="clock">--:--</span>
+    </div>
+  </div>
+  <div class="seg" id="seg"></div>
+
+  <div class="pages">
+    <!-- 0 ECU / LIVE -->
+    <section class="page show" data-name="ECU" data-tab="Dash">
+      <div class="dash">
+        <div class="dcol">
+          <div class="card tile"><span class="k">Coolant</span><span class="v"><b id="vECT">--</b><small>°C</small></span></div>
+          <div class="card tile"><span class="k">Intake</span><span class="v"><b id="vIAT">--</b><small>°C</small></span></div>
+          <div class="card tile"><span class="k">MAP</span><span class="v"><b id="vMAP">--</b><small>kPa</small></span></div>
+        </div>
+        <div class="gauge">
+          <svg viewBox="0 0 300 300" aria-hidden="true">
+            <defs><linearGradient id="ga" x1="0" y1="1" x2="0" y2="0"><stop offset="0" stop-color="#8cc8ff"/><stop offset="1" stop-color="var(--ac)"/></linearGradient>
+            <filter id="gl"><feGaussianBlur stdDeviation="4" result="b"/><feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge></filter></defs>
+            <circle cx="150" cy="150" r="96" fill="#0b1b38" stroke="#16305a" stroke-width="1.5"/>
+            <path id="arcBg" d="M 66.6 233.4 A 118 118 0 1 1 233.4 233.4" fill="none" stroke="#11264a" stroke-width="16" stroke-linecap="round"/>
+            <path id="arc" d="M 66.6 233.4 A 118 118 0 1 1 233.4 233.4" fill="none" stroke="url(#ga)" stroke-width="16" stroke-linecap="round" filter="url(#gl)" stroke-dasharray="0 999"/>
+          </svg>
+          <div class="gc"><span class="rpm"><b id="vRPM" style="font-weight:500">0</b> rpm</span><span class="spd" id="vSPD">0</span><span class="unit">km/h</span></div>
+        </div>
+        <div class="dcol">
+          <div class="card tile"><span class="k">Battery</span><span class="v"><b id="vBATT">--</b><small>V</small></span></div>
+          <div class="card tile"><span class="k">Injector</span><span class="v"><b id="vINJ">--</b><small>ms</small></span></div>
+          <div class="card tile"><span class="k">Ignition</span><span class="v"><b id="vIGN">--</b><small>°</small></span></div>
+        </div>
+      </div>
+      <div class="card wide"><span class="k">Throttle</span><span class="v"><b id="vTPS">--</b><small>%</small></span><div class="track"><i id="tpsBar"></i></div></div>
+      <div class="card" style="margin-top:14px">
+        <h3>ECU <span id="ecuState" class="mut">—</span></h3>
+        <div class="kv" id="ecuInfo"><span>สถานะ</span><span>ยังไม่เชื่อมต่อ</span></div>
+        <div class="row" style="margin-top:14px">
+          <button class="btn" id="bDetect">ตรวจกล่อง</button>
+          <button class="btn grn" id="bLive">▶ LIVE</button>
+          <button class="btn" id="bTables">ตารางดิบ</button>
+        </div>
+        <div class="hex" id="tables" style="margin-top:12px;max-height:180px;display:none"></div>
+        <p class="mut" style="font-size:12.5px;margin:12px 0 0">บิดกุญแจ ON (ไม่ต้องสตาร์ท) · เสียบปลั๊กเช็ค 4 ขา/DLC · แบตต้องเต็ม</p>
+      </div>
+    </section>
+
+    <!-- 1 READ -->
+    <section class="page" data-name="ดูดไฟล์ · READ" data-tab="ดูดไฟล์">
+      <div class="split">
+        <div class="card">
+          <h2 class="okc">⬇ ดูดไฟล์จากกล่อง</h2>
+          <label class="f">รุ่นรถ / ตระกูลกล่อง<select id="model"></select></label>
+          <div id="modelNote" class="mut" style="font-size:12.5px;margin-top:6px"></div>
+          <div class="kv" id="rAuto" style="margin-top:12px"></div>
+          <button class="btn big grn" id="bRead" style="width:100%;margin-top:16px">⬇ เริ่มดูดไฟล์</button>
+          <p class="mut" style="font-size:12.5px;margin:10px 0 0">กุญแจ ON · ไม่ต้องสตาร์ท · Start Offset และขนาดไฟล์ หาให้อัตโนมัติจากกล่อง</p>
+        </div>
+        <div class="card">
+          <h2>สถานะการดูด</h2>
+          <div id="rIdle" class="mut">กด "เริ่มดูดไฟล์" — ไฟล์ที่ได้จะเก็บเข้าคลังอัตโนมัติ แล้วไปอัดได้ที่หน้า "อัดไฟล์"</div>
+          <div class="prog" id="rprog" style="display:none">
+            <div class="pct" id="rpPct">0%</div>
+            <div class="pbar"><i id="rpBar"></i></div>
+            <div class="stage" id="rpStage"></div>
+            <div class="stage mut" id="rpSub" style="font-size:13px"></div>
+            <div class="row" style="justify-content:center;margin-top:8px"><button class="btn red" id="rbCancel">ยกเลิก</button></div>
+          </div>
+          <div id="rDone" style="display:none;margin-top:14px">
+            <div class="kv" id="rInfo"></div>
+            <div class="row" style="margin-top:12px">
+              <button class="btn" id="rDown">💾 บันทึก .bin</button>
+              <button class="btn" id="rToW">ไปหน้าอัดไฟล์ ➜</button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- 2 WRITE -->
+    <section class="page" data-name="อัดไฟล์ · WRITE" data-tab="อัดไฟล์">
+      <div class="split">
+        <div class="card" style="min-height:0;display:flex;flex-direction:column">
+          <h2>คลังไฟล์ ECU</h2>
+          <div class="row" style="margin-bottom:10px">
+            <button class="btn" id="bImport">📱 เลือกจากเครื่อง</button>
+            <input type="file" id="fImport" accept=".bin,.BIN,application/octet-stream" hidden multiple>
+          </div>
+          <div class="flist" id="flist"></div>
+        </div>
+        <div class="card">
+          <h2 id="selName">ยังไม่ได้เลือกไฟล์</h2>
+          <div class="grid g2">
+            <label class="f"><span class="lh">Start Offset <span id="aStart" class="badge ok">AUTO</span></span><input id="mStart" readonly></label>
+            <label class="f"><span class="lh">ตำแหน่ง Checksum <span id="aCks" class="badge ok">AUTO</span></span><input id="mCks" readonly></label>
+          </div>
+          <div class="row" style="margin-top:6px"><span id="autoWhy" class="mut" style="font-size:12.5px;flex:1"></span><button class="btn" id="bManual" style="padding:5px 10px;font-size:13px">✏ แก้เอง</button></div>
+          <div id="fileInfo" class="kv" style="margin-top:10px"></div>
+          <button class="btn big red" id="bWrite" style="width:100%;margin-top:14px">⚡ อัดไฟล์ลงกล่อง</button>
+          <div class="row" style="margin-top:10px">
+            <button class="btn" id="bFix">🔧 แก้ Checksum</button>
+            <button class="btn" id="bGauge">📤 ส่งไปเกจ</button>
+            <button class="btn" id="bDown">💾 บันทึก .bin</button>
+            <button class="btn" id="bRen">✏ เปลี่ยนชื่อ</button>
+            <button class="btn red" id="bDel">🗑</button>
+          </div>
+          <div class="prog" id="wprog" style="display:none">
+            <div class="pct" id="wpPct">0%</div>
+            <div class="pbar"><i id="wpBar"></i></div>
+            <div class="stage" id="wpStage"></div>
+            <div class="stage mut" id="wpSub" style="font-size:13px"></div>
+            <div class="row" style="justify-content:center;margin-top:8px"><button class="btn red" id="wbCancel">ยกเลิก</button></div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- 2 DTC -->
+    <section class="page" data-name="DTC" data-tab="Codes">
+      <div class="grid g2">
+        <div class="card tab"><h3>โค้ดปัจจุบัน (CURRENT)</h3><div id="dtcCur" class="mut">กด "อ่านโค้ด"</div></div>
+        <div class="card tab"><h3>โค้ดที่เคยเกิด (PAST)</h3><div id="dtcPast" class="mut">—</div></div>
+      </div>
+      <div class="row" style="margin-top:12px"><button class="btn big" id="bDtc">อ่านโค้ด</button><button class="btn big red" id="bDtcClr">ลบโค้ด</button></div>
+    </section>
+
+    <!-- 3 EEPROM -->
+    <section class="page" data-name="EEPROM" data-tab="EEPROM">
+      <div class="card">
+        <h2>EEPROM (256/512 byte)</h2>
+        <div class="row">
+          <button class="btn grn" id="bEeR">⬇ อ่าน EEPROM</button>
+          <button class="btn red" id="bEeW">⚡ เขียนจากไฟล์</button><input type="file" id="fEe" hidden>
+          <button class="btn red" id="bEeFF">ฟอร์แมต FF</button>
+          <button class="btn red" id="bEe00">ฟอร์แมต 00</button>
+          <button class="btn" id="bEeSave">💾 บันทึก</button>
+        </div>
+        <p class="warn" style="font-size:13px">EEPROM เก็บค่าเรียนรู้/เลขไมล์บางรุ่น — อ่านเก็บไว้ก่อนเขียนหรือฟอร์แมตทุกครั้ง</p>
+        <div class="hex" id="eeHex" style="max-height:52vh">ยังไม่มีข้อมูล</div>
+      </div>
+    </section>
+
+    <!-- 4 TOOLS -->
+    <section class="page" data-name="HEX / COMPARE" data-tab="Hex">
+      <div class="card">
+        <div class="row">
+          <label class="f">ไฟล์ A<select id="hxA"></select></label>
+          <label class="f">เทียบกับ B<select id="hxB"></select></label>
+          <label class="f">ไปที่ (hex)<input id="hxGo" style="width:110px" value="0"></label>
+          <button class="btn" id="hxPrev">◀</button><button class="btn" id="hxNext">▶</button>
+          <button class="btn" id="hxDiff">ไปจุดต่างถัดไป</button>
+        </div>
+        <div id="hxSum" class="mut" style="margin:8px 0;font-size:13.5px"></div>
+        <div class="hex" id="hx" style="max-height:58vh"></div>
+      </div>
+    </section>
+
+    <!-- 5 LOG -->
+    <section class="page" data-name="LOG" data-tab="Log">
+      <div class="card" style="height:100%;display:flex;flex-direction:column">
+        <div class="row" style="margin-bottom:8px"><label class="chk" style="margin:0"><input type="checkbox" id="logFrames"> แสดงเฟรม TX/RX</label><button class="btn" id="bLogClr">ล้าง</button><button class="btn" id="bLogSave">บันทึก log</button><span id="stats" class="mut"></span></div>
+        <div class="log" id="log"></div>
+      </div>
+    </section>
+  </div>
+
+  <div class="nav" id="nav"></div>
+</div>
+
+<!-- connect -->
+<div class="modal" id="mConnect"><div class="card">
+  <h2>เชื่อมต่อ</h2>
+  <div class="opt" data-c="usb"><div class="ic">🔌</div><div><b>สาย K-LINE USB (FTDI / CH340 / KKL)</b><small>ต่อมือถือ OTG หรือคอม · Chrome รองรับ Web Serial</small></div></div>
+  <div class="opt" data-c="gauge-ble"><div class="ic">📶</div><div><b>Smart Gauge ผ่าน Bluetooth</b><small>เกจทำหน้าที่เป็นตัวต่อ K-line + รับไฟล์ไปแฟลชเอง</small></div></div>
+  <div class="opt" data-c="gauge-usb"><div class="ic">🧩</div><div><b>Smart Gauge ผ่านสาย USB</b><small>เหมือน Bluetooth แต่เร็วกว่า</small></div></div>
+  <div class="opt" data-c="gauge-only"><div class="ic">📤</div><div><b>เชื่อมเกจเพื่อส่งไฟล์อย่างเดียว (Bluetooth)</b><small>ใช้คู่กับสาย USB ได้</small></div></div>
+  <div class="opt" data-c="demo"><div class="ic">🎮</div><div><b>DEMO (กล่องจำลอง)</b><small>ทดลองทุกฟังก์ชันโดยไม่ต้องต่อรถ</small></div></div>
+  <div class="row"><div class="sp"></div><button class="btn" id="bDisc">ตัดการเชื่อมต่อ</button><button class="btn" data-close>ปิด</button></div>
+</div></div>
+
+<!-- smart gauge -->
+<div class="modal" id="mGauge"><div class="card">
+  <h2>🔗 SMART GAUGE</h2>
+  <div class="kv" id="gInfo"></div>
+  <div class="row" style="margin-top:12px">
+    <button class="btn" id="gBle">📶 เชื่อม Bluetooth</button>
+    <button class="btn" id="gUsb">🧩 เชื่อม USB</button>
+    <button class="btn grn" id="gList">📂 ไฟล์ในเกจ</button>
+    <button class="btn red" id="gOff">ตัดเกจ</button>
+  </div>
+  <label class="chk"><input type="checkbox" id="gAuto"> เชื่อมเกจตัวเดิมอัตโนมัติเมื่อเปิดโปรแกรม (Chrome ที่รองรับ)</label>
+  <label class="chk"><input type="checkbox" id="gKl"> ใช้เกจเป็นตัวต่อ K-line ด้วย (ดูด/อัด/LIVE ผ่านเกจ ไม่ต้องใช้สาย USB)</label>
+  <div id="gFiles" style="margin-top:10px"></div>
+  <p class="mut" style="font-size:12.5px">ส่งไฟล์จากหน้า FLASH → 📤 ส่งไปเกจ แล้วกดปุ่ม FLASH ที่หน้าเกจ · เกจต้องลงเฟิร์มแวร์ bridge (โฟลเดอร์ firmware)</p>
+  <div class="row"><div class="sp"></div><button class="btn" data-close>ปิด</button></div>
+</div></div>
+
+<!-- write confirm -->
+<div class="modal" id="mWrite"><div class="card">
+  <h2 class="badc">⚡ ยืนยันอัดไฟล์ลงกล่อง</h2>
+  <div class="kv" id="wInfo"></div>
+  <div style="margin-top:10px">
+    <label class="chk"><input type="checkbox" class="wc"> แบตเตอรี่เต็ม / ต่อชาร์จไว้ (ไฟตกระหว่างอัด = กล่องค้างโหมดกู้)</label>
+    <label class="chk"><input type="checkbox" class="wc"> ดูดไฟล์เดิมของกล่องนี้เก็บไว้แล้ว</label>
+    <label class="chk"><input type="checkbox" class="wc"> ไฟล์นี้เป็นของรุ่น/รหัสกล่องเดียวกัน</label>
+    <label class="chk"><input type="checkbox" class="wc"> จะไม่ปิดกุญแจ ไม่ถอดสาย ไม่ปิดแอประหว่างอัด</label>
+    <label class="chk"><input type="checkbox" id="wFix"> แก้ checksum อัตโนมัติก่อนส่ง (ไม่แก้ไฟล์ในคลัง)</label>
+  </div>
+  <div class="row" style="margin-top:12px"><div class="sp"></div><button class="btn" data-close>ยกเลิก</button><button class="btn red big" id="wGo" disabled>เริ่มอัด</button></div>
+</div></div>
+
+<!-- settings -->
+<div class="modal" id="mSet"><div class="card">
+  <h2>SETTING</h2>
+  <h3>ธีมสี</h3>
+  <div class="themes" id="themes"></div>
+  <h3 style="margin-top:16px">K-LINE</h3>
+  <div class="grid g2">
+    <label class="f">วิธีปลุกกล่อง (สาย USB)<select id="sWake"><option value="break">BREAK 70ms (FTDI แนะนำ)</option><option value="baud">Low-baud 0x00 (CH340/อื่นๆ)</option></select></label>
+    <label class="f">Timeout ตอบกลับ (ms)<input id="sTo" type="number" min="100" max="3000"></label>
+    <label class="f">รอก่อนลบ (วินาที)<input id="sErase" type="number" min="0" max="30"></label>
+    <label class="f">Block เขียน<select id="sBlock"><option>128</option><option>64</option></select></label>
+    <label class="f" style="grid-column:span 2">รหัส Security Access (hex หรือ ascii:ข้อความ) — ใช้เมื่อกล่องไม่ยอมให้ดูด<input id="sPw" placeholder="เว้นว่าง = ไม่ส่ง"></label>
+  </div>
+  <h3 style="margin-top:16px">ฐานข้อมูลรุ่น (JSON แก้ได้)</h3>
+  <textarea id="sModels" rows="7" style="width:100%;font-family:monospace;font-size:12px"></textarea>
+  <div class="row" style="margin-top:12px"><button class="btn red" id="sReset">คืนค่าเริ่มต้น</button><div class="sp"></div><button class="btn" data-close>ปิด</button><button class="btn grn" id="sSave">บันทึก</button></div>
+</div></div>
+
+<div class="toast" id="toast"></div>
+<script>/* =====================================================================
+ * Jet_HONDA Tune — proto.js
+ * Honda / Keihin K-line framing, checksums, MFB-LINK (Smart Gauge) framing,
+ * DTC table, live-data decoding, model database.
+ *
+ * Protocol facts ported from the open-source GPL projects
+ *   eculib/honda.py (RyanHope / forks) and TunerPro-HondaECU (AlexDev-TH).
+ * ===================================================================== */
+(function (root) {
+  'use strict';
+  const P = {};
+
+  /* ---------- checksums ---------- */
+  P.sum = (a) => { let s = 0; for (let i = 0; i < a.length; i++) s += a[i]; return s; };
+  // checksum8bitHonda: two's complement of byte sum -> whole frame sums to 0
+  P.ckHonda = (a) => ((P.sum(a) ^ 0xFF) + 1) & 0xFF;
+  // checksum8bit (used as 1st checksum in write blocks)
+  P.ck8 = (a) => (0xFF - ((P.sum(a) - 1) >> 8)) & 0xFF;
+
+  /* ---------- K-line frame ---------- */
+  // frame = mtype + [len] + data + [ck] ; len = total frame length
+  P.buildFrame = (mtype, data) => {
+    data = data || [];
+    const f = [...mtype, 2 + mtype.length + data.length, ...data];
+    f.push(P.ckHonda(f));
+    return f;
+  };
+  P.parseReply = (buf, ml) => {
+    if (!buf || buf.length < ml + 1) return null;
+    const len = buf[ml];
+    if (len < ml + 2 || buf.length < len) return null;
+    const fr = Array.from(buf.slice(0, len));
+    if ((P.sum(fr) & 0xFF) !== 0) return { bad: true };
+    return { mtype: fr.slice(0, ml), len, data: fr.slice(ml + 1, len - 1), raw: fr };
+  };
+  // reply header rules
+  P.matchType = (mt, rt) => {
+    if (mt.length === 3) return rt[0] === (mt[0] | 0x10) && rt[1] === (mt[1] | 0x10);
+    if (mt.length === 2) return rt[0] === mt[0] && rt[1] === mt[1];
+    return rt[0] === (mt[0] & 0x0F);
+  };
+  // 24-bit flash address -> [bits16-23, bits0-7, bits8-15]
+  P.fmtRead = (a) => [(a >> 16) & 0xFF, a & 0xFF, (a >> 8) & 0xFF];
+
+  P.hex = (a, sep = ' ') => Array.from(a || []).map((b) => b.toString(16).toUpperCase().padStart(2, '0')).join(sep);
+  P.h8 = (b) => '0x' + b.toString(16).toUpperCase().padStart(2, '0');
+  P.hx = (n, w = 4) => '0x' + (n >>> 0).toString(16).toUpperCase().padStart(w, '0');
+  P.parseHexBytes = (s) => {
+    s = (s || '').trim();
+    if (!s) return [];
+    if (/^ascii:/i.test(s)) return Array.from(s.slice(6)).map((c) => c.charCodeAt(0) & 0xFF);
+    const t = s.replace(/0x/gi, '').replace(/[^0-9a-f]/gi, '');
+    if (t.length % 2) throw new Error('hex ต้องเป็นจำนวนคู่');
+    const o = []; for (let i = 0; i < t.length; i += 2) o.push(parseInt(t.substr(i, 2), 16));
+    return o;
+  };
+
+  /* ---------- binary file checksum ---------- */
+  P.binSum8 = (u8) => { let s = 0; for (let i = 0; i < u8.length; i++) s = (s + u8[i]) & 0xFF; return s; };
+  P.binChecksumOK = (u8) => P.binSum8(u8) === 0;
+  // set byte at idx so whole image sums to 0 (do_validation fix)
+  P.binFixChecksum = (u8, idx) => {
+    const o = new Uint8Array(u8);
+    if (idx < 0 || idx >= o.length) throw new Error('ตำแหน่ง checksum อยู่นอกไฟล์');
+    o[idx] = 0;
+    o[idx] = (0x100 - P.binSum8(o)) & 0xFF;
+    return o;
+  };
+  P.crc32 = (u8) => {
+    let c, crc = 0xFFFFFFFF;
+    for (let i = 0; i < u8.length; i++) {
+      c = (crc ^ u8[i]) & 0xFF;
+      for (let k = 0; k < 8; k++) c = c & 1 ? (c >>> 1) ^ 0xEDB88320 : c >>> 1;
+      crc = (crc >>> 8) ^ c;
+    }
+    return (crc ^ 0xFFFFFFFF) >>> 0;
+  };
+
+  /* ---------- MFB-LINK : app <-> Smart Gauge (BLE / USB) ----------
+   * [0x55 0xAA][type][lenL lenH][payload...][xor(type..payload)]
+   * response type = request | 0x80, payload[0] = status (0 = OK)      */
+  P.LINK = {
+    PING: 0x01, WAKE: 0x02, TXRX: 0x03, SENSE: 0x04,
+    FILE_BEGIN: 0x10, FILE_CHUNK: 0x11, FILE_END: 0x12, FILE_LIST: 0x13,
+    ST_OK: 0, ST_TIMEOUT: 1, ST_ERR: 2,
+  };
+  P.linkEncode = (type, payload) => {
+    payload = payload || [];
+    const f = [0x55, 0xAA, type, payload.length & 0xFF, (payload.length >> 8) & 0xFF, ...payload];
+    let x = type; for (const b of payload) x ^= b; x ^= f[3] ^ f[4];
+    f.push(x & 0xFF);
+    return f;
+  };
+  P.LinkParser = class {
+    constructor(onFrame) { this.b = []; this.onFrame = onFrame; }
+    push(bytes) {
+      for (const v of bytes) this.b.push(v);
+      for (;;) {
+        while (this.b.length >= 2 && !(this.b[0] === 0x55 && this.b[1] === 0xAA)) this.b.shift();
+        if (this.b.length < 6) return;
+        const n = this.b[3] | (this.b[4] << 8);
+        if (this.b.length < 6 + n) return;
+        const fr = this.b.splice(0, 6 + n);
+        let x = fr[2] ^ fr[3] ^ fr[4]; for (let i = 5; i < 5 + n; i++) x ^= fr[i];
+        if ((x & 0xFF) !== fr[5 + n]) continue; // bad frame, drop
+        this.onFrame(fr[2], fr.slice(5, 5 + n));
+      }
+    }
+  };
+
+  /* ---------- ECU states ---------- */
+  P.STATE = { OFF: 'OFF', UNKNOWN: 'UNKNOWN', OK: 'OK', SECURE: 'SECURE', READ: 'READ',
+    RECOVER_OLD: 'RECOVER_OLD', RECOVER_NEW: 'RECOVER_NEW', FLASH: 'FLASH', ERROR: 'ERROR' };
+  P.STATE_TH = {
+    OFF: 'ไม่พบกล่อง (บิดกุญแจ ON?)', UNKNOWN: 'ไม่ทราบสถานะ', OK: 'ปกติ (พร้อมใช้งาน)',
+    SECURE: 'ปลดล็อกแล้ว (อ่านได้)', READ: 'โหมดอ่าน', RECOVER_OLD: 'โหมดกู้ (แฟลชค้าง-แบบเก่า)',
+    RECOVER_NEW: 'โหมดกู้ (แฟลชค้าง-แบบใหม่)', FLASH: 'โหมดแฟลช (บูตโหลดเดอร์)', ERROR: 'ผิดพลาด',
+  };
+
+  /* ---------- Honda PGM-FI DTC (blink-code style "N-N") ---------- */
+  P.DTC = {
+    '1-1': 'MAP sensor แรงดันต่ำ', '1-2': 'MAP sensor แรงดันสูง',
+    '7-1': 'ECT/EOT sensor แรงดันต่ำ', '7-2': 'ECT/EOT sensor แรงดันสูง',
+    '8-1': 'TPS แรงดันต่ำ', '8-2': 'TPS แรงดันสูง',
+    '9-1': 'IAT sensor แรงดันต่ำ', '9-2': 'IAT sensor แรงดันสูง',
+    '11-1': 'Vehicle speed sensor', '12-1': 'หัวฉีด (สูบ 1)', '13-1': 'หัวฉีด (สูบ 2)',
+    '21-1': 'O2 sensor', '23-1': 'O2 sensor heater', '29-1': 'IACV / ISC valve',
+    '33-2': 'EEPROM ใน ECU', '54-1': 'Bank angle sensor แรงดันต่ำ', '54-2': 'Bank angle sensor แรงดันสูง',
+  };
+  P.dtcText = (k) => P.DTC[k] || 'ไม่มีคำอธิบายในฐานข้อมูล (ดูคู่มือซ่อมรุ่นนั้น)';
+
+  /* ---------- Live data : table 0x11 (community-decoded layout) ----------
+   * rdata = [0x71, 0x11, v0..vn]. Adjust here if a model differs.          */
+  P.decodeT11 = (rdata) => {
+    const v = rdata.slice(2);
+    if (v.length < 14) return null;
+    const g = (i) => (i < v.length ? v[i] : null);
+    const o = {
+      RPM: (g(0) << 8) | g(1),
+      TPS_V: +(g(2) * 5 / 256).toFixed(2),
+      TPS: +(g(3) / 1.6).toFixed(1),
+      ECT_V: +(g(4) * 5 / 256).toFixed(2),
+      ECT: g(5) - 40,
+      IAT_V: +(g(6) * 5 / 256).toFixed(2),
+      IAT: g(7) - 40,
+      MAP_V: +(g(8) * 5 / 256).toFixed(2),
+      MAP: g(9),
+      BATT: +(g(12) / 10).toFixed(1),
+      SPD: g(13),
+    };
+    if (v.length >= 16) o.INJ = +(((g(14) << 8) | g(15)) / 250).toFixed(2);
+    if (v.length >= 17) o.IGN = +(g(16) / 2 - 64).toFixed(1);
+    return o;
+  };
+
+  /* ---------- model database ----------
+   * size KB, start = ECU address of file byte 0, cks = checksum byte index in file.
+   * src: 'HondaECU' = from the HondaECU checksum table ; 'family' = default for the
+   * small Keihin scooter/underbone ECU family -> MUST be confirmed by reading first.  */
+  P.MODELS = [
+    { id: 'auto', name: 'AUTO — ตรวจจากการดูดไฟล์', size: 0, start: 0, cks: 0, src: 'auto' },
+    // --- Thai market small-cc (Keihin small ECU family) ---
+    ...[
+      'Wave 110i', 'Wave 125i', 'Dream Super Cub / Super Cub 110', 'Scoopy-i', 'Zoomer-X', 'Moove',
+      'Click 110i', 'Click 125i', 'Click 150i', 'Click 160', 'Spacy-i', 'Lead 125', 'Giorno+',
+      'PCX 125', 'PCX 150', 'PCX 160', 'ADV 150', 'ADV 160', 'Monkey 125', 'CT125', 'Dax 125',
+      'MSX125 SF / Grom', 'CBR150R', 'CB150R', 'Supra GTR150', 'Sonic 150 (FI)',
+    ].map((n, i) => ({ id: 'th' + i, name: n, size: 64, start: 0x8000, cks: 0, src: 'family' })),
+    // --- entries from the HondaECU checksum table ---
+    { id: 'msx17', name: 'MSX125 2017 (38770-K26-B13)', size: 64, start: 0x8000, cks: 0x0, src: 'HondaECU' },
+    { id: 'msx14', name: 'MSX125 2014 (38770-K26-911)', size: 48, start: 0x4000, cks: 0x0, src: 'HondaECU' },
+    { id: 'crf110', name: 'CRF110F 2019 (38770-KYK-D12)', size: 64, start: 0x8000, cks: 0x0, src: 'HondaECU' },
+    { id: 'cbr250', name: 'CBR250R 2011-13 (38770-KYJ)', size: 56, start: 0, cks: 0xDFEF, src: 'HondaECU' },
+    { id: 'cbr300h', name: 'CBR300R HRC (38770-K33-R01)', size: 256, start: 0, cks: 0x18FFE, src: 'HondaECU' },
+    { id: 'cbr250rr', name: 'CBR250RR HRC 2017 (38770-K64-R02)', size: 1024, start: 0, cks: 0x7FFF8, src: 'HondaECU' },
+    { id: 'cb500', name: 'CB500 2014 (38770-MGZ)', size: 256, start: 0, cks: 0x3FFF8, src: 'HondaECU' },
+    { id: 'cb650f', name: 'CB650F 2015 (38770-MJE)', size: 256, start: 0, cks: 0x3FFF8, src: 'HondaECU' },
+    { id: 'nc750x', name: 'NC750X 2015', size: 256, start: 0, cks: 0x3FFF8, src: 'HondaECU' },
+    { id: 'nc750s', name: 'NC750S 2016 (38770-MJL)', size: 512, start: 0, cks: 0x7FFF8, src: 'HondaECU' },
+    { id: 'cbr600', name: 'CBR600RR 2007-16', size: 256, start: 0, cks: 0x3FFF8, src: 'HondaECU' },
+    { id: 'cbr1000a', name: 'CBR1000RR 2004-05', size: 256, start: 0, cks: 0x3FFFC, src: 'HondaECU' },
+    { id: 'cbr1000b', name: 'CBR1000RR 2006-16', size: 256, start: 0, cks: 0x3FFF8, src: 'HondaECU' },
+    { id: 'cb1000r', name: 'CB1000R 2008-16', size: 256, start: 0, cks: 0x3FFF8, src: 'HondaECU' },
+    { id: 'custom', name: 'กำหนดเอง', size: 0, start: 0, cks: 0, src: 'custom' },
+  ];
+
+  /* ---------- auto-detect Start Offset / checksum location from a .bin ----------
+   * Rules from the HondaECU checksum table + Keihin small-ECU family.
+   * When several checksum spots are possible for a size, pick the one sitting in
+   * padding (0xFF / 0x00 around it) — that is where Honda puts the checksum byte. */
+  P.LAYOUTS = {
+    48: { start: 0x4000, cks: [0x0], why: '48KB = Keihin เล็ก (เช่น MSX125 2014)' },
+    56: { start: 0x0, cks: [0xDFEF], why: '56KB = CBR250R / CB300 / SH300' },
+    64: { start: 0x8000, cks: [0x0], why: '64KB = Keihin เล็ก (Wave / Click / PCX / MSX…)' },
+    256: { start: 0x0, cks: [0x3FFF8, 0x18FFE, 0x19FFE, 0x1FFFA, 0x3FFFC], why: '256KB = Keihin M16C/M32R' },
+    512: { start: 0x0, cks: [0x7FFF8], why: '512KB = NC750 / VFR800' },
+    1024: { start: 0x0, cks: [0xFFFF8, 0x7FFF8], why: '1MB = CBR1000RR 2017 / VFR1200 / CBR250RR' },
+  };
+  P.padScore = (u8, i) => {
+    let s = 0;
+    for (let k = i - 12; k <= i + 12; k++) if (k !== i && k >= 0 && k < u8.length && (u8[k] === 0xFF || u8[k] === 0x00)) s++;
+    return s;
+  };
+  P.detectLayout = (u8, meta) => {
+    meta = meta || {};
+    const kb = u8.length / 1024, L = P.LAYOUTS[kb];
+    let start, cks; const why = [];
+    if (meta.startManual != null) { start = meta.startManual; why.push('Start ตั้งเอง'); }
+    else if (meta.readStart != null) { start = meta.readStart; why.push('Start จากตอนดูดไฟล์'); }
+    else if (L) { start = L.start; why.push(L.why); }
+    else { start = 0; why.push('ขนาด ' + kb.toFixed(1) + 'KB ไม่อยู่ในตาราง → Start 0'); }
+    if (meta.cksManual != null) { cks = meta.cksManual; why.push('Checksum ตั้งเอง'); }
+    else {
+      const cands = (L ? L.cks : [u8.length - 8, u8.length - 2, u8.length - 4, 0]).filter((c) => c < u8.length);
+      cks = cands[0] || 0;
+      if (cands.length > 1) {
+        let best = -1;
+        for (const c of cands) { const sc = P.padScore(u8, c); if (sc > best) { best = sc; cks = c; } }
+        why.push('Checksum เลือกจุดในพื้นที่ว่างของไฟล์');
+      }
+    }
+    return { start, cks, why: why.join(' · '), known: !!L };
+  };
+
+  P.sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+
+  if (typeof module !== 'undefined' && module.exports) module.exports = P;
+  else root.HP = P;
+})(typeof window !== 'undefined' ? window : globalThis);
+
+/* =====================================================================
+ * Jet_HONDA Tune — ecu.js
+ * Honda Keihin K-line ECU operations over any transport:
+ *   transport.wake()                       -> 70ms low / 130ms high + 10400 baud
+ *   transport.txrx(frame, ml, timeoutMs)   -> reply bytes (echo removed) | null
+ *   transport.sense()  (optional)          -> true if K-line powered
+ * ===================================================================== */
+(function (root) {
+  'use strict';
+  const P = (typeof module !== 'undefined' && module.exports) ? require('./proto.js') : root.HP;
+  const S = P.STATE;
+
+  class Cancelled extends Error { constructor() { super('ยกเลิกโดยผู้ใช้'); this.cancelled = true; } }
+
+  class HondaECU {
+    constructor(transport, opt) {
+      opt = opt || {};
+      this.t = transport;
+      this.log = opt.log || (() => {});
+      this.retries = 1;
+      this.timeout = opt.timeout || 350;
+      this.stats = { tx: 0, rx: 0, bad: 0, retry: 0 };
+      this.cancelFlag = false;
+      this.state = S.OFF;
+      this.ecuId = null;
+    }
+    cancel() { this.cancelFlag = true; }
+    _chk() { if (this.cancelFlag) { this.cancelFlag = false; throw new Cancelled(); } }
+
+    async send(mtype, data, o) {
+      o = o || {};
+      const retries = o.retries == null ? this.retries : o.retries;
+      const timeout = o.timeout || this.timeout;
+      const frame = P.buildFrame(mtype, data || []);
+      for (let a = 0; a <= retries; a++) {
+        if (a) this.stats.retry++;
+        this.stats.tx++;
+        this.log('tx', frame);
+        const r = await this.t.txrx(frame, mtype.length, timeout);
+        if (!r || !r.length) { this.log('to', frame); continue; }
+        const p = P.parseReply(r, mtype.length);
+        if (!p || p.bad) { this.stats.bad++; this.log('bad', r); continue; }
+        if (!P.matchType(mtype, p.mtype)) { this.log('bad', r); continue; }
+        this.stats.rx++;
+        this.log('rx', p.raw);
+        if (o.delay) await P.sleep(o.delay);
+        return p;
+      }
+      return null;
+    }
+
+    /* ---- session ---- */
+    async ping() { return !!(await this.send([0xFE], [0x72], { retries: 0 })); }
+    async diag() { return !!(await this.send([0x72], [0x00, 0xF0])); }
+    async init() { await this.t.wake(); return this.ping(); }
+
+    async detect() {
+      const save = this.retries; this.retries = 0;
+      try {
+        await this.init();
+        let r = await this.send([0x72], [0x71, 0x00]);
+        if (!r) { await this.init(); r = await this.send([0x72], [0x71, 0x00]); }
+        if (r) {
+          const d = r.data;
+          this.ecuId = d.slice(2);
+          if (d.length >= 7 && (d[5] || d[6])) return (this.state = S.OK);
+          if (await this.send([0x7D], [0x01, 0x01, 0x03])) return (this.state = S.RECOVER_OLD);
+          if (await this.send([0x7B], [0x00, 0x01, 0x04])) return (this.state = S.RECOVER_NEW);
+          return (this.state = S.OK);
+        }
+        const w = await this.send([0x7E], [0x01, 0x01, 0x00]);
+        if (w) return (this.state = (w.data[1] === 0xF0 ? S.ERROR : S.FLASH));
+        if (await this.send([0x82, 0x82, 0x10], [0x00])) return (this.state = S.SECURE);
+        if (await this.send([0x82, 0x82, 0x00], [0x00, 0x00, 0x00, 0x08])) return (this.state = S.READ);
+        if (this.t.sense) { const on = await this.t.sense(); if (on === false) return (this.state = S.OFF); }
+        return (this.state = S.UNKNOWN);
+      } finally { this.retries = save; }
+    }
+
+    /* ---- info / tables / live ---- */
+    async readTable(t) { const r = await this.send([0x72], [0x71, t]); return r ? r.data : null; }
+    async probeTables() {
+      const ids = [0x10, 0x11, 0x13, 0x17, 0x20, 0x21, 0x60, 0x61, 0x63, 0x67, 0x70, 0x71, 0xD0, 0xD1];
+      const out = {};
+      for (const t of ids) { const d = await this.readTable(t); if (d && d.length > 2) out[t] = d.slice(2); }
+      return out;
+    }
+    async readLive() { const d = await this.readTable(0x11); return d ? P.decodeT11(d) : null; }
+    async flashCount() { const r = await this.send([0x7D], [0x01, 0x01, 0x03]); return r ? r.data : null; }
+
+    /* ---- DTC ---- */
+    async readDTC() {
+      const res = { current: [], past: [] };
+      for (const [kind, cmd] of [['current', 0x74], ['past', 0x73]]) {
+        for (let i = 1; i <= 0x0B; i++) {
+          const r = await this.send([0x72], [cmd, i]);
+          if (!r) break;
+          const d = r.data;
+          if (d.length < 3 || d[2] === 0) break;
+          for (const j of [3, 5, 7]) {
+            if (j + 1 < d.length && (d[j] || d[j + 1])) {
+              const k = d[j] + '-' + d[j + 1];
+              if (!res[kind].includes(k)) res[kind].push(k);
+            }
+          }
+        }
+      }
+      return res;
+    }
+    async clearDTC() { return !!(await this.send([0x72], [0x60, 0x03])); }
+
+    /* ---- security (service 0x27, 0xE0 + password chunks) ---- */
+    async unlock(pw) {
+      if (!pw || !pw.length) return false;
+      const a = pw.slice(0, 7), b = pw.slice(7);
+      const r1 = await this.send([0x27], [0xE0, ...a]);
+      if (!r1) return false;
+      if (!b.length) return true;
+      return !!(await this.send([0x27], [0xE0, ...b]));
+    }
+
+    /* ---- READ FLASH (ดูดไฟล์) ---- */
+    async readFlash(o) {
+      o = o || {};
+      const start = o.start || 0, max = o.maxBytes || 0x100000;
+      const onProg = o.onProgress || (() => {});
+      let size = 12, addr = start;
+      const out = new Uint8Array(max); let n = 0;
+      const t0 = Date.now();
+      while (n < max) {
+        this._chk();
+        const want = Math.min(size, max - n);
+        const r = await this.send([0x82, 0x82, 0x00], [...P.fmtRead(addr), want]);
+        if (r && r.len === want + 5) {
+          out.set(r.data.slice(0, want), n); n += want; addr += want;
+          onProg(n, max, Date.now() - t0);
+        } else {
+          size--; if (size < 1) break;
+        }
+      }
+      return out.slice(0, n);
+    }
+
+    // find a readable start address (for AUTO model)
+    async probeStart(cands) {
+      for (const a of cands) {
+        const r = await this.send([0x82, 0x82, 0x00], [...P.fmtRead(a), 8]);
+        if (r && r.len === 13) return a;
+      }
+      return null;
+    }
+
+    /* ---- EEPROM ---- */
+    async eepromRead(onProg) {
+      const out = new Uint8Array(512);
+      for (let i = 0; i < 256; i++) {
+        this._chk();
+        const r = await this.send([0x82, 0x82, 0x10], [i]);
+        if (!r || r.data.length < 2) throw new Error('อ่าน EEPROM ไม่ได้ที่ word ' + i);
+        out[i * 2] = r.data[0]; out[i * 2 + 1] = r.data[1];
+        onProg && onProg(i + 1, 256);
+      }
+      let same = true; for (let i = 0; i < 256; i++) if (out[i] !== out[i + 256]) { same = false; break; }
+      return same ? out.slice(0, 256) : out;
+    }
+    async eepromWrite(u8, onProg) {
+      const words = u8.length / 2;
+      for (let i = 0; i < words; i++) {
+        this._chk();
+        const r = await this.send([0x82, 0x82, 0x14], [i, u8[i * 2], u8[i * 2 + 1]]);
+        if (!r || r.len !== 5) throw new Error('เขียน EEPROM ไม่สำเร็จที่ word ' + i);
+        onProg && onProg(i + 1, words);
+      }
+      return true;
+    }
+    async eepromFormat(ff) { const r = await this.send([0x82, 0x82, ff ? 0x18 : 0x19], []); return !!(r && r.len === 5); }
+
+    /* ---- WRITE FLASH (อัดไฟล์) ---- */
+    async writeStatus() { const r = await this.send([0x7E], [0x01, 0x01, 0x00]); return r && r.data.length > 1 ? r.data[1] : null; }
+    async initWrite() {
+      for (const d of [[1, 1, 1], [1, 1, 2], [1, 1, 3], [1, 2, 0x50, 0x47, 0x4D], [1, 3, 0x2D, 0x46, 0x49]])
+        await this.send([0x7D], d, { delay: 500 });
+    }
+    async initRecover() {
+      for (const d of [[0, 1, 1], [0, 1, 2], [0, 1, 3], [0, 2, 0x76, 0x03, 0x17], [0, 3, 0x75, 0x05, 0x13]])
+        await this.send([0x7B], d, { delay: 500 });
+    }
+    async enterBoot() {
+      await this.send([0x72], [0x00, 0xF1]);
+      await P.sleep(1000);
+      await this.send([0x27], [0x00, 0x01, 0x00]);
+      await P.sleep(100);
+    }
+
+    async writeFlash(bin, o) {
+      o = o || {};
+      const start = o.start || 0;
+      const stage = o.onStage || (() => {});
+      const onProg = o.onProgress || (() => {});
+      if (bin.length % 64) throw new Error('ขนาดไฟล์ต้องหารด้วย 64 ลงตัว');
+      if (start % 16) throw new Error('Start offset ต้องหารด้วย 16 ลงตัว');
+      if (!P.binChecksumOK(bin) && !o.allowBadChecksum) throw new Error('checksum ไฟล์ไม่ผ่าน — แก้ checksum ก่อนอัด');
+
+      // 1) get into FLASH (boot) state — nothing destructive happens before the gate
+      stage('ตรวจสถานะกล่อง…');
+      let st = await this.detect();
+      if (st === S.OFF || st === S.UNKNOWN) throw new Error('ติดต่อกล่องไม่ได้ (' + st + ')');
+      if (st !== S.FLASH) {
+        stage('เข้าโหมดแฟลช…');
+        if (st === S.RECOVER_NEW) await this.initRecover(); else await this.initWrite();
+        if ((await this.writeStatus()) == null) await this.enterBoot();
+        if ((await this.writeStatus()) == null) {
+          await this.t.wake();
+          if ((await this.writeStatus()) == null)
+            throw new Error('เข้าโหมดแฟลชไม่ได้ — ยังไม่ได้ลบข้อมูล กล่องยังปลอดภัย');
+        }
+      }
+      this.state = S.FLASH;
+      this._chk(); // last point where cancel is allowed
+
+      // 2) erase
+      stage('ลบข้อมูลเดิม (erase)…');
+      await this.writeStatus();
+      for (let s = o.eraseWait || 0; s > 0; s--) { stage('รอก่อนลบ ' + s + ' วินาที'); await P.sleep(1000); }
+      await this.send([0x7E], [0x01, 0x02]);
+      await this.send([0x7E], [0x01, 0x03, 0x00, 0x00]); await this.writeStatus();
+      await this.send([0x7E], [0x01, 0x0B, 0x00, 0x00, 0x00, 0xFF, 0xFF, 0xFF]); await this.writeStatus();
+      await this.send([0x7E], [0x01, 0x0E, 0x01, 0x90]); await P.sleep(40);
+      const er = await this.send([0x7E], [0x01, 0x04, 0xFF]);
+      if (!er) throw new Error('สั่งลบไม่สำเร็จ (ไม่มีการตอบกลับ) — ลองอัดใหม่');
+      await P.sleep(o.fast ? 50 : 2000);
+      const tEnd = Date.now() + 90000;
+      for (;;) {
+        const r = await this.send([0x7E], [0x01, 0x05]);
+        if (!r) throw new Error('ระหว่างรอลบ กล่องไม่ตอบ — ลองอัดใหม่ทันที (โหมดกู้)');
+        if (r.data[1] === 0x00) break;
+        if (r.data[1] === 0xFA) throw new Error('ลบไม่สำเร็จ (block error 0xFA)');
+        if (Date.now() > tEnd) throw new Error('รอลบนานเกินไป');
+        stage('กำลังลบ… สถานะ ' + P.h8(r.data[1]));
+        await P.sleep(100);
+      }
+      await this.writeStatus();
+
+      // 3) write blocks
+      let block = o.block || 128;
+      const t0 = Date.now();
+      const writeAll = async (bs) => {
+        const n = bin.length / bs;
+        for (let i = 0; i < n; i++) {
+          const addr = (start >> 4) + i * (bs >> 4);
+          const next = i === n - 1 ? 0 : addr + (bs >> 4);
+          const x = [addr >> 8, addr & 0xFF, ...bin.subarray(i * bs, (i + 1) * bs), next >> 8, next & 0xFF];
+          const r = await this.send([0x7E], [0x01, 0x06, ...x, P.ck8(x), P.ckHonda(x)], { retries: 2, timeout: 1500 });
+          const d = r && r.data;
+          if (!r || r.len !== 7 || ((d[d.length - 2] << 8) | d[d.length - 1]) !== next) {
+            if (i === 0 && bs === 128) return false;
+            throw new Error('เขียน block ที่ ' + P.hx(start + i * bs, 5) + ' ไม่สำเร็จ — อย่าปิดกุญแจ ให้กดอัดใหม่ (โหมดกู้)');
+          }
+          if (bs === 64 && i % 2 === 1) { await this.send([0x7E], [0x01, 0x07]); await P.sleep(o.fast ? 5 : 200); }
+          onProg((i + 1) * bs, bin.length, Date.now() - t0);
+        }
+        return true;
+      };
+      stage('กำลังอัดไฟล์…');
+      if (!(await writeAll(block))) { block = 64; stage('กำลังอัดไฟล์ (block 64)…'); await writeAll(64); }
+
+      // 4) post write
+      stage('ปิดงานแฟลช / ตรวจสอบ…');
+      for (const c of [0x08, 0x09, 0x0A]) { await this.send([0x7E], [0x01, c]); await P.sleep(o.fast ? 5 : 500); await this.writeStatus(); }
+      await this.send([0x7E], [0x01, 0x0C]); await P.sleep(o.fast ? 5 : 500);
+      await this.writeStatus();
+      const fin = await this.send([0x7E], [0x01, 0x0D]);
+      const ok = !!(fin && fin.data[1] === 0x0F);
+      stage(ok ? 'อัดไฟล์สำเร็จ ✔ ปิดกุญแจ 10 วินาทีแล้วเปิดใหม่' : 'อัดเสร็จแต่ตรวจสอบท้ายไม่ผ่าน');
+      return ok;
+    }
+  }
+
+  const E = { HondaECU, Cancelled };
+  if (typeof module !== 'undefined' && module.exports) module.exports = E;
+  else Object.assign(root, E);
+})(typeof window !== 'undefined' ? window : globalThis);
+
+/* =====================================================================
+ * Jet_HONDA Tune — sim.js
+ * Virtual Keihin ECU used by DEMO mode and by the test-suite.
+ * Speaks the same frames as a real ECU, including the full flash sequence.
+ * ===================================================================== */
+(function (root) {
+  'use strict';
+  const P = (typeof module !== 'undefined' && module.exports) ? require('./proto.js') : root.HP;
+
+  function makeImage(size) {
+    const b = new Uint8Array(size);
+    let s = 0x1234;
+    const rnd = () => ((s = (s * 1103515245 + 12345) & 0x7FFFFFFF) >> 16) & 0xFF;
+    for (let i = 0; i < size; i++) b[i] = i < size * 0.7 ? rnd() : 0xFF;
+    // a 29x25 16-bit fuel table at 0x4000 for realism
+    for (let r = 0; r < 29; r++) for (let c = 0; c < 25; c++) {
+      const v = Math.round(2000 + c * 330 + r * 40 + Math.sin(r / 3) * 120);
+      const o = 0x4000 + (r * 25 + c) * 2; if (o + 1 < size) { b[o] = v >> 8; b[o + 1] = v & 0xFF; }
+    }
+    b.set(Array.from('MFB-DEMO K03-H01').map((c) => c.charCodeAt(0)), 0x10);
+    return P.binFixChecksum(b, 0);
+  }
+
+  class SimTransport {
+    constructor(o) {
+      o = o || {};
+      this.name = 'DEMO'; this.fw = 'Jet_HONDA GAUGE (จำลอง)';
+      this.kind = 'demo';
+      this.latency = o.latency == null ? 2 : o.latency;
+      this.size = (o.sizeKB || 64) * 1024;
+      this.start = o.start == null ? 0x8000 : o.start;
+      this.flash = makeImage(this.size);
+      this.eeprom = new Uint8Array(256).map((_, i) => (i * 7) & 0xFF);
+      this.mode = 'OK';           // OK | BOOT | RECOVER_OLD
+      this.requirePw = !!o.requirePw;
+      this.secure = false; this.arm = 0; this.bootArm = false;
+      this.erase = 0; this.status = 0; this.dtc = ['7-1', '21-1']; this.past = ['8-2'];
+      this.t0 = Date.now(); this.files = [];
+      this.failNext = 0;
+    }
+    async open() { return true; }
+    async close() {}
+    async sense() { return true; }
+    async wake() { await P.sleep(this.latency ? 20 : 0); }
+    async sendFile(name, u8, onProg) {
+      for (let i = 0; i < u8.length; i += 160) { await P.sleep(this.latency ? 4 : 0); onProg && onProg(Math.min(i + 160, u8.length), u8.length); }
+      this.files.push({ name, size: u8.length, crc: P.crc32(u8) });
+      return true;
+    }
+    async fileList() { return this.files.map((f) => ({ name: '/ecu/' + f.name + '.bin', size: f.size })); }
+    async txrx(frame, ml) {
+      if (this.latency) await P.sleep(this.latency); else await Promise.resolve();
+      if (this.failNext > 0) { this.failNext--; return null; }
+      if ((P.sum(frame) & 0xFF) !== 0) return null;
+      const mt = frame.slice(0, ml), d = frame.slice(ml + 1, frame.length - 1);
+      const R = (rt, data) => P.buildFrame(rt, data);
+      const m0 = mt[0];
+      if (ml === 1 && m0 === 0xFE) return this.mode === 'BOOT' ? null : R([0x0E], [0x72]);
+      if (ml === 1 && m0 === 0x72) {
+        if (this.mode !== 'OK') return null;
+        const c = d[0];
+        if (c === 0x00) { if (d[1] === 0xF1 && this.arm >= 2) this.bootArm = true; return R([0x02], [0x00]); }
+        if (c === 0x71) return R([0x02], [0x71, d[1], ...this.table(d[1])]);
+        if (c === 0x74 || c === 0x73) {
+          const list = c === 0x74 ? this.dtc : this.past;
+          const pairs = list.slice((d[1] - 1) * 3, d[1] * 3);
+          if (!pairs.length) return R([0x02], [c, d[1], 0x00, 0, 0, 0, 0, 0, 0]);
+          const b = [c, d[1], pairs.length];
+          for (let k = 0; k < 3; k++) { const p = pairs[k]; if (p) { const [x, y] = p.split('-').map(Number); b.push(x, y); } else b.push(0, 0); }
+          return R([0x02], b);
+        }
+        if (c === 0x60) { this.dtc = []; this.past = []; return R([0x02], [0x60, 0x03]); }
+        return null;
+      }
+      if (ml === 1 && m0 === 0x27) {
+        if (d[0] === 0xE0) { this.secure = true; return R([0x07], [0xE0, 0x00]); }
+        if (d[0] === 0x00 && this.bootArm) { this.mode = 'BOOT'; this.status = 0; return R([0x07], [0x00, 0x01]); }
+        return R([0x07], [d[0], 0x00]);
+      }
+      if (ml === 1 && m0 === 0x7D) {
+        if (this.mode === 'BOOT') return null;
+        if (d[1] === 0x02 && d[2] === 0x50) this.arm = 1;
+        if (d[1] === 0x03 && d[2] === 0x2D && this.arm === 1) this.arm = 2;
+        if (this.mode === 'RECOVER_OLD' && this.arm === 2) { this.mode = 'BOOT'; }
+        return R([0x0D], [0x01, 0x00, 0x00, 0x12]);
+      }
+      if (ml === 1 && m0 === 0x7B) return null;
+      if (ml === 3 && m0 === 0x82) {
+        if (this.mode !== 'OK') return null;
+        const rt = [0x92, 0x92, mt[2]];
+        if (mt[2] === 0x00) {
+          if (this.requirePw && !this.secure) return null;
+          const a = (d[0] << 16) | (d[2] << 8) | d[1], n = d[3];
+          const off = a - this.start;
+          if (off < 0 || off + n > this.size || n < 1 || n > 12) return null;
+          return R(rt, Array.from(this.flash.subarray(off, off + n)));
+        }
+        if (mt[2] === 0x10) { const w = d[0] & 0x7F; return R(rt, [this.eeprom[w * 2], this.eeprom[w * 2 + 1]]); }
+        if (mt[2] === 0x14) { const w = d[0] & 0x7F; this.eeprom[w * 2] = d[1]; this.eeprom[w * 2 + 1] = d[2]; return R(rt, []); }
+        if (mt[2] === 0x18 || mt[2] === 0x19) { this.eeprom.fill(mt[2] === 0x18 ? 0xFF : 0x00); return R(rt, []); }
+        return null;
+      }
+      if (ml === 1 && m0 === 0x7E) {
+        if (this.mode !== 'BOOT') return null;
+        const c = d[1];
+        if (c === 0x01) return R([0x0E], [0x01, this.status]);
+        if (c === 0x04) { this.erase = 6; this.flash.fill(0xFF); return R([0x0E], [0x01, 0x00]); }
+        if (c === 0x05) { if (this.erase > 0) this.erase--; return R([0x0E], [0x01, this.erase ? 0x01 : 0x00]); }
+        if (c === 0x06) {
+          const x = d.slice(2, d.length - 2), c1 = d[d.length - 2], c2 = d[d.length - 1];
+          if (P.ck8(x) !== c1 || P.ckHonda(x) !== c2) return null;
+          const addr = (x[0] << 8) | x[1], data = x.slice(2, x.length - 2);
+          const off = addr * 16 - this.start;
+          if (off < 0 || off + data.length > this.size) return null;
+          this.flash.set(data, off);
+          return R([0x0E], [0x01, 0x06, x[x.length - 2], x[x.length - 1]]);
+        }
+        if (c === 0x0C) { this.status = 0x0F; return R([0x0E], [0x01, 0x00]); }
+        if (c === 0x0D) { this.mode = 'OK'; this.arm = 0; this.bootArm = false; return R([0x0E], [0x01, 0x0F]); }
+        return R([0x0E], [0x01, 0x00]);
+      }
+      return null;
+    }
+    table(t) {
+      if (t === 0x00) return [0x4B, 0x30, 0x33, 0x48, 0x01, 0x10, 0x22];  // "K03H"..
+      if (t === 0x11) {
+        const s = (Date.now() - this.t0) / 1000;
+        const ph = (s % 14) / 14, wot = ph > 0.35 && ph < 0.85;
+        const rpm = Math.round(wot ? 3000 + (ph - 0.35) * 2 * 6800 : 1500 + Math.sin(s * 3) * 30);
+        const tps = wot ? 92 + Math.sin(s * 9) * 3 : 0;
+        const map = wot ? 95 : 32;
+        const spd = Math.round(wot ? (ph - 0.35) * 2 * 120 : Math.max(0, 40 - (ph > 0.85 ? (ph - 0.85) * 260 : 40)));
+        const inj = Math.round((wot ? 6.0 + Math.sin(s * 5) * 0.1 : 2.1) * 250);
+        const ign = wot ? 27.9 : 12;
+        return [rpm >> 8, rpm & 255, Math.round((0.5 + tps / 100 * 4) * 51.2), Math.round(tps * 1.6),
+          120, 79 + 40, 150, 34 + 40, 140, map, 0, 0, 141, spd, inj >> 8, inj & 255, Math.round((ign + 64) * 2), 0, 0, 0];
+      }
+      if (t === 0x17) return [0x00, 0x51, 0x00, 0x00];
+      if (t === 0xD1) return [0x01, 0x00, 0x00, 0x00, 0x00];
+      if (t === 0x10 || t === 0x20) return [0x00, 0x00, 0x00];
+      return [];
+    }
+  }
+
+  if (typeof module !== 'undefined' && module.exports) module.exports = { SimTransport, makeImage };
+  else root.SimTransport = SimTransport;
+})(typeof window !== 'undefined' ? window : globalThis);
+
+/* =====================================================================
+ * Jet_HONDA Tune — transports.js (browser)
+ *  1) DirectKLine  : USB K-line cable (FTDI / CH340 / KKL) via Web Serial, 10400 baud
+ *  2) GaugeLink    : Smart Gauge (ESP32) via Bluetooth LE (Nordic UART) or USB serial,
+ *                    speaking MFB-LINK; the gauge does the K-line timing.
+ * ===================================================================== */
+(function (root) {
+  'use strict';
+  const P = root.HP;
+  const NUS = '6e400001-b5a3-f393-e0a9-e50e24dcca9e';
+  const NUS_RX = '6e400002-b5a3-f393-e0a9-e50e24dcca9e'; // app -> gauge (write)
+  const NUS_TX = '6e400003-b5a3-f393-e0a9-e50e24dcca9e'; // gauge -> app (notify)
+
+  /* ---------------- byte-stream helper over Web Serial ---------------- */
+  class SerialStream {
+    constructor() { this.buf = []; this.waiters = []; this.port = null; this.alive = false; }
+    async open(port, baud) {
+      this.port = port || (await navigator.serial.requestPort());
+      await this.port.open({ baudRate: baud, bufferSize: 4096 });
+      this.baud = baud; this.alive = true; this._loop(); return this.port;
+    }
+    async _loop() {
+      while (this.alive && this.port && this.port.readable) {
+        this.reader = this.port.readable.getReader();
+        try {
+          for (;;) {
+            const { value, done } = await this.reader.read();
+            if (done) break;
+            for (const b of value) this.buf.push(b);
+            if (this.onData) this.onData(value);
+            const w = this.waiters; this.waiters = []; w.forEach((f) => f());
+          }
+        } catch (e) { /* port lost */ } finally { try { this.reader.releaseLock(); } catch (e) {} }
+        if (!this.alive) break;
+        await P.sleep(5);
+      }
+    }
+    async write(bytes) { const w = this.port.writable.getWriter(); try { await w.write(new Uint8Array(bytes)); } finally { w.releaseLock(); } }
+    async need(n, deadline) {
+      while (this.buf.length < n) {
+        const left = deadline - Date.now(); if (left <= 0) return false;
+        await new Promise((r) => { this.waiters.push(r); setTimeout(r, Math.min(left, 50)); });
+      }
+      return true;
+    }
+    async reopen(baud) {
+      this.alive = false; try { await this.reader.cancel(); } catch (e) {}
+      await P.sleep(2); await this.port.close();
+      await this.port.open({ baudRate: baud, bufferSize: 4096 });
+      this.baud = baud; this.alive = true; this._loop();
+    }
+    async close() { this.alive = false; try { await this.reader.cancel(); } catch (e) {} try { await this.port.close(); } catch (e) {} }
+  }
+
+  /* ---------------- Android APP native bridge (window.JetNative) ---------------- */
+  const NATIVE = !!root.JetNative;
+  const b64e = (a) => { let s = ''; const u = a instanceof Uint8Array ? a : Uint8Array.from(a); for (let i = 0; i < u.length; i += 0x8000) s += String.fromCharCode.apply(null, u.subarray(i, i + 0x8000)); return btoa(s); };
+  const b64d = (s) => { const t = atob(s), u = new Uint8Array(t.length); for (let i = 0; i < t.length; i++) u[i] = t.charCodeAt(i); return u; };
+  const Bus = { h: {} };
+  root.JetEvt = (evt, data) => { const f = Bus.h[evt]; if (f) f(data); };
+  const waitEvt = (evt, ms) => new Promise((res) => { const tm = setTimeout(() => { Bus.h[evt] = null; res(null); }, ms); Bus.h[evt] = (d) => { clearTimeout(tm); Bus.h[evt] = null; res(d); }; });
+
+  // byte stream over the app's USB-serial driver (FTDI / CH34x / CP210x / PL2303 / CDC)
+  class NativeUsbStream {
+    constructor() { this.buf = []; this.waiters = []; }
+    async open(baud, quiet) {
+      const p = waitEvt('usb-open', 60000);
+      Bus.h['usb-data'] = (b) => { const u = b64d(b); for (const x of u) this.buf.push(x); if (this.onData) this.onData(u); const w = this.waiters; this.waiters = []; w.forEach((f) => f()); };
+      Bus.h['usb-lost'] = () => { if (this.onLost) this.onLost(); };
+      root.JetNative.usbOpen(baud, !!quiet);
+      const r = await p;
+      if (!r || !r.ok) throw new Error(r ? r.err : 'เปิด USB ไม่สำเร็จ (หมดเวลา)');
+      this.devName = r.name; this.baud = baud;
+    }
+    async write(bytes) { if (!root.JetNative.usbWrite(b64e(bytes))) throw new Error('เขียน USB ไม่ได้'); }
+    need(n, deadline) { return SerialStream.prototype.need.call(this, n, deadline); }
+    async setBreak(on) { root.JetNative.usbSetBreak(!!on); }
+    async reopen(baud) { root.JetNative.usbSetBaud(baud); this.baud = baud; }
+    async close() { Bus.h['usb-data'] = Bus.h['usb-lost'] = null; root.JetNative.usbClose(); }
+  }
+
+  // BLE (Nordic UART) through the app — the app shows its own device picker
+  class NativeBle {
+    async open() {
+      const p = waitEvt('ble-open', 90000);
+      Bus.h['ble-data'] = (b) => this.onData && this.onData(b64d(b));
+      Bus.h['ble-lost'] = () => this.onLost && this.onLost();
+      root.JetNative.bleConnect();
+      const r = await p;
+      if (!r || !r.ok) throw new Error(r ? r.err : 'เชื่อมต่อ Bluetooth ไม่สำเร็จ');
+      this.name = r.name;
+    }
+    async write(bytes) { if (!root.JetNative.bleWrite(b64e(bytes))) throw new Error('Bluetooth ยังไม่พร้อม'); }
+    async close() { Bus.h['ble-data'] = Bus.h['ble-lost'] = null; root.JetNative.bleClose(); }
+  }
+
+  /* ---------------- 1) direct USB K-line cable ---------------- */
+  class DirectKLine {
+    constructor(o) { o = o || {}; this.kind = 'usb'; this.name = 'สาย K-LINE USB'; this.wakeMode = o.wakeMode || 'break'; this.s = NATIVE ? new NativeUsbStream() : new SerialStream(); }
+    async open() {
+      if (NATIVE) { this.s.onLost = () => this.onLost && this.onLost(); await this.s.open(10400, false); this.name = 'K-LINE ' + this.s.devName; return true; }
+      await this.s.open(null, 10400); const i = this.s.port.getInfo ? this.s.port.getInfo() : {}; this.info = i; return true;
+    }
+    async close() { await this.s.close(); }
+    async wake() {
+      if (this.wakeMode === 'baud') {
+        // 0x00 @ 120 baud ≈ 75 ms low (start + 8 data bits), then back to 10400
+        await this.s.reopen(120); await this.s.write([0x00]); await P.sleep(90);
+        await this.s.reopen(10400); await P.sleep(100);
+      } else if (this.s.setBreak) {
+        await this.s.setBreak(true); await P.sleep(70);
+        await this.s.setBreak(false); await P.sleep(130);
+      } else {
+        await this.s.port.setSignals({ break: true }); await P.sleep(70);
+        await this.s.port.setSignals({ break: false }); await P.sleep(130);
+      }
+      this.s.buf.length = 0;
+    }
+    async txrx(frame, ml, timeout) {
+      const s = this.s; s.buf.length = 0;
+      await s.write(frame);
+      const dl = Date.now() + timeout + Math.ceil(frame.length * 1.1);
+      // echo (single-wire K-line): strip if present
+      if (await s.need(frame.length, dl)) {
+        let echo = true; for (let i = 0; i < frame.length; i++) if (s.buf[i] !== frame[i]) { echo = false; break; }
+        if (echo) s.buf.splice(0, frame.length);
+      }
+      if (!(await s.need(ml + 1, dl))) return null;
+      const len = s.buf[ml]; if (len < ml + 2) return null;
+      if (!(await s.need(len, dl))) return null;
+      return s.buf.splice(0, len);
+    }
+  }
+
+  /* ---------------- 2) Smart Gauge (MFB-LINK) ---------------- */
+  class GaugeLink {
+    constructor(via, device) { this.device = device || null; this.kind = via === 'usb' ? 'gauge-usb' : 'gauge-ble'; this.via = via; this.name = 'SMART GAUGE ' + (via === 'usb' ? 'USB' : 'BLE'); this.pending = null; this.parser = new P.LinkParser((t, p) => this._onFrame(t, p)); this.chunk = 180; }
+    async open() {
+      if (NATIVE) {
+        this.s = this.via === 'usb' ? new NativeUsbStream() : new NativeBle();
+        this.s.onData = (v) => this.parser.push(v);
+        this.s.onLost = () => { this.lost = true; if (this.onLost) this.onLost(); };
+        if (this.via === 'usb') { await this.s.open(115200, true); this.name = 'GAUGE USB'; }
+        else { await this.s.open(); this.name = 'GAUGE ' + (this.s.name || 'BLE'); }
+      } else if (this.via === 'usb') {
+        this.s = new SerialStream(); this.s.onData = (v) => this.parser.push(v);
+        await this.s.open(null, 115200);
+      } else {
+        if (!navigator.bluetooth) throw new Error('เบราว์เซอร์นี้ไม่รองรับ Bluetooth (ใช้ Chrome บน Android / PC)');
+        this.dev = this.device || await navigator.bluetooth.requestDevice({ filters: [{ services: [NUS] }, { namePrefix: 'Jet' }, { namePrefix: 'MFB' }, { namePrefix: 'Jet' }], optionalServices: [NUS] });
+        this.dev.addEventListener('gattserverdisconnected', () => { this.lost = true; if (this.onLost) this.onLost(); });
+        const srv = await (await this.dev.gatt.connect()).getPrimaryService(NUS);
+        this.rx = await srv.getCharacteristic(NUS_RX); this.tx = await srv.getCharacteristic(NUS_TX);
+        await this.tx.startNotifications();
+        this.tx.addEventListener('characteristicvaluechanged', (e) => this.parser.push(new Uint8Array(e.target.value.buffer)));
+        this.name = 'GAUGE ' + (this.dev.name || 'BLE');
+      }
+      const r = await this.request(P.LINK.PING, [], 2000);
+      if (!r) throw new Error('เชื่อมต่อได้แต่เกจไม่ตอบ (อัปเดตเฟิร์มแวร์เกจเป็น bridge v1) (อัปเดตเฟิร์มแวร์เกจ)');
+      this.fw = String.fromCharCode(...r.slice(1));
+      return true;
+    }
+    async fileList() {
+      const r = await this.request(P.LINK.FILE_LIST, [], 3000);
+      if (!r || r[0]) return null;
+      return String.fromCharCode(...r.slice(1)).split('\n').filter(Boolean).map((l) => { const i = l.lastIndexOf(':'); return { name: l.slice(0, i), size: +l.slice(i + 1) }; });
+    }
+    async close() { if (this.s) await this.s.close(); if (this.dev && this.dev.gatt.connected) this.dev.gatt.disconnect(); }
+    _onFrame(t, p) { const q = this.pending; if (q && t === (q.type | 0x80)) { this.pending = null; clearTimeout(q.tm); q.res(p); } }
+    async _raw(bytes) {
+      if (this.s) return this.s.write(bytes);
+      for (let i = 0; i < bytes.length; i += this.chunk) await this.rx.writeValueWithResponse(new Uint8Array(bytes.slice(i, i + this.chunk)));
+    }
+    async request(type, payload, timeout) {
+      while (this.pending) await P.sleep(1);
+      return new Promise(async (res) => {
+        const q = { type, res, tm: setTimeout(() => { if (this.pending === q) this.pending = null; res(null); }, timeout || 1500) };
+        this.pending = q;
+        try { await this._raw(P.linkEncode(type, payload)); } catch (e) { clearTimeout(q.tm); this.pending = null; res(null); }
+      });
+    }
+    async wake() { await this.request(P.LINK.WAKE, [], 1500); }
+    async sense() { const r = await this.request(P.LINK.SENSE, [], 800); return r ? !!r[1] : null; }
+    async txrx(frame, ml, timeout) {
+      const r = await this.request(P.LINK.TXRX, [ml, timeout & 0xFF, timeout >> 8, ...frame], timeout + 1200);
+      if (!r || r[0] !== P.LINK.ST_OK) return null;
+      return r.slice(1);
+    }
+    async sendFile(name, u8, onProg) {
+      const nm = Array.from(new TextEncoder().encode(name.slice(0, 40)));
+      const sz = u8.length;
+      let r = await this.request(P.LINK.FILE_BEGIN, [sz & 255, (sz >> 8) & 255, (sz >> 16) & 255, sz >>> 24, nm.length, ...nm], 4000);
+      if (!r || r[0]) throw new Error('เกจไม่รับไฟล์ (พื้นที่เต็ม?)');
+      const CH = 160;
+      for (let o = 0; o < sz; o += CH) {
+        const d = Array.from(u8.subarray(o, o + CH));
+        let ok = false;
+        for (let a = 0; a < 3 && !ok; a++) { r = await this.request(P.LINK.FILE_CHUNK, [o & 255, (o >> 8) & 255, (o >> 16) & 255, o >>> 24, ...d], 3000); ok = r && r[0] === 0; }
+        if (!ok) throw new Error('ส่งไฟล์สะดุดที่ ' + o);
+        onProg && onProg(Math.min(o + CH, sz), sz);
+      }
+      const c = P.crc32(u8);
+      r = await this.request(P.LINK.FILE_END, [c & 255, (c >> 8) & 255, (c >> 16) & 255, c >>> 24], 5000);
+      if (!r || r[0]) throw new Error('CRC ไฟล์บนเกจไม่ตรง');
+      return true;
+    }
+  }
+
+  root.JetApp = NATIVE ? { saveFile: (name, u8, mime) => root.JetNative.saveFile(name, b64e(u8), mime || ''), keepScreen: (on) => root.JetNative.keepScreen(!!on) } : null;
+  root.DirectKLine = DirectKLine;
+  root.GaugeLink = GaugeLink;
+})(window);
+
+/* =====================================================================
+ * Jet_HONDA Tune — app.js (UI)
+ * ===================================================================== */
+(function () {
+  'use strict';
+  const P = window.HP;
+  const $ = (s) => document.querySelector(s), $$ = (s) => Array.from(document.querySelectorAll(s));
+  const LS = 'jht.settings';
+  const DEF = { theme: '#2a7bff', wake: 'break', timeout: 350, eraseWait: 0, block: 128, pw: '', models: null, modelId: 'auto' };
+  const S = Object.assign({}, DEF, JSON.parse(localStorage.getItem(LS) || '{}'));
+  const saveS = () => localStorage.setItem(LS, JSON.stringify(S));
+  const st = { t: null, gauge: null, ecu: null, busy: false, live: false, files: [], sel: null, ee: null, hexOff: 0, mm: {} };
+  const models = () => S.models || P.MODELS;
+
+  /* ---------------- helpers ---------------- */
+  const toast = (m, ms) => { const t = $('#toast'); t.textContent = m; t.style.display = 'block'; clearTimeout(toast.h); toast.h = setTimeout(() => (t.style.display = 'none'), ms || 2600); };
+  const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+  const fmtDate = (d) => { d = new Date(d); const p = (n) => String(n).padStart(2, '0'); return `${p(d.getDate())}/${p(d.getMonth() + 1)}/${d.getFullYear()} ${p(d.getHours())}:${p(d.getMinutes())}`; };
+  const kb = (n) => (n / 1024).toFixed(n % 1024 ? 1 : 1) + ' KB';
+  const parseHex = (s) => { const v = parseInt(String(s).replace(/^0x/i, ''), 16); return isNaN(v) ? 0 : v; };
+  const download = (name, data, type) => { if (window.JetApp) { const u = typeof data === 'string' ? new TextEncoder().encode(data) : data; const r = JetApp.saveFile(name, u, type); toast(r ? 'บันทึกแล้ว: ' + r : 'บันทึกไฟล์ไม่สำเร็จ', 4000); return; } const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob([data], { type: type || 'application/octet-stream' })); a.download = name; a.click(); setTimeout(() => URL.revokeObjectURL(a.href), 2000); };
+  const modal = (id, on) => $(id).classList.toggle('show', on);
+  $$('[data-close]').forEach((b) => b.onclick = () => b.closest('.modal').classList.remove('show'));
+
+  /* ---------------- log ---------------- */
+  const logEl = $('#log'); let logN = 0;
+  function log(kind, msg) {
+    if ((kind === 'tx' || kind === 'rx' || kind === 'to' || kind === 'bad') && !$('#logFrames').checked) return;
+    if (Array.isArray(msg) || msg instanceof Uint8Array) msg = P.hex(msg);
+    const cls = { tx: 'tx', rx: 'rx', to: 'er', bad: 'er', err: 'er', info: 'in' }[kind] || '';
+    const tag = { tx: 'TX ', rx: 'RX ', to: 'TIMEOUT ', bad: 'BAD ', err: 'ERR ', info: '' }[kind] || '';
+    const d = document.createElement('div'); d.className = cls;
+    d.textContent = new Date().toTimeString().slice(0, 8) + '  ' + tag + msg;
+    logEl.appendChild(d); if (++logN > 3000) { logEl.firstChild.remove(); logN--; }
+    logEl.scrollTop = logEl.scrollHeight;
+  }
+  $('#bLogClr').onclick = () => { logEl.innerHTML = ''; logN = 0; };
+  $('#bLogSave').onclick = () => download('jet-honda-tune-log.txt', logEl.innerText, 'text/plain');
+
+  /* ---------------- theme ---------------- */
+  const THEMES = [['#2a7bff', 'น้ำเงิน'], ['#00c8ff', 'ฟ้า'], ['#7a5cff', 'ม่วง'], ['#3dff2a', 'เขียวนีออน'], ['#ff2a3a', 'แดง']];
+  function applyTheme() { document.documentElement.style.setProperty('--ac', S.theme); }
+  $('#themes').innerHTML = THEMES.map(([c, n]) => `<div style="text-align:center"><button data-c="${c}" style="background:${c};color:${c}"></button><div class="mut" style="font-size:12px;margin-top:5px">${n}</div></div>`).join('');
+  $$('#themes button').forEach((b) => b.onclick = () => { S.theme = b.dataset.c; applyTheme(); saveS(); markTheme(); });
+  const markTheme = () => $$('#themes button').forEach((b) => b.classList.toggle('on', b.dataset.c === S.theme));
+
+  /* ---------------- logo ---------------- */
+  function applyLogo() {   // custom-logo option removed: always show the built-in logo
+    try { localStorage.removeItem('jht.logo'); } catch (e) {}
+    $('#brandCustom').innerHTML = ''; $('#brandDefault').style.display = 'flex';
+  }
+  $('#brand').onclick = () => go(0);
+
+  /* ---------------- pages ---------------- */
+  const pages = $$('.page');
+  $('#nav').innerHTML = pages.map((p, i) => `<button data-p="${i}">${p.dataset.tab || p.dataset.name}</button>`).join('') + '<button id="bSet">Setup</button>';
+  $('#seg').innerHTML = pages.map(() => '<i></i>').join('');
+  let curPage = 0;
+  function go(i) {
+    curPage = i;
+    pages.forEach((p, k) => p.classList.toggle('show', k === i));
+    $$('#nav button[data-p]').forEach((b, k) => b.classList.toggle('on', k === i));
+    $$('#seg i').forEach((b, k) => b.classList.toggle('on', k === i));
+    if (pages[i].dataset.tab === 'Hex') renderHex();
+  }
+  $$('#nav button[data-p]').forEach((b) => b.onclick = () => go(+b.dataset.p));
+  const pageOf = (tab) => pages.findIndex((p) => p.dataset.tab === tab);
+  const tick = () => { const d = new Date(); $('#clock').textContent = String(d.getHours()).padStart(2, '0') + ':' + String(d.getMinutes()).padStart(2, '0'); };
+  tick(); setInterval(tick, 10000);
+  let sx = null;
+  $('.pages').addEventListener('touchstart', (e) => { sx = e.touches[0].clientX; }, { passive: true });
+  $('.pages').addEventListener('touchend', (e) => {
+    if (sx == null) return; const dx = e.changedTouches[0].clientX - sx; sx = null;
+    if (Math.abs(dx) < 90 || e.target.closest('.hex,.flist,input,select,textarea')) return;
+    const cur = curPage;
+    go(Math.max(0, Math.min(pages.length - 1, cur + (dx < 0 ? 1 : -1))));
+  });
+
+  /* ---------------- status pills ---------------- */
+  function pills() {
+    const t = st.t;
+    $('#dLink').className = 'dot' + (t ? ' on' : '');
+    $('#tLink').textContent = t ? t.name : 'OFFLINE · แตะเพื่อเชื่อมต่อ';
+    const s = st.ecu ? st.ecu.state : null;
+    const good = s === 'OK' || s === 'SECURE' || s === 'READ';
+    $('#tEcu').className = 'chipst' + (good ? ' on' : s && s !== 'OFF' ? ' mid' : '');
+    $('#tEcu').textContent = 'ECU ' + (s || '—');
+    $('#pGauge').className = 'chipst' + (st.gauge ? ' on' : '');
+    $('#tGauge').textContent = st.gauge ? 'GAUGE ✓' : 'GAUGE';
+    $('#bDemo').classList.toggle('on', !!(t && t.kind === 'demo'));
+  }
+
+  /* ---------------- connect ---------------- */
+  $('#bConnect').onclick = () => {
+    if (!('serial' in navigator) && !window.JetApp) $$('#mConnect .opt[data-c$="usb"]').forEach((o) => (o.style.opacity = .45));
+    modal('#mConnect', true);
+  };
+  $('#pGauge').onclick = () => { if (!st.gauge) connect('gauge-only'); else toast('เชื่อมเกจอยู่แล้ว'); };
+  $('#bDemo').onclick = () => (st.t && st.t.kind === 'demo') ? disconnect() : connect('demo');
+  $$('#mConnect .opt').forEach((o) => o.onclick = () => { modal('#mConnect', false); connect(o.dataset.c); });
+  $('#bDisc').onclick = () => { modal('#mConnect', false); disconnect(); };
+
+  async function disconnect() {
+    stopLive();
+    try { if (st.t) await st.t.close(); } catch (e) {}
+    try { if (st.gauge && st.gauge !== st.t) await st.gauge.close(); } catch (e) {}
+    st.t = st.gauge = st.ecu = null; pills(); renderEcu(); log('info', 'ตัดการเชื่อมต่อ');
+  }
+  async function connect(kind) {
+    try {
+      if (kind === 'gauge-only') {
+        const g = new GaugeLink('ble'); await g.open(); st.gauge = g; g.onLost = () => { st.gauge = null; pills(); };
+        log('info', 'เชื่อมเกจแล้ว ' + (g.fw || '')); toast('เชื่อมเกจแล้ว'); pills(); return;
+      }
+      await disconnect();
+      let t;
+      if (kind === 'demo') t = new SimTransport({ latency: 2 });
+      else if (kind === 'usb') { if (!('serial' in navigator) && !window.JetApp) throw new Error('เบราว์เซอร์นี้ไม่รองรับ Web Serial — ใช้ Chrome/Edge หรือแอป APK'); t = new DirectKLine({ wakeMode: S.wake }); }
+      else t = new GaugeLink(kind === 'gauge-usb' ? 'usb' : 'ble');
+      await t.open();
+      t.onLost = () => { log('err', 'การเชื่อมต่อหลุด'); toast('การเชื่อมต่อหลุด'); st.t = null; if (st.gauge === t) st.gauge = null; pills(); };
+      st.t = t; if (kind !== 'usb') st.gauge = t;
+      st.ecu = new HondaECU(t, { log, timeout: S.timeout });
+      log('info', 'เชื่อมต่อ ' + t.name + (t.fw ? ' · ' + t.fw : ''));
+      pills(); await detect();
+      if (kind === 'demo') startLive();
+    } catch (e) { log('err', e.message || e); toast(e.message || String(e), 4000); pills(); }
+  }
+
+  /* ---------------- busy wrapper ---------------- */
+  async function op(name, fn) {
+    if (!st.ecu) { toast('ยังไม่ได้เชื่อมต่อ'); modal('#mConnect', true); return; }
+    if (st.busy) { toast('กำลังทำงานอื่นอยู่'); return; }
+    const wasLive = st.live; stopLive();
+    st.busy = true; while (st.liveRunning) await P.sleep(10);
+    log('info', '▶ ' + name);
+    try { return await fn(); }
+    catch (e) { log('err', name + ': ' + (e.message || e)); const x = st.pg; if (x && $('#' + x + 'prog').style.display !== 'none') { $('#' + x + 'pStage').innerHTML = '<span class="badc">✗ ' + esc(e.message || e) + '</span>'; $('#' + x + 'bCancel').style.display = 'none'; } toast(e.cancelled ? 'ยกเลิกแล้ว' : (e.message || String(e)), 5000); }
+    finally { st.busy = false; pills(); renderStats(); if (wasLive && name !== 'อัดไฟล์') startLive(); }
+  }
+
+  /* ---------------- ECU info / live ---------------- */
+  async function detect() {
+    return op('ตรวจกล่อง', async () => {
+      const s = await st.ecu.detect();
+      log('info', 'สถานะกล่อง: ' + s + ' — ' + P.STATE_TH[s]);
+      if (s === 'OK') { st.fcount = await st.ecu.flashCount(); }
+      renderEcu(); return s;
+    });
+  }
+  $('#bDetect').onclick = detect;
+  function renderEcu() {
+    const e = st.ecu, s = e ? e.state : null;
+    $('#ecuState').textContent = s || '—';
+    $('#ecuState').className = s === 'OK' || s === 'SECURE' ? 'okc' : s ? 'warn' : 'mut';
+    $('#ecuInfo').innerHTML = !e ? '<span>สถานะ</span><span>ยังไม่เชื่อมต่อ</span>' : [
+      ['สถานะ', P.STATE_TH[s] || s], ['ECU ID', e.ecuId ? P.hex(e.ecuId) : '—'],
+      ['ECU ID (ascii)', e.ecuId ? esc(String.fromCharCode(...e.ecuId.map((b) => (b > 31 && b < 127 ? b : 46)))) : '—'],
+      ['Flash count', st.fcount ? P.hex(st.fcount) : '—'], ['ช่องทาง', st.t ? st.t.name : '—'],
+    ].map(([k, v]) => `<span>${k}</span><span>${v}</span>`).join('');
+  }
+  const ARC_LEN = 2 * Math.PI * 118 * 0.75;
+  function showLive(d) {
+    const f = (k, n) => { const el = $('#v' + k); if (el && d[k] != null) el.textContent = n == null ? d[k] : (+d[k]).toFixed(n); };
+    f('ECT', 0); f('IAT', 0); f('MAP', 0); f('BATT', 1); f('INJ', 2); f('IGN', 1); f('TPS', 1); f('SPD', 0);
+    if (d.RPM != null) {
+      $('#vRPM').textContent = Math.round(d.RPM).toLocaleString('en-US');
+      const p = Math.max(0, Math.min(1, d.RPM / (S.rpmMax || 12000)));
+      $('#arc').setAttribute('stroke-dasharray', (p * ARC_LEN).toFixed(1) + ' 999');
+    }
+    if (d.TPS != null) $('#tpsBar').style.width = Math.max(0, Math.min(100, d.TPS)) + '%';
+  }
+  async function liveLoop() {
+    st.liveRunning = true;
+    let fails = 0;
+    while (st.live && st.ecu && !st.busy) {
+      try {
+        const d = await st.ecu.readLive();
+        if (d) { fails = 0; showLive(d); } else if (++fails > 5) { log('err', 'LIVE: กล่องไม่ตอบ'); stopLive(); }
+      } catch (e) { stopLive(); }
+      await P.sleep(40);
+    }
+    st.liveRunning = false;
+  }
+  function startLive() { if (!st.ecu || st.live) return; st.live = true; $('#bLive').textContent = '■ STOP'; $('#bLive').classList.add('on'); liveLoop(); }
+  function stopLive() { st.live = false; $('#bLive').textContent = '▶ LIVE'; $('#bLive').classList.remove('on'); }
+  $('#bLive').onclick = () => { if (!st.ecu) return toast('ยังไม่ได้เชื่อมต่อ'); st.live ? stopLive() : startLive(); };
+  $('#bTables').onclick = () => op('อ่านตารางทั้งหมด', async () => {
+    const t = await st.ecu.probeTables();
+    const el = $('#tables'); el.style.display = 'block';
+    el.textContent = Object.keys(t).length ? Object.entries(t).map(([k, v]) => 'T' + (+k).toString(16).toUpperCase().padStart(2, '0') + ': ' + P.hex(v)).join('\n') : 'ไม่มีตารางตอบกลับ';
+  });
+
+  /* ---------------- DTC ---------------- */
+  const dtcHtml = (l) => l.length ? l.map((k) => `<div class="dtc"><b>${k}</b><span>${esc(P.dtcText(k))}</span></div>`).join('') : '<div class="okc">ไม่มีโค้ด ✔</div>';
+  $('#bDtc').onclick = () => op('อ่านโค้ด DTC', async () => { const r = await st.ecu.readDTC(); $('#dtcCur').innerHTML = dtcHtml(r.current); $('#dtcPast').innerHTML = dtcHtml(r.past); });
+  $('#bDtcClr').onclick = () => { if (confirm('ลบโค้ดทั้งหมดในกล่อง?')) op('ลบโค้ด', async () => { toast((await st.ecu.clearDTC()) ? 'ลบโค้ดแล้ว' : 'ลบไม่สำเร็จ'); $('#bDtc').click(); }); };
+
+  /* ---------------- file library (IndexedDB) ---------------- */
+  const DB = {
+    db: null,
+    open() { return new Promise((res, rej) => { const r = indexedDB.open('mfbk', 1); r.onupgradeneeded = () => r.result.createObjectStore('files', { keyPath: 'id' }); r.onsuccess = () => res((this.db = r.result)); r.onerror = () => rej(r.error); }); },
+    tx(m) { return this.db.transaction('files', m).objectStore('files'); },
+    all() { return new Promise((res) => { const r = this.tx('readonly').getAll(); r.onsuccess = () => res(r.result.sort((a, b) => b.date - a.date)); r.onerror = () => res([]); }); },
+    put(f) { return new Promise((res) => { const r = this.tx('readwrite').put(f); r.onsuccess = () => res(f); }); },
+    del(id) { return new Promise((res) => { const r = this.tx('readwrite').delete(id); r.onsuccess = res; }); },
+  };
+  async function addFile(name, u8, meta) {
+    const f = Object.assign({ id: Date.now() + '' + Math.random().toString(36).slice(2, 6), name, date: Date.now(), data: u8.buffer.slice(u8.byteOffset, u8.byteOffset + u8.length) }, meta || {});
+    await DB.put(f); await refreshFiles(); selectFile(f.id); return f;
+  }
+  const fbytes = (f) => new Uint8Array(f.data);
+  async function refreshFiles() {
+    st.files = await DB.all();
+    $('#flist').innerHTML = st.files.length ? st.files.map((f) => {
+      const u = fbytes(f), ok = P.binChecksumOK(u);
+      return `<div class="fi${st.sel && st.sel.id === f.id ? ' sel' : ''}" data-id="${f.id}"><span class="chip">▣</span><div style="flex:1;min-width:0"><b>${esc(f.name)}<span class="badge ${ok ? 'ok' : 'bad'}">${ok ? 'CKS OK' : 'CKS ✗'}</span></b><small>${kb(u.length)} · ${fmtDate(f.date)} · ผลรวม ${P.h8(P.binSum8(u))}${f.origin === 'read' ? ' · ดูดจากกล่อง' : ''}</small></div></div>`;
+    }).join('') : '<div class="mut">ยังไม่มีไฟล์ — ดูดจากกล่อง หรือเลือกไฟล์ .bin จากเครื่อง</div>';
+    $$('#flist .fi').forEach((el) => el.onclick = () => selectFile(el.dataset.id));
+    const opts = '<option value="">—</option>' + st.files.map((f) => `<option value="${f.id}">${esc(f.name)}</option>`).join('');
+    const a = $('#hxA').value, b = $('#hxB').value; $('#hxA').innerHTML = opts; $('#hxB').innerHTML = opts; $('#hxA').value = a; $('#hxB').value = b;
+  }
+  const layout = (f) => P.detectLayout(fbytes(f), f);
+  function curLayout() {
+    if (!st.sel) return null;
+    if (st.manual) return { start: parseHex($('#mStart').value), cks: parseHex($('#mCks').value), why: 'กำลังแก้เอง' };
+    return layout(st.sel);
+  }
+  function setManual(on) {
+    st.manual = on;
+    ['#mStart', '#mCks'].forEach((s) => ($(s).readOnly = !on));
+    $('#bManual').textContent = on ? '✔ บันทึกค่า' : '✏ แก้เอง';
+  }
+  function selectFile(id) {
+    st.sel = st.files.find((f) => f.id === id) || null;
+    $$('#flist .fi').forEach((el) => el.classList.toggle('sel', st.sel && el.dataset.id === st.sel.id));
+    if (st.sel && !$('#hxA').value) $('#hxA').value = id;
+    setManual(false); renderSel();
+  }
+  $('#bManual').onclick = async () => {
+    if (!st.sel) return toast('เลือกไฟล์ก่อน');
+    if (!st.manual) { setManual(true); $('#mStart').focus(); return; }
+    st.sel.startManual = parseHex($('#mStart').value); st.sel.cksManual = parseHex($('#mCks').value);
+    await DB.put(st.sel); setManual(false); renderSel(); toast('บันทึกค่าให้ไฟล์นี้แล้ว');
+  };
+  function renderSel() {
+    const f = st.sel;
+    $('#selName').textContent = f ? f.name : 'ยังไม่ได้เลือกไฟล์ — เลือกจากคลังด้านซ้าย';
+    if (!f) { $('#fileInfo').innerHTML = ''; $('#mStart').value = $('#mCks').value = ''; $('#autoWhy').textContent = ''; return; }
+    const u = fbytes(f), ok = P.binChecksumOK(u), L = curLayout();
+    if (!st.manual) { $('#mStart').value = P.hx(L.start, 5); $('#mCks').value = P.hx(L.cks, 5); }
+    const ms = f.startManual != null, mc = f.cksManual != null;
+    $('#aStart').textContent = ms ? 'ตั้งเอง' : 'AUTO'; $('#aStart').className = 'badge ' + (ms ? 'w' : 'ok');
+    $('#aCks').textContent = mc ? 'ตั้งเอง' : 'AUTO'; $('#aCks').className = 'badge ' + (mc ? 'w' : 'ok');
+    $('#autoWhy').innerHTML = esc(L.why || '') + (ms || mc ? ' · <a href="#" id="bAuto">คืนค่า AUTO</a>' : '');
+    if (ms || mc) $('#bAuto').onclick = async (e) => { e.preventDefault(); delete f.startManual; delete f.cksManual; await DB.put(f); renderSel(); };
+    const warn = [];
+    if (u.length % 64) warn.push('ขนาดไม่หารด้วย 64 — อัดไม่ได้');
+    if (!L.known && !ms && f.readStart == null) warn.push('ขนาดไฟล์ไม่อยู่ในตาราง — ตรวจ Start/Checksum ก่อนอัด');
+    if (L.cks >= u.length) warn.push('ตำแหน่ง checksum อยู่นอกไฟล์');
+    $('#fileInfo').innerHTML = [
+      ['ขนาด', kb(u.length) + ' (' + u.length + ' byte)'],
+      ['Checksum', ok ? '<span class="okc">ผ่าน ✔ (ผลรวม 0x00)</span>' : `<span class="badc">ไม่ผ่าน (ผลรวม ${P.h8(P.binSum8(u))})</span> — กด "แก้ Checksum" หรือให้แก้อัตโนมัติตอนอัด`],
+      ['ที่มา', f.origin === 'read' ? 'ดูดจากกล่อง' : f.origin === 'fix' ? 'แก้ checksum' : 'นำเข้าจากเครื่อง'],
+      ['CRC32', P.hx(P.crc32(u), 8)],
+      ['หมายเหตุ', warn.length ? `<span class="warn">${warn.join(' · ')}</span>` : '<span class="mut">—</span>'],
+    ].map(([k, v]) => `<span>${k}</span><span>${v}</span>`).join('');
+  }
+  $('#bImport').onclick = () => $('#fImport').click();
+  $('#fImport').onchange = async (e) => {
+    for (const file of e.target.files) {
+      const u = new Uint8Array(await file.arrayBuffer());
+      if (u.length > 4 * 1024 * 1024) { toast('ไฟล์ใหญ่เกิน'); continue; }
+      await addFile(file.name.replace(/\.bin$/i, ''), u, { origin: 'import' });
+    }
+    e.target.value = '';
+  };
+  $('#bDown').onclick = () => { if (!st.sel) return toast('เลือกไฟล์ก่อน'); download(st.sel.name + '.bin', fbytes(st.sel)); };
+  $('#bRen').onclick = async () => { if (!st.sel) return; const n = prompt('ชื่อไฟล์ใหม่', st.sel.name); if (n) { st.sel.name = n.trim(); await DB.put(st.sel); await refreshFiles(); renderSel(); } };
+  $('#bDel').onclick = async () => { if (!st.sel || !confirm('ลบไฟล์ "' + st.sel.name + '" ออกจากคลัง?')) return; await DB.del(st.sel.id); st.sel = null; await refreshFiles(); renderSel(); };
+  $('#bFix').onclick = async () => {
+    if (!st.sel) return toast('เลือกไฟล์ก่อน');
+    const u = fbytes(st.sel), L = curLayout(), idx = L.cks;
+    if (P.binChecksumOK(u)) return toast('checksum ผ่านอยู่แล้ว');
+    try {
+      const o = P.binFixChecksum(u, idx), s = st.sel;
+      await addFile(s.name.replace(/_FIX$/, '') + '_FIX', o, { origin: 'fix', readStart: s.readStart, startManual: s.startManual, cksManual: s.cksManual });
+      toast('สร้างไฟล์ _FIX แล้ว (byte ' + P.hx(idx, 5) + ' = ' + P.h8(o[idx]) + ')');
+    } catch (e) { toast(e.message); }
+  };
+
+  /* ---------------- model select (READ page) ---------------- */
+  function fillModels() {
+    $('#model').innerHTML = models().map((m) => `<option value="${m.id}">${esc(m.name)}${m.src === 'family' ? ' ⚠' : ''}</option>`).join('');
+    $('#model').value = S.modelId; applyModel(false);
+  }
+  function applyModel(save) {
+    const m = models().find((x) => x.id === $('#model').value) || models()[0];
+    $('#modelNote').innerHTML = {
+      family: '⚠ ค่าตั้งต้นตระกูลกล่อง Keihin เล็ก — ระบบจะยืนยันขนาด/ตำแหน่งจริงจากกล่องให้เอง',
+      HondaECU: '✔ ค่าจากตาราง checksum ของโปรเจกต์ HondaECU', auto: 'ระบบหา Start Offset และขนาดไฟล์จากกล่องให้อัตโนมัติ', custom: 'ค้นหาอัตโนมัติจากกล่อง',
+    }[m.src] || '';
+    $('#rAuto').innerHTML = [['Start Offset', '<span class="okc">AUTO</span> (ลองที่ ' + P.hx(m.start || 0, 5) + ' ก่อน)'], ['ขนาดไฟล์', m.size ? m.size + ' KB' : '<span class="okc">AUTO</span> (ดูดจนกล่องหยุดตอบ)'], ['Checksum', '<span class="okc">AUTO</span> (หาจากไฟล์ที่ได้)']]
+      .map(([k, v]) => `<span>${k}</span><span>${v}</span>`).join('');
+    if (save) { S.modelId = m.id; saveS(); }
+  }
+  $('#model').onchange = () => applyModel(true);
+  ['#mStart', '#mCks'].forEach((s) => $(s).oninput = renderSel);
+
+  /* ---------------- progress (r = READ page, w = WRITE page) ---------------- */
+  function progShow(x, on, cancellable) { st.pg = x; $('#' + x + 'prog').style.display = on ? 'block' : 'none'; $('#' + x + 'bCancel').style.display = cancellable ? '' : 'none'; if (on) progSet(x, 0, 1, 0, ''); }
+  function progSet(x, n, total, ms, stage) {
+    const p = total ? n / total : 0;
+    $('#' + x + 'pPct').textContent = Math.floor(p * 100) + '%'; $('#' + x + 'pBar').style.width = (p * 100).toFixed(1) + '%';
+    if (stage != null) $('#' + x + 'pStage').textContent = stage;
+    if (ms) { const bps = n / (ms / 1000); $('#' + x + 'pSub').textContent = `${kb(n)} / ${kb(total)} · ${(bps / 1024).toFixed(2)} KB/s · เหลือ ~${Math.max(0, Math.round((total - n) / Math.max(bps, 1)))} วิ`; }
+  }
+  const stage = (x, s) => { $('#' + x + 'pStage').textContent = s; };
+  $('#rbCancel').onclick = $('#wbCancel').onclick = () => st.ecu && st.ecu.cancel();
+
+  /* ---------------- READ (ดูดไฟล์) ---------------- */
+  $('#bRead').onclick = () => op('ดูดไฟล์', async () => {
+    const m = models().find((x) => x.id === $('#model').value) || models()[0];
+    const max = m.size ? m.size * 1024 : 0x100000;
+    $('#rIdle').style.display = 'none'; $('#rDone').style.display = 'none';
+    progShow('r', true, true); progSet('r', 0, max, 0, 'ตรวจสถานะกล่อง…');
+    const s = await st.ecu.detect();
+    if (s === 'OFF' || s === 'UNKNOWN') throw new Error('ติดต่อกล่องไม่ได้ (' + s + ') — เช็คปลั๊ก/กุญแจ ON');
+    if (s === 'FLASH' || s.startsWith('RECOVER')) throw new Error('กล่องอยู่โหมดแฟลช/กู้ — ต้องอัดไฟล์ให้สำเร็จก่อนจึงดูดได้');
+    if (S.pw) { stage('r', 'ส่งรหัส Security Access…'); const ok = await st.ecu.unlock(P.parseHexBytes(S.pw)); log('info', 'Security: ' + (ok ? 'ผ่าน' : 'ไม่ตอบ')); }
+    stage('r', 'ค้นหา Start Offset อัตโนมัติ…');
+    const start = await st.ecu.probeStart([...new Set([m.start || 0, 0x0, 0x4000, 0x8000, 0x10000])]);
+    if (start == null) throw new Error('กล่องไม่ยอมให้อ่าน — ลองใส่รหัส Security ในตั้งค่า');
+    log('info', 'Start Offset = ' + P.hx(start, 5));
+    stage('r', 'กำลังดูดไฟล์… (เริ่มที่ ' + P.hx(start, 5) + ')');
+    const u = await st.ecu.readFlash({ start, maxBytes: max, onProgress: (n, t, ms) => progSet('r', n, m.size ? t : Math.max(n, 65536 * Math.ceil(n / 65536)), ms) });
+    if (!u.length) throw new Error('กล่องไม่ยอมให้อ่าน — ลองใส่รหัส Security ในตั้งค่า');
+    const ok = P.binChecksumOK(u), L = P.detectLayout(u, { readStart: start });
+    const name = (m.id !== 'auto' && m.id !== 'custom' ? m.name.split(' (')[0].replace(/\s+/g, '') : 'ECU') + '_' + new Date().toISOString().slice(2, 16).replace(/[-:T]/g, '');
+    const f = await addFile(name, u, { origin: 'read', readStart: start, ecuId: Array.from(st.ecu.ecuId || []) });
+    st.lastRead = f;
+    progSet('r', u.length, u.length, 0, `ดูดเสร็จ ${kb(u.length)} · checksum ${ok ? 'ผ่าน ✔' : 'ไม่ผ่าน ✗ (อาจอ่านไม่ครบ)'}`);
+    $('#rInfo').innerHTML = [['ไฟล์', esc(name)], ['ขนาด', kb(u.length)], ['Start Offset', P.hx(start, 5) + ' <span class="badge ok">AUTO</span>'],
+      ['Checksum', (ok ? '<span class="okc">ผ่าน</span>' : '<span class="badc">ไม่ผ่าน</span>') + ' · ตำแหน่ง ' + P.hx(L.cks, 5) + ' <span class="badge ok">AUTO</span>'],
+      ['ECU ID', st.ecu.ecuId ? P.hex(st.ecu.ecuId) : '—']].map(([k, v]) => `<span>${k}</span><span>${v}</span>`).join('');
+    $('#rDone').style.display = 'block'; $('#rbCancel').style.display = 'none';
+    toast('ดูดไฟล์สำเร็จ บันทึกเข้าคลังแล้ว');
+  });
+  $('#rDown').onclick = () => st.lastRead && download(st.lastRead.name + '.bin', fbytes(st.lastRead));
+  $('#rToW').onclick = () => { if (st.lastRead) selectFile(st.lastRead.id); go(pageOf('อัดไฟล์')); };
+
+  /* ---------------- WRITE (อัดไฟล์) ---------------- */
+  $('#bWrite').onclick = () => {
+    if (!st.sel) return toast('เลือกไฟล์ในคลังก่อน');
+    if (st.manual) return toast('กด "บันทึกค่า" ก่อน');
+    if (!st.ecu) { toast('ยังไม่ได้เชื่อมต่อ'); return modal('#mConnect', true); }
+    const u = fbytes(st.sel), ok = P.binChecksumOK(u), L = curLayout();
+    $('#wInfo').innerHTML = [['ไฟล์', esc(st.sel.name)], ['ขนาด', kb(u.length)], ['Start Offset', P.hx(L.start, 5)], ['ตำแหน่ง Checksum', P.hx(L.cks, 5)],
+      ['Checksum', ok ? '<span class="okc">ผ่าน</span>' : '<span class="badc">ไม่ผ่าน — ต้องติ๊กแก้อัตโนมัติ</span>'], ['ช่องทาง', st.t.name]]
+      .map(([k, v]) => `<span>${k}</span><span>${v}</span>`).join('');
+    $$('.wc').forEach((c) => (c.checked = false)); $('#wFix').checked = !ok; upd();
+    modal('#mWrite', true);
+  };
+  const upd = () => { $('#wGo').disabled = !$$('.wc').every((c) => c.checked); };
+  $$('.wc').forEach((c) => c.onchange = upd);
+  $('#wGo').onclick = () => {
+    modal('#mWrite', false);
+    op('อัดไฟล์', async () => {
+      const L = curLayout();
+      let u = fbytes(st.sel);
+      if (!P.binChecksumOK(u)) { if (!$('#wFix').checked) throw new Error('checksum ไม่ผ่าน'); u = P.binFixChecksum(u, L.cks); log('info', 'แก้ checksum ที่ ' + P.hx(L.cks, 5) + ' ก่อนส่ง'); }
+      progShow('w', true, true); window.onbeforeunload = () => 'กำลังอัดไฟล์!';
+      let wl = null; try { wl = navigator.wakeLock && await navigator.wakeLock.request('screen'); } catch (e) {} if (window.JetApp) JetApp.keepScreen(true);
+      try {
+        const ok = await st.ecu.writeFlash(u, {
+          start: L.start, block: +S.block, eraseWait: +S.eraseWait, fast: st.t.kind === 'demo',
+          onStage: (s) => { stage('w', s); log('info', s); if (/ลบ|erase/.test(s)) $('#wbCancel').style.display = 'none'; },
+          onProgress: (n, t, ms) => progSet('w', n, t, ms),
+        });
+        $('#wbCancel').style.display = 'none';
+        if (ok) { progSet('w', 1, 1, 0); toast('อัดไฟล์สำเร็จ ✔', 6000); } else toast('อัดเสร็จแต่การตรวจท้ายไม่ผ่าน — ลองอัดซ้ำ', 6000);
+        await P.sleep(300); await st.ecu.detect(); renderEcu();
+      } finally { window.onbeforeunload = null; try { wl && wl.release(); } catch (e) {} if (window.JetApp) JetApp.keepScreen(false); }
+    });
+  };
+
+  /* ---------------- send to Smart Gauge ---------------- */
+  $('#bGauge').onclick = async () => {
+    if (!st.sel) return toast('เลือกไฟล์ก่อน');
+    if (!st.gauge) { toast('ยังไม่ได้เชื่อมเกจ — แตะ GAUGE ด้านบน'); return; }
+    if (st.busy) return toast('กำลังทำงานอื่นอยู่');
+    let u = fbytes(st.sel);
+    if (!P.binChecksumOK(u) && confirm('checksum ไม่ผ่าน — แก้ checksum ก่อนส่งไปเกจ?')) u = P.binFixChecksum(u, curLayout().cks);
+    const wasLive = st.live; stopLive(); st.busy = true; while (st.liveRunning) await P.sleep(10);
+    progShow('w', true, false); stage('w', 'ส่งไฟล์ไปเกจ…'); const t0 = Date.now();
+    try {
+      await st.gauge.sendFile(st.sel.name, u, (n, t) => progSet('w', n, t, Date.now() - t0));
+      stage('w', 'ส่งไฟล์ถึงเกจแล้ว ✔ กดปุ่ม FLASH ที่หน้าเกจเพื่อเริ่มแฟลช'); toast('ส่งไฟล์ไปเกจแล้ว'); log('info', 'ส่ง ' + st.sel.name + ' → เกจ CRC ' + P.hx(P.crc32(u), 8));
+    } catch (e) { toast(e.message, 5000); log('err', e.message); }
+    finally { st.busy = false; if (wasLive) startLive(); }
+  };
+
+  /* ---------------- EEPROM ---------------- */
+  const hexDump = (u, base, cmp) => {
+    let s = '';
+    for (let o = 0; o < u.length; o += 16) {
+      s += `<span class="a">${(base + o).toString(16).toUpperCase().padStart(6, '0')}</span>  `;
+      let asc = '';
+      for (let i = 0; i < 16 && o + i < u.length; i++) {
+        const b = u[o + i], h = b.toString(16).toUpperCase().padStart(2, '0');
+        const diff = cmp && cmp[o + i] !== undefined && cmp[o + i] !== b;
+        s += diff ? `<span class="d">${h}</span> ` : b === 0xFF || b === 0 ? `<span class="z">${h}</span> ` : h + ' ';
+        asc += b > 31 && b < 127 ? esc(String.fromCharCode(b)) : '.';
+        if (i === 7) s += ' ';
+      }
+      s += ' ' + asc + '\n';
+    }
+    return s;
+  };
+  const showEe = () => { $('#eeHex').innerHTML = st.ee ? hexDump(st.ee, 0) : 'ยังไม่มีข้อมูล'; };
+  $('#bEeR').onclick = () => op('อ่าน EEPROM', async () => { st.ee = await st.ecu.eepromRead(); showEe(); toast('อ่าน EEPROM ' + st.ee.length + ' byte'); });
+  $('#bEeSave').onclick = () => { if (!st.ee) return toast('ยังไม่มีข้อมูล'); download('EEPROM_' + Date.now() + '.bin', st.ee); };
+  $('#bEeW').onclick = () => $('#fEe').click();
+  $('#fEe').onchange = async (e) => {
+    const f = e.target.files[0]; e.target.value = ''; if (!f) return;
+    const u = new Uint8Array(await f.arrayBuffer());
+    if (u.length !== 256 && u.length !== 512) return toast('ไฟล์ EEPROM ต้อง 256 หรือ 512 byte');
+    if (!confirm('เขียน EEPROM จากไฟล์ ' + f.name + ' ?')) return;
+    op('เขียน EEPROM', async () => { await st.ecu.eepromWrite(u); toast('เขียน EEPROM สำเร็จ'); st.ee = u; showEe(); });
+  };
+  const fmt = (ff) => { if (confirm('ฟอร์แมต EEPROM เป็น ' + (ff ? 'FF' : '00') + ' ? ข้อมูลเดิมจะหายทั้งหมด')) op('ฟอร์แมต EEPROM', async () => toast((await st.ecu.eepromFormat(ff)) ? 'ฟอร์แมตแล้ว' : 'ไม่สำเร็จ')); };
+  $('#bEeFF').onclick = () => fmt(true); $('#bEe00').onclick = () => fmt(false);
+
+  /* ---------------- HEX / COMPARE ---------------- */
+  const ROWS = 64;
+  function renderHex() {
+    const A = st.files.find((f) => f.id === $('#hxA').value), B = st.files.find((f) => f.id === $('#hxB').value);
+    if (!A) { $('#hx').textContent = 'เลือกไฟล์ A'; $('#hxSum').textContent = ''; return; }
+    const a = fbytes(A), b = B ? fbytes(B) : null;
+    st.hexOff = Math.max(0, Math.min(st.hexOff, Math.max(0, a.length - 16))) & ~15;
+    const view = a.subarray(st.hexOff, st.hexOff + ROWS * 16);
+    $('#hx').innerHTML = hexDump(view, st.hexOff, b ? b.subarray(st.hexOff, st.hexOff + ROWS * 16) : null);
+    $('#hxGo').value = st.hexOff.toString(16).toUpperCase();
+    if (b) {
+      let n = 0, ranges = 0, prev = false;
+      const L = Math.min(a.length, b.length);
+      for (let i = 0; i < L; i++) { const d = a[i] !== b[i]; if (d) { n++; if (!prev) ranges++; } prev = d; }
+      $('#hxSum').innerHTML = `ต่างกัน <b class="warn">${n}</b> byte ใน <b>${ranges}</b> ช่วง` + (a.length !== b.length ? ` · <span class="badc">ขนาดไม่เท่ากัน (${a.length} / ${b.length})</span>` : '');
+    } else $('#hxSum').textContent = `${A.name} · ${kb(a.length)}`;
+  }
+  $('#hxA').onchange = $('#hxB').onchange = () => { st.hexOff = 0; renderHex(); };
+  $('#hxGo').onchange = () => { st.hexOff = parseHex($('#hxGo').value); renderHex(); };
+  $('#hxPrev').onclick = () => { st.hexOff -= ROWS * 16; renderHex(); };
+  $('#hxNext').onclick = () => { st.hexOff += ROWS * 16; renderHex(); };
+  $('#hxDiff').onclick = () => {
+    const A = st.files.find((f) => f.id === $('#hxA').value), B = st.files.find((f) => f.id === $('#hxB').value);
+    if (!A || !B) return toast('เลือกไฟล์ A และ B');
+    const a = fbytes(A), b = fbytes(B), L = Math.min(a.length, b.length);
+    let i = st.hexOff + ROWS * 16; while (i < L && a[i] === b[i]) i++;
+    if (i >= L) { i = 0; while (i < L && a[i] === b[i]) i++; }
+    if (i >= L) return toast('ไม่มีจุดต่าง');
+    st.hexOff = Math.max(0, (i & ~15) - 64); renderHex();
+  };
+
+  /* ---------------- settings ---------------- */
+  $('#bSet').onclick = () => {
+    markTheme(); $('#sWake').value = S.wake; $('#sTo').value = S.timeout; $('#sErase').value = S.eraseWait; $('#sBlock').value = S.block; $('#sPw').value = S.pw;
+    $('#sModels').value = JSON.stringify(models().map((m) => Object.assign({}, m, { start: P.hx(m.start), cks: P.hx(m.cks) })), null, 1);
+    modal('#mSet', true);
+  };
+  $('#sSave').onclick = () => {
+    try {
+      if (S.pw !== $('#sPw').value) P.parseHexBytes($('#sPw').value);
+      const ms = JSON.parse($('#sModels').value).map((m) => Object.assign(m, { start: parseHex(m.start), cks: parseHex(m.cks), size: +m.size || 0 }));
+      Object.assign(S, { wake: $('#sWake').value, timeout: +$('#sTo').value || 350, eraseWait: +$('#sErase').value || 0, block: +$('#sBlock').value, pw: $('#sPw').value.trim(), models: ms });
+      saveS(); if (st.ecu) st.ecu.timeout = S.timeout; if (st.t && st.t.wakeMode) st.t.wakeMode = S.wake;
+      fillModels(); modal('#mSet', false); toast('บันทึกแล้ว');
+    } catch (e) { toast('ผิดพลาด: ' + e.message, 4000); }
+  };
+  $('#sReset').onclick = () => { if (confirm('คืนค่าตั้งค่าทั้งหมด?')) { localStorage.removeItem(LS); location.reload(); } };
+
+  function renderStats() { if (st.ecu) $('#stats').textContent = `TX ${st.ecu.stats.tx} · RX ${st.ecu.stats.rx} · retry ${st.ecu.stats.retry} · bad ${st.ecu.stats.bad}`; }
+  setInterval(renderStats, 1500);
+
+  window.JetBack = () => {
+    const m = document.querySelector('.modal.show'); if (m) { m.classList.remove('show'); return true; }
+    if (!pages[0].classList.contains('show')) { go(0); return true; }
+    return false;
+  };
+
+  /* ---------------- boot ---------------- */
+  (async () => {
+    applyTheme(); applyLogo(); go(0); fillModels(); pills(); renderEcu();
+    try { await DB.open(); await refreshFiles(); } catch (e) { toast('เปิดคลังไฟล์ไม่ได้: ' + e.message); }
+    log('info', window.JetApp ? 'Jet_HONDA Tune (Android APP) พร้อมใช้งาน · USB OTG + Bluetooth' : 'Jet_HONDA Tune พร้อมใช้งาน · Web Serial: ' + ('serial' in navigator ? 'มี' : 'ไม่มี') + ' · Bluetooth: ' + ('bluetooth' in navigator ? 'มี' : 'ไม่มี'));
+  })();
+})();
+</script>
+</body>
+</html>

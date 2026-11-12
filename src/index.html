@@ -1,0 +1,261 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#05080f">
+<title>Jet_HONDA Tune</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Lexend:wght@400;500;600;700;800&family=Kanit:wght@300;400;500;600&display=swap" rel="stylesheet">
+<style>/*@@CSS@@*/</style>
+</head>
+<body>
+<div class="app">
+  <div class="top">
+    <div class="hl">
+      <button class="status" id="bConnect" title="เชื่อมต่อ"><span class="dot" id="dLink"></span><span id="tLink">OFFLINE</span></button>
+      <span class="chipst" id="tEcu">ECU —</span>
+      <button class="chipst" id="pGauge" style="background:none;cursor:pointer"><span id="tGauge">GAUGE</span></button>
+      <span class="dot" id="dEcu" hidden></span><span class="dot" id="dGauge" hidden></span>
+    </div>
+    <div class="brand" id="brand" title="Jet_HONDA Tune">
+      <span id="brandCustom"></span>
+      <span id="brandDefault" style="display:flex;align-items:center;gap:9px">
+      <svg viewBox="0 0 64 64" aria-hidden="true"><defs><linearGradient id="lg" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#fff"/><stop offset=".45" stop-color="#8cc8ff"/><stop offset="1" stop-color="#2f7cf6"/></linearGradient></defs>
+        <path d="M32 3 57 17.5v29L32 61 7 46.5v-29Z" fill="#0a1426" stroke="url(#lg)" stroke-width="3"/>
+        <path d="M14 38 50 20 40 30 52 30 18 47 28 37Z" fill="url(#lg)"/>
+        <path d="M27 18h12v3h-4v15a7 7 0 0 1-7 7h-3v-3h3a4 4 0 0 0 4-4V21h-5Z" fill="#fff" opacity=".92"/></svg>
+      <div class="logo">Jet_HONDA<small>TUNE</small></div></span>
+    </div>
+    <div class="hr">
+      <button class="mini" id="bDemo">DEMO</button>
+      <span class="clock" id="clock">--:--</span>
+    </div>
+  </div>
+  <div class="seg" id="seg"></div>
+
+  <div class="pages">
+    <!-- 0 ECU / LIVE -->
+    <section class="page show" data-name="ECU" data-tab="Dash">
+      <div class="dash">
+        <div class="dcol">
+          <div class="card tile"><span class="k">Coolant</span><span class="v"><b id="vECT">--</b><small>°C</small></span></div>
+          <div class="card tile"><span class="k">Intake</span><span class="v"><b id="vIAT">--</b><small>°C</small></span></div>
+          <div class="card tile"><span class="k">MAP</span><span class="v"><b id="vMAP">--</b><small>kPa</small></span></div>
+        </div>
+        <div class="gauge">
+          <svg viewBox="0 0 300 300" aria-hidden="true">
+            <defs><linearGradient id="ga" x1="0" y1="1" x2="0" y2="0"><stop offset="0" stop-color="#8cc8ff"/><stop offset="1" stop-color="var(--ac)"/></linearGradient>
+            <filter id="gl"><feGaussianBlur stdDeviation="4" result="b"/><feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge></filter></defs>
+            <circle cx="150" cy="150" r="96" fill="#0b1b38" stroke="#16305a" stroke-width="1.5"/>
+            <path id="arcBg" d="M 66.6 233.4 A 118 118 0 1 1 233.4 233.4" fill="none" stroke="#11264a" stroke-width="16" stroke-linecap="round"/>
+            <path id="arc" d="M 66.6 233.4 A 118 118 0 1 1 233.4 233.4" fill="none" stroke="url(#ga)" stroke-width="16" stroke-linecap="round" filter="url(#gl)" stroke-dasharray="0 999"/>
+          </svg>
+          <div class="gc"><span class="rpm"><b id="vRPM" style="font-weight:500">0</b> rpm</span><span class="spd" id="vSPD">0</span><span class="unit">km/h</span></div>
+        </div>
+        <div class="dcol">
+          <div class="card tile"><span class="k">Battery</span><span class="v"><b id="vBATT">--</b><small>V</small></span></div>
+          <div class="card tile"><span class="k">Injector</span><span class="v"><b id="vINJ">--</b><small>ms</small></span></div>
+          <div class="card tile"><span class="k">Ignition</span><span class="v"><b id="vIGN">--</b><small>°</small></span></div>
+        </div>
+      </div>
+      <div class="card wide"><span class="k">Throttle</span><span class="v"><b id="vTPS">--</b><small>%</small></span><div class="track"><i id="tpsBar"></i></div></div>
+      <div class="card" style="margin-top:14px">
+        <h3>ECU <span id="ecuState" class="mut">—</span></h3>
+        <div class="kv" id="ecuInfo"><span>สถานะ</span><span>ยังไม่เชื่อมต่อ</span></div>
+        <div class="row" style="margin-top:14px">
+          <button class="btn" id="bDetect">ตรวจกล่อง</button>
+          <button class="btn grn" id="bLive">▶ LIVE</button>
+          <button class="btn" id="bTables">ตารางดิบ</button>
+        </div>
+        <div class="hex" id="tables" style="margin-top:12px;max-height:180px;display:none"></div>
+        <p class="mut" style="font-size:12.5px;margin:12px 0 0">บิดกุญแจ ON (ไม่ต้องสตาร์ท) · เสียบปลั๊กเช็ค 4 ขา/DLC · แบตต้องเต็ม</p>
+      </div>
+    </section>
+
+    <!-- 1 READ -->
+    <section class="page" data-name="ดูดไฟล์ · READ" data-tab="ดูดไฟล์">
+      <div class="split">
+        <div class="card">
+          <h2 class="okc">⬇ ดูดไฟล์จากกล่อง</h2>
+          <label class="f">รุ่นรถ / ตระกูลกล่อง<select id="model"></select></label>
+          <div id="modelNote" class="mut" style="font-size:12.5px;margin-top:6px"></div>
+          <div class="kv" id="rAuto" style="margin-top:12px"></div>
+          <button class="btn big grn" id="bRead" style="width:100%;margin-top:16px">⬇ เริ่มดูดไฟล์</button>
+          <p class="mut" style="font-size:12.5px;margin:10px 0 0">กุญแจ ON · ไม่ต้องสตาร์ท · Start Offset และขนาดไฟล์ หาให้อัตโนมัติจากกล่อง</p>
+        </div>
+        <div class="card">
+          <h2>สถานะการดูด</h2>
+          <div id="rIdle" class="mut">กด "เริ่มดูดไฟล์" — ไฟล์ที่ได้จะเก็บเข้าคลังอัตโนมัติ แล้วไปอัดได้ที่หน้า "อัดไฟล์"</div>
+          <div class="prog" id="rprog" style="display:none">
+            <div class="pct" id="rpPct">0%</div>
+            <div class="pbar"><i id="rpBar"></i></div>
+            <div class="stage" id="rpStage"></div>
+            <div class="stage mut" id="rpSub" style="font-size:13px"></div>
+            <div class="row" style="justify-content:center;margin-top:8px"><button class="btn red" id="rbCancel">ยกเลิก</button></div>
+          </div>
+          <div id="rDone" style="display:none;margin-top:14px">
+            <div class="kv" id="rInfo"></div>
+            <div class="row" style="margin-top:12px">
+              <button class="btn" id="rDown">💾 บันทึก .bin</button>
+              <button class="btn" id="rToW">ไปหน้าอัดไฟล์ ➜</button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- 2 WRITE -->
+    <section class="page" data-name="อัดไฟล์ · WRITE" data-tab="อัดไฟล์">
+      <div class="split">
+        <div class="card" style="min-height:0;display:flex;flex-direction:column">
+          <h2>คลังไฟล์ ECU</h2>
+          <div class="row" style="margin-bottom:10px">
+            <button class="btn" id="bImport">📱 เลือกจากเครื่อง</button>
+            <input type="file" id="fImport" accept=".bin,.BIN,application/octet-stream" hidden multiple>
+          </div>
+          <div class="flist" id="flist"></div>
+        </div>
+        <div class="card">
+          <h2 id="selName">ยังไม่ได้เลือกไฟล์</h2>
+          <div class="grid g2">
+            <label class="f"><span class="lh">Start Offset <span id="aStart" class="badge ok">AUTO</span></span><input id="mStart" readonly></label>
+            <label class="f"><span class="lh">ตำแหน่ง Checksum <span id="aCks" class="badge ok">AUTO</span></span><input id="mCks" readonly></label>
+          </div>
+          <div class="row" style="margin-top:6px"><span id="autoWhy" class="mut" style="font-size:12.5px;flex:1"></span><button class="btn" id="bManual" style="padding:5px 10px;font-size:13px">✏ แก้เอง</button></div>
+          <div id="fileInfo" class="kv" style="margin-top:10px"></div>
+          <button class="btn big red" id="bWrite" style="width:100%;margin-top:14px">⚡ อัดไฟล์ลงกล่อง</button>
+          <div class="row" style="margin-top:10px">
+            <button class="btn" id="bFix">🔧 แก้ Checksum</button>
+            <button class="btn" id="bGauge">📤 ส่งไปเกจ</button>
+            <button class="btn" id="bDown">💾 บันทึก .bin</button>
+            <button class="btn" id="bRen">✏ เปลี่ยนชื่อ</button>
+            <button class="btn red" id="bDel">🗑</button>
+          </div>
+          <div class="prog" id="wprog" style="display:none">
+            <div class="pct" id="wpPct">0%</div>
+            <div class="pbar"><i id="wpBar"></i></div>
+            <div class="stage" id="wpStage"></div>
+            <div class="stage mut" id="wpSub" style="font-size:13px"></div>
+            <div class="row" style="justify-content:center;margin-top:8px"><button class="btn red" id="wbCancel">ยกเลิก</button></div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- 2 DTC -->
+    <section class="page" data-name="DTC" data-tab="Codes">
+      <div class="grid g2">
+        <div class="card tab"><h3>โค้ดปัจจุบัน (CURRENT)</h3><div id="dtcCur" class="mut">กด "อ่านโค้ด"</div></div>
+        <div class="card tab"><h3>โค้ดที่เคยเกิด (PAST)</h3><div id="dtcPast" class="mut">—</div></div>
+      </div>
+      <div class="row" style="margin-top:12px"><button class="btn big" id="bDtc">อ่านโค้ด</button><button class="btn big red" id="bDtcClr">ลบโค้ด</button></div>
+    </section>
+
+    <!-- 3 EEPROM -->
+    <section class="page" data-name="EEPROM" data-tab="EEPROM">
+      <div class="card">
+        <h2>EEPROM (256/512 byte)</h2>
+        <div class="row">
+          <button class="btn grn" id="bEeR">⬇ อ่าน EEPROM</button>
+          <button class="btn red" id="bEeW">⚡ เขียนจากไฟล์</button><input type="file" id="fEe" hidden>
+          <button class="btn red" id="bEeFF">ฟอร์แมต FF</button>
+          <button class="btn red" id="bEe00">ฟอร์แมต 00</button>
+          <button class="btn" id="bEeSave">💾 บันทึก</button>
+        </div>
+        <p class="warn" style="font-size:13px">EEPROM เก็บค่าเรียนรู้/เลขไมล์บางรุ่น — อ่านเก็บไว้ก่อนเขียนหรือฟอร์แมตทุกครั้ง</p>
+        <div class="hex" id="eeHex" style="max-height:52vh">ยังไม่มีข้อมูล</div>
+      </div>
+    </section>
+
+    <!-- 4 TOOLS -->
+    <section class="page" data-name="HEX / COMPARE" data-tab="Hex">
+      <div class="card">
+        <div class="row">
+          <label class="f">ไฟล์ A<select id="hxA"></select></label>
+          <label class="f">เทียบกับ B<select id="hxB"></select></label>
+          <label class="f">ไปที่ (hex)<input id="hxGo" style="width:110px" value="0"></label>
+          <button class="btn" id="hxPrev">◀</button><button class="btn" id="hxNext">▶</button>
+          <button class="btn" id="hxDiff">ไปจุดต่างถัดไป</button>
+        </div>
+        <div id="hxSum" class="mut" style="margin:8px 0;font-size:13.5px"></div>
+        <div class="hex" id="hx" style="max-height:58vh"></div>
+      </div>
+    </section>
+
+    <!-- 5 LOG -->
+    <section class="page" data-name="LOG" data-tab="Log">
+      <div class="card" style="height:100%;display:flex;flex-direction:column">
+        <div class="row" style="margin-bottom:8px"><label class="chk" style="margin:0"><input type="checkbox" id="logFrames"> แสดงเฟรม TX/RX</label><button class="btn" id="bLogClr">ล้าง</button><button class="btn" id="bLogSave">บันทึก log</button><span id="stats" class="mut"></span></div>
+        <div class="log" id="log"></div>
+      </div>
+    </section>
+  </div>
+
+  <div class="nav" id="nav"></div>
+</div>
+
+<!-- connect -->
+<div class="modal" id="mConnect"><div class="card">
+  <h2>เชื่อมต่อ</h2>
+  <div class="opt" data-c="usb"><div class="ic">🔌</div><div><b>สาย K-LINE USB (FTDI / CH340 / KKL)</b><small>ต่อมือถือ OTG หรือคอม · Chrome รองรับ Web Serial</small></div></div>
+  <div class="opt" data-c="gauge-ble"><div class="ic">📶</div><div><b>Smart Gauge ผ่าน Bluetooth</b><small>เกจทำหน้าที่เป็นตัวต่อ K-line + รับไฟล์ไปแฟลชเอง</small></div></div>
+  <div class="opt" data-c="gauge-usb"><div class="ic">🧩</div><div><b>Smart Gauge ผ่านสาย USB</b><small>เหมือน Bluetooth แต่เร็วกว่า</small></div></div>
+  <div class="opt" data-c="gauge-only"><div class="ic">📤</div><div><b>เชื่อมเกจเพื่อส่งไฟล์อย่างเดียว (Bluetooth)</b><small>ใช้คู่กับสาย USB ได้</small></div></div>
+  <div class="opt" data-c="demo"><div class="ic">🎮</div><div><b>DEMO (กล่องจำลอง)</b><small>ทดลองทุกฟังก์ชันโดยไม่ต้องต่อรถ</small></div></div>
+  <div class="row"><div class="sp"></div><button class="btn" id="bDisc">ตัดการเชื่อมต่อ</button><button class="btn" data-close>ปิด</button></div>
+</div></div>
+
+<!-- smart gauge -->
+<div class="modal" id="mGauge"><div class="card">
+  <h2>🔗 SMART GAUGE</h2>
+  <div class="kv" id="gInfo"></div>
+  <div class="row" style="margin-top:12px">
+    <button class="btn" id="gBle">📶 เชื่อม Bluetooth</button>
+    <button class="btn" id="gUsb">🧩 เชื่อม USB</button>
+    <button class="btn grn" id="gList">📂 ไฟล์ในเกจ</button>
+    <button class="btn red" id="gOff">ตัดเกจ</button>
+  </div>
+  <label class="chk"><input type="checkbox" id="gAuto"> เชื่อมเกจตัวเดิมอัตโนมัติเมื่อเปิดโปรแกรม (Chrome ที่รองรับ)</label>
+  <label class="chk"><input type="checkbox" id="gKl"> ใช้เกจเป็นตัวต่อ K-line ด้วย (ดูด/อัด/LIVE ผ่านเกจ ไม่ต้องใช้สาย USB)</label>
+  <div id="gFiles" style="margin-top:10px"></div>
+  <p class="mut" style="font-size:12.5px">ส่งไฟล์จากหน้า FLASH → 📤 ส่งไปเกจ แล้วกดปุ่ม FLASH ที่หน้าเกจ · เกจต้องลงเฟิร์มแวร์ bridge (โฟลเดอร์ firmware)</p>
+  <div class="row"><div class="sp"></div><button class="btn" data-close>ปิด</button></div>
+</div></div>
+
+<!-- write confirm -->
+<div class="modal" id="mWrite"><div class="card">
+  <h2 class="badc">⚡ ยืนยันอัดไฟล์ลงกล่อง</h2>
+  <div class="kv" id="wInfo"></div>
+  <div style="margin-top:10px">
+    <label class="chk"><input type="checkbox" class="wc"> แบตเตอรี่เต็ม / ต่อชาร์จไว้ (ไฟตกระหว่างอัด = กล่องค้างโหมดกู้)</label>
+    <label class="chk"><input type="checkbox" class="wc"> ดูดไฟล์เดิมของกล่องนี้เก็บไว้แล้ว</label>
+    <label class="chk"><input type="checkbox" class="wc"> ไฟล์นี้เป็นของรุ่น/รหัสกล่องเดียวกัน</label>
+    <label class="chk"><input type="checkbox" class="wc"> จะไม่ปิดกุญแจ ไม่ถอดสาย ไม่ปิดแอประหว่างอัด</label>
+    <label class="chk"><input type="checkbox" id="wFix"> แก้ checksum อัตโนมัติก่อนส่ง (ไม่แก้ไฟล์ในคลัง)</label>
+  </div>
+  <div class="row" style="margin-top:12px"><div class="sp"></div><button class="btn" data-close>ยกเลิก</button><button class="btn red big" id="wGo" disabled>เริ่มอัด</button></div>
+</div></div>
+
+<!-- settings -->
+<div class="modal" id="mSet"><div class="card">
+  <h2>SETTING</h2>
+  <h3>ธีมสี</h3>
+  <div class="themes" id="themes"></div>
+  <h3 style="margin-top:16px">K-LINE</h3>
+  <div class="grid g2">
+    <label class="f">วิธีปลุกกล่อง (สาย USB)<select id="sWake"><option value="break">BREAK 70ms (FTDI แนะนำ)</option><option value="baud">Low-baud 0x00 (CH340/อื่นๆ)</option></select></label>
+    <label class="f">Timeout ตอบกลับ (ms)<input id="sTo" type="number" min="100" max="3000"></label>
+    <label class="f">รอก่อนลบ (วินาที)<input id="sErase" type="number" min="0" max="30"></label>
+    <label class="f">Block เขียน<select id="sBlock"><option>128</option><option>64</option></select></label>
+    <label class="f" style="grid-column:span 2">รหัส Security Access (hex หรือ ascii:ข้อความ) — ใช้เมื่อกล่องไม่ยอมให้ดูด<input id="sPw" placeholder="เว้นว่าง = ไม่ส่ง"></label>
+  </div>
+  <h3 style="margin-top:16px">ฐานข้อมูลรุ่น (JSON แก้ได้)</h3>
+  <textarea id="sModels" rows="7" style="width:100%;font-family:monospace;font-size:12px"></textarea>
+  <div class="row" style="margin-top:12px"><button class="btn red" id="sReset">คืนค่าเริ่มต้น</button><div class="sp"></div><button class="btn" data-close>ปิด</button><button class="btn grn" id="sSave">บันทึก</button></div>
+</div></div>
+
+<div class="toast" id="toast"></div>
+<script>/*@@JS@@*/</script>
+</body>
+</html>

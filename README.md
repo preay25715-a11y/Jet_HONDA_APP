@@ -1,1 +1,119 @@
-# Jet_HONDA_JUNE
+# Jet_HONDA Tune
+
+โปรแกรมดูด/อัดไฟล์ ECU Honda (Keihin K-line) ธีมน้ำเงิน-ดำ เชื่อมกับ Smart Gauge ได้
+เป็นไฟล์ HTML ไฟล์เดียว: `dist/Jet_HONDA_Tune.html` เปิดด้วย **Chrome / Edge** บนมือถือ Android หรือคอม
+
+## เปิดใช้งาน
+- Web Serial และ Web Bluetooth ต้องรันใน "secure context" ให้เปิดไฟล์ผ่าน `https://` (เช่น GitHub Pages / Netlify) หรือ `http://localhost`
+  บนคอมจะเปิดแบบ `file://` ก็ใช้ได้
+- โหมด **DEMO** ใช้กล่องจำลองที่ตอบเฟรมแบบเดียวกับกล่องจริง ใช้ลองได้ทุกฟังก์ชัน (ดูด อัด DTC EEPROM LIVE)
+
+## ช่องทางเชื่อมต่อ
+| ช่องทาง | ใช้อะไร | หมายเหตุ |
+|---|---|---|
+| สาย K-LINE USB | FTDI FT232R + วงจร K-line (L9637D / MC33290 / ออปโต้ PC817 x2) หรือสาย KKL | 10400 baud ปลุกกล่องด้วย BREAK 70ms ถ้าเป็น CH340 ให้เลือก "Low-baud" ในตั้งค่า |
+| Smart Gauge (BLE / USB) | เกจ ESP32 ที่ลงเฟิร์มแวร์ `firmware/MFB_KLine_Bridge` แล้ว | เกจเป็นคนจับเวลา K-line ให้ ส่วนแอปส่งคำสั่งผ่าน MFB-LINK |
+| เชื่อมเกจเพื่อส่งไฟล์อย่างเดียว | BLE | ส่ง .bin ไปเก็บใน `/ecu/<ชื่อ>.bin` ของเกจ แล้วกด FLASH ที่หน้าเกจ |
+
+ปลั๊กเช็ค Honda 4 ขา (DLC): K-line / GND / +12V (สีสายต่างกันตามรุ่น ให้ดูคู่มือซ่อม) ถ้าต่อบนโต๊ะ ให้ใช้แหล่งจ่ายไฟอย่างน้อย 2.5A
+
+## ฟังก์ชัน
+- **ECU LIVE**: ตรวจสถานะกล่อง (OK / SECURE / READ / FLASH / RECOVER_OLD / RECOVER_NEW / OFF) อ่าน ECU ID กับ flash count
+  ค่าสด RPM, TPS, MAP, ECT, IAT, BATT, SPD, INJ, IGN จากตาราง 0x11 และอ่านตารางดิบทั้งหมด
+- **FLASH**
+  - ดูด (Read): อ่านทีละ 12 byte (`82 82 00`) จนกล่องหยุดตอบ ทำให้รู้ขนาดจริงเอง
+    ถ้าเลือกรุ่นเป็น AUTO โปรแกรมจะหา Start Offset ให้เอง (0 / 0x4000 / 0x8000 / 0x10000)
+  - อัด (Write): เข้าโหมดแฟลช (`7D` PGM-FI / `7B` กู้) → erase (`7E 01 02…04`) → เขียนทีละ 128 byte
+    (ถ้าไม่ผ่านจะลดเป็น 64) → post-write (`7E 01 08…0D`)
+    โปรแกรมจะไม่ลบอะไรจนกว่าจะยืนยันได้ว่ากล่องอยู่ในโหมดแฟลชแล้ว
+  - ตรวจและแก้ checksum (ผลรวมทั้งไฟล์ = 0x00 โดยปรับ byte ที่ตำแหน่ง checksum)
+  - คลังไฟล์ในเครื่อง (IndexedDB) นำเข้า, บันทึก .bin, เปลี่ยนชื่อ, ลบ, ส่งไปเกจ
+- **DTC**: อ่านโค้ดปัจจุบันและโค้ดที่เคยเกิด แล้วลบได้ (`72 74/73`, `72 60 03`)
+- **EEPROM**: อ่าน เขียน ฟอร์แมต FF/00 (`82 82 10/14/18/19`)
+- **HEX / COMPARE**: ดูไฟล์เป็น hex เทียบสองไฟล์ และกระโดดไปจุดที่ต่างกัน
+- **SETTING**: ธีมสี 5 สี, วิธีปลุกกล่อง, timeout, เวลารอก่อนลบ, ขนาด block, รหัส Security Access, ฐานข้อมูลรุ่น (JSON แก้ได้)
+
+## ฐานข้อมูลรุ่น — ควรอ่านก่อนใช้
+- รุ่นที่มีเครื่องหมาย ✔ (MSX125, CRF110F, CBR250R, CBR300R HRC, CB500, CB650F, CBR600RR, CBR1000RR …)
+  ใช้ค่า ขนาด / start / checksum จากตารางของโปรเจกต์ HondaECU
+- รุ่นตลาดไทยที่มีเครื่องหมาย ⚠ (Wave, Click, PCX, ADV, Scoopy, CBR150R ฯลฯ) ใช้ **ค่าตั้งต้นของตระกูลกล่อง Keihin ขนาดเล็ก**
+  (64KB, start 0x8000, checksum ที่ 0) ยังไม่ได้ยืนยันทีละรุ่น ให้ทำแบบนี้:
+  **ดูดไฟล์เดิมก่อนเสมอ** ดูขนาดจริงกับ checksum แล้วค่อยแก้ค่าในตั้งค่าและบันทึก
+- กล่องรุ่นใหม่บางรุ่นอาจขอรหัส Security Access หรือไม่รองรับคำสั่งชุดนี้ ถ้าดูดไม่ได้เลย แอปจะแจ้ง และกล่องจะไม่เสียหาย
+
+## ความปลอดภัยตอนอัด
+1. แบตต้องเต็ม หรือต่อชาร์จไว้
+2. ดูดไฟล์เดิมของกล่องเก็บไว้ทุกครั้ง
+3. ระหว่างอัด ห้ามปิดกุญแจ ห้ามถอดสาย และห้ามปิดแอป (แอปจะขอให้หน้าจอไม่ดับ)
+4. ถ้าอัดค้างกลางทาง กล่องจะอยู่ในโหมด RECOVER ให้กดอัดซ้ำทันทีโดยไม่ปิดกุญแจ แอปจะใช้ลำดับคำสั่งกู้ให้เอง
+5. อัดเสร็จแล้ว ปิดกุญแจ 10 วินาที แล้วค่อยเปิดใหม่
+
+## เชื่อมกับ Smart Gauge (เฟิร์มแวร์ ESP32)
+`firmware/MFB_KLine_Bridge/MFB_KLine_Bridge.ino`
+- ถ้าจะรวมเข้ากับเฟิร์มแวร์เกจเดิม ให้ตั้ง `MFB_STANDALONE 0` แล้วเรียก `mfbBridgeBegin()` ใน setup() กับ `mfbBridgeLoop()` ใน loop()
+- ช่วงที่ `mfbBridgeBusy()` เป็น true ให้หยุดการอ่าน K-line ของเกจเองไว้ก่อน
+- เขียนฟังก์ชัน `mfbOnFileReceived(path, size)` เพื่อให้ไฟล์ที่ได้รับไปโผล่ในหน้า FLASH ของเกจ
+- ขา K-line ตั้งค่าเริ่มต้นไว้ที่ RX=16 / TX=17 ถ้าวงจรออปโต้กลับขั้ว ให้ตั้ง `KL_INVERT true`
+- BLE ใช้ Nordic UART Service ชื่อเครื่อง `MFB-PRO GAUGE`
+
+### โปรโตคอล MFB-LINK (แอป ⇄ เกจ)
+`55 AA | type | lenL lenH | payload | xor(type,len,payload)` — คำตอบคือ `type|0x80` และ payload[0] เป็นสถานะ (0 = OK, 1 = timeout, 2 = error)
+
+| type | ชื่อ | payload ขาไป | payload ขากลับ |
+|---|---|---|---|
+| 01 | PING | – | สถานะ + ข้อความชื่อเฟิร์มแวร์ |
+| 02 | WAKE | – | สถานะ (เกจดึง K-line ลง low 70ms แล้ว high 130ms) |
+| 03 | TXRX | ml, timeoutL, timeoutH, เฟรม K-line | สถานะ + เฟรมตอบกลับ (ตัด echo ออกแล้ว) |
+| 04 | SENSE | – | สถานะ + ระดับไฟ K-line |
+| 10 | FILE_BEGIN | size u32, nameLen, name | สถานะ |
+| 11 | FILE_CHUNK | offset u32, data (≤160) | สถานะ |
+| 12 | FILE_END | crc32 u32 | สถานะ (0 = CRC ตรง) |
+| 13 | FILE_LIST | – | สถานะ + "ชื่อ:ขนาด\n…" |
+
+### เฟรม Honda K-line
+`[mtype][len][data…][ck]` โดย len คือความยาวทั้งเฟรม และ ck คือ two's complement ของผลรวม (ทั้งเฟรมรวมกันต้องได้ 0)
+ตัวอย่าง: ping `FE 04 72 8C` → `0E 04 72 7C`, ตาราง 11 `72 05 71 11 07`
+
+
+## แอป Android (APK)
+โฟลเดอร์ `android/` เป็นแอป Android แบบ native ที่ห่อหน้าโปรแกรมเดียวกันไว้ข้างใน และมีตัวเชื่อม (JetBridge) ที่เขียนให้ใช้ฮาร์ดแวร์ได้จริง
+- **USB OTG**: ใช้ไลบรารี usb-serial-for-android รองรับชิป FTDI, CH340/CH341/CH9102, CP210x, PL2303 และ ESP32 (CDC)
+  ใช้คำสั่ง BREAK ปลุกกล่องได้ และตั้ง latency ของ FTDI เป็น 1ms เพื่อให้ดูด/อัดเร็วขึ้น
+- **Bluetooth LE**: สแกนแล้วให้เลือกเกจจากรายการ (เกจที่มี ★ คือตัวที่มี MFB-LINK) ขอ MTU 247 และส่งข้อมูลแบบมีคิว
+- **บันทึกไฟล์** ไปที่ `Download/JetHondaTune/` และเลือกไฟล์ .bin จากเครื่องได้
+- ระหว่างอัดไฟล์ หน้าจอจะไม่ดับ จอเป็นแนวนอนเต็มจอ และปุ่มย้อนกลับจะปิดหน้าต่างหรือกลับหน้าแรก
+
+### สร้าง APK ฟรีด้วย GitHub (ไม่ต้องลงโปรแกรมอะไร)
+1. สร้าง repo ใหม่บน GitHub เช่น `JetHondaTune` แล้วอัปโหลดไฟล์ทั้งหมดในโฟลเดอร์นี้ ต้องมีโฟลเดอร์ `.github/workflows/` ไปด้วย
+   ถ้าอัปโหลดผ่านเว็บแล้วโฟลเดอร์ `.github` ไม่ขึ้น ให้กด Add file → Create new file ตั้งชื่อ `.github/workflows/build-apk.yml`
+   แล้ววางเนื้อหาจากไฟล์นั้นลงไป
+2. เข้าแท็บ **Actions** → เลือก "Build Jet_HONDA Tune APK" → กด **Run workflow** (ทุกครั้งที่ push ก็จะ build ให้เอง) ใช้เวลาราว 4–6 นาที
+3. เข้าแท็บ **Releases** แล้วดาวน์โหลด `Jet_HONDA_Tune.apk` บนมือถือได้เลย
+4. ติดตั้ง: อนุญาต "ติดตั้งแอปที่ไม่รู้จัก" ให้เบราว์เซอร์หรือแอปไฟล์ → เปิดแอป → อนุญาต "อุปกรณ์ใกล้เคียง/Bluetooth" ตอนเสียบสาย OTG
+   จะมีหน้าต่างขออนุญาตใช้ USB ให้กดตกลง
+
+### สร้างด้วย Android Studio
+เปิดโฟลเดอร์ `android/` แล้วรัน `python3 build.py` ที่โฟลเดอร์หลักก่อน เพื่อคัดลอกหน้าเว็บไปไว้ใน assets จากนั้นกด Build → Build APK
+
+APK เซ็นด้วยคีย์ `android/app/jet-release.jks` (รหัส `jethonda123`) ที่ใส่มาให้ในโปรเจกต์ ใช้คีย์เดิมทุกครั้ง จึงอัปเดตทับของเดิมได้โดยไม่ต้องถอนแอป
+ถ้าจะเผยแพร่สู่สาธารณะ ควรสร้างคีย์ใหม่ของตัวเองและเก็บเป็นความลับ
+
+**หมายเหตุ:** เกจ ESP32 ที่ต่อผ่านสาย USB บางบอร์ดจะรีเซ็ตตัวเองตอนเปิดพอร์ต แอปจึงตั้งค่า DTR/RTS เป็น low ให้แล้ว แต่ถ้ายังรีเซ็ต ให้ใช้ Bluetooth แทน
+
+## โครงสร้างไฟล์
+```
+src/proto.js       เฟรม, checksum, MFB-LINK, DTC, ถอดค่า live, ฐานข้อมูลรุ่น
+src/ecu.js         คำสั่ง ECU ทั้งหมด (detect / read / write / DTC / EEPROM / security)
+src/sim.js         กล่องจำลองสำหรับ DEMO และชุดทดสอบ
+src/transports.js  Web Serial (สาย USB) และ Smart Gauge (BLE / USB)
+src/app.js, style.css, index.html   UI
+
+build.py           รวมทุกไฟล์เป็น dist/Jet_HONDA_Tune.html
+test/test.js       node test/test.js (ทดสอบทั้ง workflow กับกล่องจำลอง)
+android/           แอป Android (MainActivity + JetBridge: USB OTG / BLE / บันทึกไฟล์)
+.github/workflows/build-apk.yml   สร้าง APK อัตโนมัติบน GitHub
+```
+
+## ที่มาของโปรโตคอล
+พอร์ตมาจากโปรเจกต์โอเพนซอร์ส GPL ได้แก่ eculib/HondaECU (RyanHope และ fork) และ TunerPro-HondaECU (AlexDev-TH)
+รวมถึงบันทึก Honda_Keihin_KLine_Protocol ถ้าจะแจกจ่ายต่อ ควรใช้สัญญาอนุญาต GPL-3.0 ด้วย
