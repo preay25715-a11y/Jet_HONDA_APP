@@ -1,5 +1,5 @@
 /* =====================================================================
- * Jet_HONDA Tune — app.js (UI)
+ * Jet Smart Gauge — app.js (UI)
  * ===================================================================== */
 (function () {
   'use strict';
@@ -101,7 +101,7 @@
     $('#tEcu').textContent = 'ECU ' + (s || '—');
     $('#pGauge').className = 'chipst' + (st.gauge ? ' on' : '');
     $('#tGauge').textContent = st.gauge ? 'GAUGE ✓' : 'GAUGE';
-    $('#bDemo').classList.toggle('on', !!(t && t.kind === 'demo'));
+    const bd = $('#bDemo'); if (bd) bd.classList.toggle('on', !!(t && t.kind === 'demo'));
   }
 
   /* ---------------- connect ---------------- */
@@ -114,48 +114,24 @@
   /* ---------------- Smart Gauge section (in SETTING) ---------------- */
   function renderGauge() {
     const g = st.gauge, s = st.sens, fresh = s && Date.now() - s.t < 3000, ok = (b) => (b ? '<span class="okc">✓</span>' : '<span class="mut">✗</span>');
-    const via = !g ? '—' : g.kind === 'demo' ? 'DEMO (จำลอง)' : g.via === 'usb' ? 'สาย USB' : 'Bluetooth';
+    const via = !g ? '—' : g.via === 'usb' ? 'สาย USB' : 'Bluetooth';
     $('#gInfo').innerHTML = [
       ['สถานะ', g ? '<span class="okc">เชื่อมแล้ว</span>' : '<span class="badc">ยังไม่เชื่อม</span>'], ['ชื่อ', g ? esc(g.name || '') : '—'],
       ['ช่องทาง', via], ['เฟิร์มแวร์', g ? esc(g.fw || '—') : '—'],
-      ['เป็นตัวต่อ K-line', g && st.t === g ? '<span class="okc">ใช่</span>' : 'ไม่'], ['เซ็นเซอร์', g ? (fresh ? `AFR ${ok(s.afrOk)} GPS ${ok(s.gpsOk)}${s.gpsOk ? ' (' + s.sats + ')' : ''} EOT ${ok(s.eotOk)} O2 ${ok(s.o2Ok)}` : g.noSensors ? 'เฟิร์มแวร์ไม่รองรับ' : 'รอข้อมูล…') : '—'],
+      ['ใช้เป็นตัวต่อสาย K-line', g && st.t === g ? '<span class="okc">ใช่</span>' : 'ไม่'], ['เซ็นเซอร์', g ? (fresh ? `ไวด์แบนด์ ${ok(s.afrOk)} จีพีเอส ${ok(s.gpsOk)}${s.gpsOk ? ' (' + s.sats + ')' : ''} อุณหภูมิน้ำมันเครื่อง ${ok(s.eotOk)} ออกซิเจน ${ok(s.o2Ok)}` : g.noSensors ? 'เฟิร์มแวร์ไม่รองรับ' : 'รอข้อมูล…') : '—'],
     ].map(([k, v]) => `<span>${k}</span><span>${v}</span>`).join('');
-    $('#gKl').checked = S.gaugeKl != null ? !!S.gaugeKl : !!(g && st.t === g);
     $('#gOff').disabled = !g;
   }
   $('#bSet').addEventListener('click', renderGauge);
   setInterval(() => { if ($('#mSet').classList.contains('show')) renderGauge(); }, 1000);
-  $('#gKl').onchange = () => { S.gaugeKl = $('#gKl').checked; saveS(); };
-  const gConnect = async (via) => {
-    const kl = $('#gKl').checked;
-    if (kl && st.t && st.t.kind === 'usb' && !(await ask('ตอนนี้ต่อสาย K-line USB อยู่ — เปลี่ยนไปใช้เกจเป็นตัวต่อ K-line แทน?'))) return;
-    await connect(kl ? (via === 'usb' ? 'gauge-usb' : 'gauge-ble') : (via === 'usb' ? 'gauge-only-usb' : 'gauge-only'));
-    renderGauge();
-  };
-  $('#gBle').onclick = () => gConnect('ble');
-  $('#gUsb').onclick = () => gConnect('usb');
+  const gConnect = async () => { await connect(S.gaugeKl ? 'gauge-ble' : 'gauge-only'); renderGauge(); };
+  $('#gBle').onclick = () => gConnect();
   $('#gOff').onclick = async () => {
     if (!st.gauge) return;
     if (st.gauge === st.t) await disconnect(); else { try { await st.gauge.close(); } catch (e) {} st.gauge = null; st.sens = null; }
     pills(); renderGauge(); toast('ตัดการเชื่อมต่อเกจแล้ว');
   };
-  $('#gTest').onclick = async () => {
-    const g = st.gauge; if (!g) return toast('ยังไม่ได้เชื่อมเกจ');
-    if (st.busy) return toast('กำลังทำงานอื่นอยู่');
-    const t0 = performance.now();
-    const pong = g.request ? await g.request(P.LINK.PING, [], 2000) : true;
-    const rtt = Math.round(performance.now() - t0);
-    const s = g.sensors ? await g.sensors() : null; if (s) st.sens = s;
-    renderGauge();
-    toast(pong ? `เกจตอบกลับใน ${rtt} ms · ` + (s ? `AFR ${s.afrOk ? s.afr.toFixed(1) : '✗'} · GPS ${s.gpsOk ? Math.round(s.spd) + ' km/h' : '✗'}` : 'ยังไม่รองรับคำสั่งเซ็นเซอร์') : 'เกจไม่ตอบ — ตรวจเฟิร์มแวร์ / ระยะ Bluetooth', 4500);
-  };
-  $('#gList').onclick = async () => {
-    const g = st.gauge; if (!g) return toast('ยังไม่ได้เชื่อมเกจ');
-    const box = $('#gFiles'); box.style.display = 'block'; box.textContent = 'กำลังอ่าน…';
-    const list = g.fileList ? await g.fileList() : (g.files || []).map((f) => ({ name: '/ecu/' + f.name + '.bin', size: f.size }));
-    box.textContent = !list ? 'อ่านรายการไฟล์ไม่ได้' : list.length ? list.map((f) => `${f.name}  ${(f.size / 1024).toFixed(1)} KB`).join('\n') : 'ยังไม่มีไฟล์ในเกจ';
-  };
-  $('#bDemo').onclick = () => (st.t && st.t.kind === 'demo') ? disconnect() : connect('demo');
+  if ($('#bDemo')) $('#bDemo').onclick = () => (st.t && st.t.kind === 'demo') ? disconnect() : connect('demo');
   $$('#mConnect .opt').forEach((o) => o.onclick = () => { modal('#mConnect', false); connect(o.dataset.c); });
   $('#bDisc').onclick = () => { modal('#mConnect', false); disconnect(); };
 
@@ -166,6 +142,7 @@
     st.t = st.gauge = st.ecu = null; pills(); renderEcu(); log('info', 'ตัดการเชื่อมต่อ');
   }
   async function connect(kind) {
+    if (!window.JetLic || !JetLic.ok()) return;
     try {
       if (kind === 'gauge-only' || kind === 'gauge-only-usb') {
         const via = kind === 'gauge-only-usb' ? 'usb' : 'ble';
@@ -176,7 +153,7 @@
       }
       await disconnect();
       let t;
-      if (kind === 'demo') t = new SimTransport({ latency: 2 });
+      if (kind === 'demo' && window.SimTransport) t = new SimTransport({ latency: 2 });
       else if (kind === 'usb') { if (!('serial' in navigator) && !window.JetApp) throw new Error('เบราว์เซอร์นี้ไม่รองรับ Web Serial — ใช้ Chrome/Edge หรือแอป APK'); t = new DirectKLine({ wakeMode: S.wake }); }
       else t = new GaugeLink(kind === 'gauge-usb' ? 'usb' : 'ble');
       await t.open();
@@ -211,28 +188,82 @@
     });
   }
   function renderEcu() {}
+  // segmented RPM bar: green → yellow → orange → red
+  const NSEG = 48, SEG = [];
+  (function () {
+    const g = $('#arcSeg'), R = 118, NS = 'http://www.w3.org/2000/svg';
+    for (let i = 0; i < NSEG; i++) {
+      const a0 = (135 + 270 * i / NSEG + 0.7) * Math.PI / 180, a1 = (135 + 270 * (i + 1) / NSEG - 0.7) * Math.PI / 180;
+      const pt = (a) => (150 + R * Math.cos(a)).toFixed(2) + ' ' + (150 + R * Math.sin(a)).toFixed(2);
+      const p = document.createElementNS(NS, 'path'); p.setAttribute('d', `M ${pt(a0)} A ${R} ${R} 0 0 1 ${pt(a1)}`);
+      p.setAttribute('fill', 'none'); p.setAttribute('stroke-width', '17'); p.setAttribute('stroke-linecap', 'butt');
+      const f = i / (NSEG - 1), hue = f < 0.6 ? 140 - (85 * f / 0.6) : 55 - 55 * (f - 0.6) / 0.4;
+      p.dataset.c = `hsl(${Math.round(hue)},92%,${f > 0.6 ? 55 : 52}%)`; p.setAttribute('stroke', '#11264a');
+      g.appendChild(p); SEG.push(p);
+    }
+  })();
+  let lastN = -1;
+  function rpmArc(p) {
+    const n = Math.round(p * NSEG); if (n === lastN) return; lastN = n;
+    SEG.forEach((e, i) => { const on = i < n; e.setAttribute('stroke', on ? e.dataset.c : '#11264a'); e.style.filter = on ? `drop-shadow(0 0 4px ${e.dataset.c})` : ''; });
+  }
   const ARC_LEN = 2 * Math.PI * 118 * 0.75;
-  // centre of the round gauge: tap to switch km/h ⇄ AFR
+  /* ---- every value the app can show (Dash tiles / GRID cells) ---- */
+  const CH = {
+    RPM: { l: 'RPM', u: 'rpm', d: 0, bar: [0, 12000], grad: 1 }, SPD: { l: 'Speed', u: 'km/h', d: 0 }, TPS: { l: 'Throttle', u: '%', d: 1, col: '#4d8dff', bar: [0, 100] },
+    ECT: { l: 'Coolant', u: '°C', d: 0 }, IAT: { l: 'Intake', u: '°C', d: 0 }, MAP: { l: 'MAP', u: 'kPa', d: 0 }, BATT: { l: 'Battery', u: 'V', d: 1, col: '#ff5a6a' },
+    INJ: { l: 'Injector', u: 'ms', d: 2 }, IGN: { l: 'Ignition', u: '°', d: 1 }, AFR: { l: 'AFR', u: '', d: 1, col: '#2fd18b', bar: [10, 18] },
+    CRP: { l: 'CRP volt', u: 'V', d: 2, col: '#ffc233', bar: [0, 5] }, EOT: { l: 'Oil temp', u: '°C', d: 0 }, O2: { l: 'O2', u: 'V', d: 2 }, GEAR: { l: 'Gear', u: '', d: 0 },
+  };
+  const chVal = (d, k) => (k === 'SPD' ? (d.SPD != null ? d.SPD : d.GPS) : d[k]);
+  const chText = (d, k) => {
+    const v = chVal(d || {}, k), c = CH[k]; if (v == null) return '--';
+    return k === 'GEAR' ? (v === 0 ? 'N' : String(v)) : (+v).toFixed(c.d);
+  };
+  const DEF_RATIOS = '140 92 68 54 45 38';
+  const DEF_TILES = ['ECT', 'IAT', 'MAP', 'BATT', 'INJ', 'IGN'];
+  function pick(title, cur, cb) {
+    $('#pkTitle').textContent = title;
+    $('#pkGrid').innerHTML = Object.keys(CH).map((k) => `<button class="${k === cur ? 'on' : ''}" data-k="${k}"><b>${CH[k].l}</b><small>${CH[k].u || '&nbsp;'}</small></button>`).join('');
+    $$('#pkGrid button').forEach((b) => b.onclick = () => { modal('#mPick', false); cb(b.dataset.k); });
+    modal('#mPick', true);
+  }
+  function renderTiles(d) {
+    d = d || st.last || {};
+    const t = Array.isArray(S.tiles) && S.tiles.length === 6 ? S.tiles : DEF_TILES;
+    $$('.tile[data-s]').forEach((el) => {
+      const k = t[+el.dataset.s], c = CH[k] || CH.ECT;
+      el.querySelector('.k').textContent = c.l; el.querySelector('b').textContent = chText(d, k); el.querySelector('small').textContent = c.u;
+    });
+  }
+  $$('.tile[data-s]').forEach((el) => el.onclick = () => {
+    const t = (Array.isArray(S.tiles) && S.tiles.length === 6 ? S.tiles : DEF_TILES).slice(), i = +el.dataset.s;
+    pick('เลือกค่าที่ช่องนี้', t[i], (k) => { t[i] = k; S.tiles = t; saveS(); renderTiles(); });
+  });
+  // centre of the round gauge: tap to cycle km/h → AFR → CRP volt
+  const CENTER = { spd: ['SPD', 'km/h ⇄', 0], afr: ['AFR', 'AFR ⇄', 1], crp: ['CRP', 'CRP volt ⇄', 2] };
+  const NEXT = { spd: 'afr', afr: 'crp', crp: 'spd' };
   function showCenter(d) {
     d = d || st.last || {};
-    const afr = S.center === 'afr', v = afr ? d.AFR : d.SPD, el = $('#vSPD');
-    if (v != null) el.textContent = afr ? (+v).toFixed(1) : Math.round(v);
-    else if (afr) el.textContent = '--';
-    el.style.color = !afr || v == null ? '' : v < 11.5 ? '#ff6b7a' : v > 15.5 ? '#ffb020' : '#7dffb8';
-    $('#vUnit').textContent = afr ? 'AFR ⇄' : 'km/h ⇄';
+    const m = CENTER[S.center] ? S.center : 'spd', [key, unit, dec] = CENTER[m], el = $('#vSPD');
+    const v = m === 'spd' ? (d.SPD != null ? d.SPD : d.GPS) : d[key];
+    if (v != null) el.textContent = m === 'spd' ? Math.round(v) : (+v).toFixed(dec);
+    else el.textContent = m === 'spd' ? '0' : '--';
+    el.style.color = m !== 'afr' || v == null ? '' : v < 11.5 ? '#ff6b7a' : v > 15.5 ? '#ffb020' : '#7dffb8';
+    $('#vUnit').textContent = unit;
+    const g = d.GEAR; $('#vGear').textContent = g == null ? '–' : g === 0 ? 'N' : g;
   }
   $('.gauge').addEventListener('click', () => {
-    S.center = S.center === 'afr' ? 'spd' : 'afr'; saveS(); showCenter();
-    if (S.center === 'afr' && (!st.last || st.last.AFR == null)) toast('ยังไม่มีค่า AFR — ต้องต่อ Smart Gauge ที่มีไวด์แบนด์ (หรือเปิด DEMO)', 3500);
+    S.center = NEXT[CENTER[S.center] ? S.center : 'spd']; saveS(); showCenter();
+    const need = { afr: ['AFR', 'ยังไม่มีค่า AFR — ต้องต่อ Smart Gauge ที่มีไวด์แบนด์'], crp: ['CRP', 'ยังไม่มีค่า CRP — ต้องต่อ Smart Gauge ที่มีเซ็นเซอร์ CRP (หรือเปิด DEMO)'] }[S.center];
+    if (need && (!st.last || st.last[need[0]] == null)) toast(need[1], 3500);
   });
   function showLive(d) {
-    const f = (k, n) => { const el = $('#v' + k); if (el && d[k] != null) el.textContent = n == null ? d[k] : (+d[k]).toFixed(n); };
-    f('ECT', 0); f('IAT', 0); f('MAP', 0); f('BATT', 1); f('INJ', 2); f('IGN', 1); f('TPS', 1);
-    showCenter(d);
+    showCenter(d); renderTiles(d);
+    const tp = $('#vTPS'); if (tp && d.TPS != null) tp.textContent = (+d.TPS).toFixed(1);
     if (d.RPM != null) {
       $('#vRPM').textContent = Math.round(d.RPM).toLocaleString('en-US');
-      const p = Math.max(0, Math.min(1, d.RPM / (S.rpmMax || 12000)));
-      $('#arc').setAttribute('stroke-dasharray', (p * ARC_LEN).toFixed(1) + ' 999');
+      rpmArc(Math.max(0, Math.min(1, d.RPM / (S.rpmMax || 12000))));
     }
     if (d.TPS != null) $('#tpsBar').style.width = Math.max(0, Math.min(100, d.TPS)) + '%';
   }
@@ -240,10 +271,14 @@
   async function mergeSensors(d) {
     if (st.gauge && st.gauge.sensors) {
       const s = await st.gauge.sensors();
-      if (s) { st.sens = s; if (s.afrOk) d.AFR = s.afr; if (s.eotOk) d.EOT = s.eot; if (s.o2Ok) d.O2 = s.o2; }
+      if (s) { st.sens = s; if (s.afrOk) d.AFR = s.afr; if (s.eotOk) d.EOT = s.eot; if (s.o2Ok) d.O2 = s.o2; if (s.crpOk) d.CRP = s.crp; if (s.gearOk) d.GEAR = s.gear; if (s.obd) Object.assign(d, s.obd); }
     }
     const g = window.JetGps && JetGps.current();
     if (g) { d.GPS = g.spd; d.gpsSrc = g.src; }
+    if (d.GEAR == null) {
+      const sp = d.SPD != null ? d.SPD : d.GPS, g = P.computeGear(d.RPM, sp, P.parseRatios(S.gearRatios || DEF_RATIOS));
+      if (g != null) d.GEAR = g;
+    }
     d.t = Date.now();
     return d;
   }
@@ -260,7 +295,7 @@
     }
     st.liveRunning = false;
   }
-  function startLive() { if (!st.ecu || st.live) return; st.live = true; $('#bLive').textContent = '■ STOP'; $('#bLive').classList.add('on'); liveLoop(); }
+  function startLive() { if (!st.ecu || st.live || !window.JetLic || !JetLic.ok()) return; st.live = true; $('#bLive').textContent = '■ STOP'; $('#bLive').classList.add('on'); liveLoop(); }
   function stopLive() { st.live = false; $('#bLive').textContent = '▶ LIVE'; $('#bLive').classList.remove('on'); }
   $('#bLive').onclick = () => { if (!st.ecu) return toast('ยังไม่ได้เชื่อมต่อ'); st.live ? stopLive() : startLive(); };
   /* ---------------- DTC ---------------- */
@@ -378,7 +413,7 @@
   };
 
   /* ---------------- API for ui-extra.js ---------------- */
-  window.JetCore = { st, S, saveS, $, $$, P, toast, ask, askText, dlg, op, go, pageOf, fbytes, addFile, refreshFiles, log, esc, kb, download, modal,
+  window.JetCore = { CH, chText, chVal, pick, DEF_RATIOS, renderTiles, st, S, saveS, $, $$, P, toast, ask, askText, dlg, op, go, pageOf, fbytes, addFile, refreshFiles, log, esc, kb, download, modal,
     startLive, stopLive, renderHex, mergeSensors, emitLive, models, parseHex };
 
   /* ---------------- boot ---------------- */
@@ -388,7 +423,7 @@
     const hideSplash = () => { const el = $('#splash'); if (!el || el.classList.contains('out')) return; el.classList.add('out'); setTimeout(() => el.remove(), 600); };
     setTimeout(hideSplash, 6000); // fail-safe
     sp(15, 'โหลดธีมและหน้าจอ…');
-    applyTheme(); applyLogo(); go(0); pills(); renderEcu(); showCenter();
+    applyTheme(); applyLogo(); go(0); pills(); renderEcu(); showCenter(); renderTiles();
     sp(45, 'เปิดคลังไฟล์ ECU…');
     try { await DB.open(); await refreshFiles(); } catch (e) { toast('เปิดคลังไฟล์ไม่ได้: ' + e.message); }
     sp(75, 'เตรียมโปรโตคอล K-LINE…');
@@ -396,6 +431,6 @@
     sp(100, window.JetApp ? 'พร้อม · USB OTG + Bluetooth' : 'พร้อมใช้งาน');
     await P.sleep(Math.max(300, 1900 - (Date.now() - t0)));
     hideSplash();
-    log('info', window.JetApp ? 'Jet_HONDA Tune (Android APP) พร้อมใช้งาน · USB OTG + Bluetooth' : 'Jet_HONDA Tune พร้อมใช้งาน · Web Serial: ' + ('serial' in navigator ? 'มี' : 'ไม่มี') + ' · Bluetooth: ' + ('bluetooth' in navigator ? 'มี' : 'ไม่มี'));
+    log('info', window.JetApp ? 'Jet Smart Gauge (Android APP) พร้อมใช้งาน · USB OTG + Bluetooth' : 'Jet Smart Gauge พร้อมใช้งาน · Web Serial: ' + ('serial' in navigator ? 'มี' : 'ไม่มี') + ' · Bluetooth: ' + ('bluetooth' in navigator ? 'มี' : 'ไม่มี'));
   })();
 })();

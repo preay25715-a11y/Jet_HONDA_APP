@@ -1,5 +1,5 @@
 /* =====================================================================
- * Jet_HONDA Tune — ecu.js
+ * Jet Smart Gauge — ecu.js
  * Honda Keihin K-line ECU operations over any transport:
  *   transport.wake()                       -> 70ms low / 130ms high + 10400 baud
  *   transport.txrx(frame, ml, timeoutMs)   -> reply bytes (echo removed) | null

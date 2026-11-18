@@ -1,0 +1,124 @@
+/* =====================================================================
+ * Jet Smart Gauge — i18n.js : TH / EN switch (Thai is the source language)
+ * Translates the DOM in place (text nodes + title/placeholder) and keeps
+ * translating whatever the app writes afterwards.
+ * ===================================================================== */
+(function (root) {
+  'use strict';
+  // [Thai, English]  — long phrases are replaced anywhere inside a text,
+  // short words (< 5 Thai chars) only when they are the whole text.
+  const D = [
+    ['กำลังเริ่มระบบ…', 'Starting…'], ['เชื่อมต่อ', 'Connect'], ['ย้อนหลัง 30 วินาที', 'Last 30 seconds'], ['⏸ หยุดกราฟ', '⏸ Pause graph'], ['▶ เดินกราฟ', '▶ Resume graph'],
+    ['รีเซ็ต min/max', 'Reset min/max'], ['AFR LOG · เบนซิน', 'AFR LOG · Gasoline'], ['CRP LOG · ดีเซล', 'CRP LOG · Diesel'], ['⛽ เบนซิน', '⛽ Gasoline'], ['🛢 ดีเซล', '🛢 Diesel'],
+    ['ล้าง', 'Clear'], ['11.5 รวย · 14.7 · 16.5 บาง', '11.5 rich · 14.7 · 16.5 lean'], ['0 V ต่ำ · 2.5 V · 5 V สูง', '0 V low · 2.5 V · 5 V high'],
+    ['ช่องมืด = ยังไม่มีข้อมูล · กรอบขาว = ตำแหน่งเครื่องตอนนี้ · แตะช่อง = ดูรายละเอียด', 'Dark cell = no data · white box = current engine position · tap a cell for details'],
+    ['แหล่ง: AUTO', 'Source: AUTO'], ['แหล่ง: เกจ', 'Source: Gauge'], ['แหล่ง: มือถือ', 'Source: Phone'], ['แหล่ง GPS', 'GPS source'],
+    ['โค้ดปัญหา (DTC)', 'Diagnostic trouble codes (DTC)'], ['ปัจจุบัน', 'Current'], ['ที่เคยเกิด', 'History'], ['ลบโค้ด', 'Clear codes'], ['อ่านโค้ด', 'Read codes'], ['กด "อ่านโค้ด"', 'Press "Read codes"'],
+    ['อ่านโค้ด DTC', 'Read DTC'], ['ไม่มีโค้ด ✔', 'No codes ✔'], ['ลบโค้ดทั้งหมดในกล่อง?', 'Clear all codes in the ECU?'], ['ลบโค้ดแล้ว', 'Codes cleared'], ['ลบไม่สำเร็จ', 'Clear failed'],
+    ['ทั้งหมด / ALL', 'ALL'], ['SETTING', 'SETTINGS'], ['ภาษา / Language', 'Language'],
+    ['ค้นหา Bluetooth', 'Search Bluetooth'], ['📶 ค้นหา Bluetooth', '📶 Search Bluetooth'], ['ตัดการเชื่อมต่อ', 'Disconnect'], ['ปิด', 'Close'], ['คืนค่าเริ่มต้น', 'Reset to default'], ['บันทึก', 'Save'], ['💾 บันทึก', '💾 Save'],
+    ['Hex / เทียบไฟล์', 'Hex / compare'], ['⬇ อ่าน EEPROM', '⬇ Read EEPROM'], ['⚡ เขียนจากไฟล์', '⚡ Write from file'], ['ฟอร์แมต FF', 'Format FF'], ['ฟอร์แมต 00', 'Format 00'],
+    ['EEPROM เก็บค่าเรียนรู้/เลขไมล์บางรุ่น — อ่านเก็บไว้ก่อนเขียนหรือฟอร์แมตทุกครั้ง', 'EEPROM holds learned values / odometer on some models — always read and keep a copy before writing or formatting'],
+    ['ยังไม่มีข้อมูล', 'No data yet'], ['ไฟล์ A', 'File A'], ['เทียบกับ B', 'Compare with B'], ['ไปที่ (hex)', 'Go to (hex)'], ['ไปจุดต่างถัดไป', 'Next difference'], ['แสดงเฟรม TX/RX', 'Show TX/RX frames'], ['บันทึก log', 'Save log'],
+    ['เลือกค่าที่แสดง', 'Choose value'], ['เลือกค่าที่ช่องนี้', 'Choose value for this tile'], ['ยกเลิก', 'Cancel'], ['ตกลง', 'OK'], ['ยืนยัน', 'Confirm'], ['บันทึกแล้ว:', 'Saved:'], ['บันทึกแล้ว', 'Saved'], ['บันทึกไฟล์ไม่สำเร็จ', 'Could not save file'],
+    ['OFFLINE · แตะเพื่อเชื่อมต่อ', 'OFFLINE · tap to connect'], ['DEMO (จำลอง)', 'DEMO (simulated)'], ['สาย USB', 'USB cable'], ['สถานะ', 'Status'], ['เชื่อมแล้ว', 'Connected'], ['ยังไม่เชื่อม', 'Not connected'],
+    ['ชื่อ', 'Name'], ['ช่องทาง', 'Channel'], ['เฟิร์มแวร์', 'Firmware'], ['เป็นตัวต่อ K-line', 'K-line adapter'], ['ใช่', 'Yes'], ['ไม่', 'No'], ['เซ็นเซอร์', 'Sensors'], ['เฟิร์มแวร์ไม่รองรับ', 'Firmware not supported'], ['รอข้อมูล…', 'Waiting for data…'],
+    ['ตัดการเชื่อมต่อเกจแล้ว', 'Gauge disconnected'], ['มือถือมีพอร์ต USB เดียว (ใช้กับสาย K-line อยู่) — ต่อเกจด้วย Bluetooth แทน', 'The phone has a single USB port (in use for the K-line cable) — connect the gauge by Bluetooth instead'],
+    ['เกจหลุดการเชื่อมต่อ', 'Gauge connection lost'], ['เชื่อมเกจแล้ว', 'Gauge connected'], ['เบราว์เซอร์นี้ไม่รองรับ Web Serial — ใช้ Chrome/Edge หรือแอป APK', 'This browser has no Web Serial — use Chrome/Edge or the APK app'],
+    ['การเชื่อมต่อหลุด', 'Connection lost'], ['ยังไม่ได้เชื่อมต่อ', 'Not connected'], ['กำลังทำงานอื่นอยู่', 'Another job is running'], ['ยกเลิกแล้ว', 'Cancelled'], ['ตรวจกล่อง', 'Detect ECU'], ['สถานะกล่อง:', 'ECU status:'],
+    ['ยังไม่มีค่า AFR — ต้องต่อ Smart Gauge ที่มีไวด์แบนด์ (หรือเปิด DEMO)', 'No AFR value — connect a Smart Gauge with a wideband sensor (or turn on DEMO)'],
+    ['ยังไม่มีค่า CRP — ต้องต่อ Smart Gauge ที่มีเซ็นเซอร์ CRP (หรือเปิด DEMO)', 'No CRP value — connect a Smart Gauge with a CRP sensor (or turn on DEMO)'],
+    ['LIVE: กล่องไม่ตอบ', 'LIVE: ECU not responding'], ['อ่าน EEPROM', 'Read EEPROM'], ['ไฟล์ EEPROM ต้อง 256 หรือ 512 byte', 'EEPROM file must be 256 or 512 bytes'], ['เขียน EEPROM จากไฟล์', 'Write EEPROM from file'],
+    ['เขียน EEPROM สำเร็จ', 'EEPROM written'], ['เขียน EEPROM', 'Write EEPROM'], ['ฟอร์แมต EEPROM เป็น', 'Format EEPROM to'], ['? ข้อมูลเดิมจะหายทั้งหมด', '? All existing data will be lost'], ['ฟอร์แมต EEPROM', 'Format EEPROM'],
+    ['ฟอร์แมตแล้ว', 'Formatted'], ['ไม่สำเร็จ', 'failed'], ['เลือกไฟล์ A และ B', 'Choose files A and B'], ['เลือกไฟล์ A', 'Choose file A'], ['ต่างกัน', 'differ'], ['byte ใน', 'bytes in'], ['ช่วง', 'ranges'],
+    ['ขนาดไม่เท่ากัน', 'Different sizes'], ['ไม่มีจุดต่าง', 'No differences'], ['ผิดพลาด:', 'Error:'], ['คืนค่าตั้งค่าทั้งหมด?', 'Reset all settings?'],
+    ['โหลดธีมและหน้าจอ…', 'Loading theme and screens…'], ['เปิดคลังไฟล์ ECU…', 'Opening ECU file store…'], ['เปิดคลังไฟล์ไม่ได้:', 'Cannot open file store:'], ['เตรียมโปรโตคอล K-LINE…', 'Preparing K-LINE protocol…'],
+    ['พร้อม · USB OTG + Bluetooth', 'Ready · USB OTG + Bluetooth'], ['พร้อมใช้งาน', 'Ready'], ['มี', 'Yes'], ['ไม่มี', 'No'], ['GPS ไม่พร้อม', 'GPS not ready'], ['เกจ', 'Gauge'], ['มือถือ', 'Phone'],
+    ['ยังไม่มีข้อมูลสด — กด LIVE หรือเปิด DEMO', 'No live data yet — press LIVE or turn on DEMO'], ['ค่าเริ่มต้น (RPM × TPS)', 'Default (RPM × TPS)'], ['ค่าเริ่มต้น', 'Default'],
+    ['แกนจาก', 'axes from'], ['บันทึกแล้ว', 'logged'], ['ช่อง', 'cells'], ['สด', 'live'], ['ยังไม่มีข้อมูลสด (ต่อเกจ/เปิด DEMO)', 'no live data (connect gauge / DEMO)'],
+    ['เฉลี่ย', 'avg'], ['ครั้ง', 'samples'], ['ยังไม่มีข้อมูล', 'no data yet'], ['Log ทั้งหมด?', 'Log?'], ['ล้าง ', 'Clear '], ['จบรอบ:', 'Run finished:'], ['หยุด LOG แล้ว', 'Log stopped'],
+    ['พร้อมจับเวลา — ออกตัวได้เลย', 'Ready — launch when you like'], ['ล้างผลทั้ง 3 รอบ?', 'Clear all 3 runs?'], ['ยังไม่มีสัญญาณ GPS', 'No GPS signal'], ['ครั้ง/วินาที', 'per second'],
+    ['GPS มือถือ', 'Phone GPS'], ['AFR เป้า (เดินทาง)', 'Target AFR (cruise)'], ['AFR เป้า (เต็มคันเร่ง)', 'Target AFR (full throttle)'], ['เต็มคันเร่งเมื่อ TPS ≥ (%)', 'Full throttle when TPS ≥ (%)'],
+    ['AUTO (เกจก่อน)', 'AUTO (gauge first)'], ['เกจเท่านั้น', 'Gauge only'], ['มือถือเท่านั้น', 'Phone only'],
+    ['hex ต้องเป็นจำนวนคู่', 'hex must have an even number of digits'], ['ไม่พบกล่อง (บิดกุญแจ ON?)', 'ECU not found (key ON?)'], ['ไม่ทราบสถานะ', 'Unknown state'], ['ปกติ (พร้อมใช้งาน)', 'Normal (ready)'],
+    ['ปลดล็อกแล้ว (อ่านได้)', 'Unlocked (readable)'], ['โหมดอ่าน', 'Read mode'], ['โหมดกู้ (แฟลชค้าง-แบบเก่า)', 'Recovery mode (stuck flash, old type)'], ['โหมดกู้ (แฟลชค้าง-แบบใหม่)', 'Recovery mode (stuck flash, new type)'],
+    ['โหมดแฟลช (บูตโหลดเดอร์)', 'Flash mode (bootloader)'], ['ผิดพลาด', 'Error'],
+    ['sensor แรงดันต่ำ', 'sensor voltage low'], ['sensor แรงดันสูง', 'sensor voltage high'], ['แรงดันต่ำ', 'voltage low'], ['แรงดันสูง', 'voltage high'], ['หัวฉีด (สูบ 1)', 'Injector (cyl. 1)'], ['หัวฉีด (สูบ 2)', 'Injector (cyl. 2)'],
+    ['EEPROM ใน ECU', 'ECU EEPROM'], ['ไม่มีคำอธิบายในฐานข้อมูล (ดูคู่มือซ่อมรุ่นนั้น)', 'No description in database (see the workshop manual)'],
+    ['เชื่อมต่อ Bluetooth ไม่สำเร็จ', 'Bluetooth connection failed'], ['Bluetooth ยังไม่พร้อม', 'Bluetooth not ready'], ['เปิด USB ไม่สำเร็จ (หมดเวลา)', 'Could not open USB (timeout)'], ['เขียน USB ไม่ได้', 'USB write failed'],
+    ['เบราว์เซอร์นี้ไม่รองรับ Bluetooth (ใช้ Chrome บน Android / PC)', 'This browser has no Bluetooth support (use Chrome on Android / PC)'], ['ยกเลิกโดยผู้ใช้', 'Cancelled by user'],
+    ['เชื่อมต่อได้แต่เกจไม่ตอบ (อัปเดตเฟิร์มแวร์เกจเป็น bridge v1)', 'Connected but the gauge does not answer (update gauge firmware to bridge v1)'], ['(อัปเดตเฟิร์มแวร์เกจ)', '(update gauge firmware)'],
+    ['สาย K-LINE USB (FTDI / CH340 / KKL)', 'K-LINE USB cable (FTDI / CH340 / KKL)'], ['ต่อมือถือ OTG หรือคอม · Chrome รองรับ Web Serial', 'Phone OTG or PC · Chrome supports Web Serial'],
+    ['ตรวจสถานะกล่อง…', 'Checking ECU state…'], ['ติดต่อกล่องไม่ได้', 'Cannot reach ECU'],
+    ['เกจทำหน้าที่เป็นตัวต่อ K-line + รับไฟล์ไปแฟลชเอง', 'The gauge acts as the K-line adapter + receives files to flash by itself'], ['Smart Gauge ผ่าน Bluetooth', 'Smart Gauge via Bluetooth'], ['Smart Gauge ผ่านสาย USB', 'Smart Gauge via USB cable'],
+    ['เหมือน Bluetooth แต่เร็วกว่า', 'Like Bluetooth but faster'], ['เชื่อมเกจเพื่อส่งไฟล์อย่างเดียว (Bluetooth)', 'Connect gauge for file transfer only (Bluetooth)'], ['ใช้คู่กับสาย USB ได้', 'Can be used together with a USB cable'],
+    ['DEMO (กล่องจำลอง)', 'DEMO (simulated ECU)'], ['ทดลองทุกฟังก์ชันโดยไม่ต้องต่อรถ', 'Try every function without a vehicle'], ['GPS เกจ', 'GPS Gauge'], ['GPS มือถือ', 'GPS Phone'], ['Jet Smart Gauge (จำลอง)', 'Jet Smart Gauge (simulated)'],
+    ['พร้อมใช้งาน · Web Serial:', 'Ready · Web Serial:'], ['Jet Smart Gauge (Android APP) พร้อมใช้งาน', 'Jet Smart Gauge (Android APP) ready'],
+    ['ตั้งค่า', 'SETTINGS'], ['ภาษา', 'Language'], ['ค้นหาบลูทูธ', 'Search Bluetooth'], ['📶 ค้นหาบลูทูธ', '📶 Search Bluetooth'], ['ค่า AFR และจีพีเอส', 'AFR & GPS'],
+    ['เป้า AFR (ขับปกติ)', 'Target AFR (cruise)'], ['เป้า AFR (เปิดคันเร่งเต็ม)', 'Target AFR (full throttle)'], ['ถือว่าเปิดเต็มเมื่อคันเร่ง ≥ (%)', 'Full throttle when pedal ≥ (%)'],
+    ['แหล่งสัญญาณจีพีเอส', 'GPS source'], ['อัตโนมัติ (เกจก่อน)', 'AUTO (gauge first)'], ['โหมดสาธิต (จำลอง)', 'DEMO (simulated)'], ['ใช้เป็นตัวต่อสาย K-line', 'Used as K-line adapter'],
+    ['ไวด์แบนด์', 'Wideband'], ['จีพีเอส', 'GPS'], ['อุณหภูมิน้ำมันเครื่อง', 'Oil temp'], ['ออกซิเจน', 'O2'],
+    ['ต้องมี License ก่อนใช้งาน — ส่ง “รหัสเครื่อง” ให้ เปรียวจูนเนอร์ เพื่อขอ License', 'A licence is required — send the “Device ID” to เปรียวจูนเนอร์ to get your licence'],
+    ['วาง License ที่ได้รับที่นี่', 'Paste your licence here'], ['คัดลอกแล้ว ✓', 'Copied ✓'], ['คัดลอก', 'Copy'], ['วาง', 'Paste'], ['เปิดใช้งาน', 'Activate'],
+    ['รูปแบบ License ไม่ถูกต้อง — คัดลอกให้ครบทุกตัวอักษร', 'Invalid licence format — copy every character'], ['License ไม่ถูกต้อง', 'Invalid licence'],
+    ['License นี้ออกให้เครื่องอื่น (รหัสเครื่องไม่ตรง)', 'This licence was issued for another device (ID mismatch)'], ['License หมดอายุแล้ว — ติดต่อ เปรียวจูนเนอร์ เพื่อต่ออายุ', 'Licence expired — contact เปรียวจูนเนอร์ to renew'],
+    ['นาฬิกาเครื่องผิดปกติ — ตั้งวันเวลาให้ถูกต้องแล้วลองใหม่', 'Device clock looks wrong — set the correct date/time and try again'], ['เปิดใช้งานสำเร็จ — สวัสดี', 'Activated — welcome'],
+    ['เจ้าของ', 'Owner'], ['รหัสเครื่อง', 'Device ID'], ['หมดอายุ', 'Expires'], ['ถาวร', 'Lifetime'],
+    ['ขนาด', 'size'], ['ไม่ตรง', 'mismatch'],
+  ];
+  const lang0 = (() => { try { return localStorage.getItem('jht.lang') || 'th'; } catch (e) { return 'th'; } })();
+  let lang = lang0 === 'en' ? 'en' : 'th';
+  const HAS = /[฀-๿]/;
+  const EXACT = new Map(), SUB = [];
+  for (const [t, e] of D) { const n = (t.match(/[฀-๿]/g) || []).length; if (n < 5) EXACT.set(t.trim(), e); else SUB.push([t, e]); EXACT.set(t.trim(), e); }
+  SUB.sort((a, b) => b[0].length - a[0].length);
+  function tr(s) {
+    if (!HAS.test(s)) return s;
+    const t = s.trim(), hit = EXACT.get(t);
+    if (hit != null) return s.replace(t, hit);
+    let o = s;
+    for (const [k, v] of SUB) if (o.indexOf(k) >= 0) o = o.split(k).join(v);
+    return o;
+  }
+  const done = new WeakMap(), orig = new WeakMap(), origA = new WeakMap();
+  let busy = false;
+  function nodeEn(n) {
+    const v = n.nodeValue; if (!HAS.test(v) || done.get(n) === v) return;
+    const t = tr(v); orig.set(n, v); done.set(n, t);
+    if (t !== v) { busy = true; n.nodeValue = t; busy = false; }
+  }
+  function walk(el, fn) {
+    const w = document.createTreeWalker(el, NodeFilter.SHOW_TEXT, { acceptNode: (n) => (n.parentNode && /^(SCRIPT|STYLE|TEXTAREA)$/.test(n.parentNode.nodeName) ? NodeFilter.FILTER_REJECT : NodeFilter.FILTER_ACCEPT) });
+    const a = []; while (w.nextNode()) a.push(w.currentNode); a.forEach(fn);
+  }
+  const ATTRS = ['title', 'placeholder'];
+  function attrs(en) {
+    document.querySelectorAll('[title],[placeholder]').forEach((e) => ATTRS.forEach((a) => {
+      const v = e.getAttribute(a); if (v == null) return;
+      let m = origA.get(e); if (!m) { m = {}; origA.set(e, m); }
+      if (en) { if (HAS.test(v)) { m[a] = v; e.setAttribute(a, tr(v)); } } else if (m[a] != null) { e.setAttribute(a, m[a]); delete m[a]; }
+    }));
+  }
+  const mo = new MutationObserver((ms) => {
+    if (lang !== 'en' || busy) return;
+    for (const m of ms) {
+      if (m.type === 'characterData') { if (HAS.test(m.target.nodeValue)) nodeEn(m.target); }
+      else m.addedNodes.forEach((n) => { if (n.nodeType === 3) { if (HAS.test(n.nodeValue)) nodeEn(n); } else if (n.nodeType === 1) walk(n, nodeEn); });
+    }
+  });
+  function apply() {
+    document.documentElement.lang = lang;
+    if (lang === 'en') { walk(document.body, nodeEn); attrs(true); }
+    else { busy = true; walk(document.body, (n) => { if (orig.has(n)) { n.nodeValue = orig.get(n); orig.delete(n); done.delete(n); } }); busy = false; attrs(false); }
+    document.querySelectorAll('[data-lang]').forEach((b) => b.classList.toggle('on', b.dataset.lang === lang));
+  }
+  function set(l) {
+    lang = l === 'en' ? 'en' : 'th';
+    try { localStorage.setItem('jht.lang', lang); } catch (e) { /* ignore */ }
+    apply(); window.dispatchEvent(new Event('jetlang'));
+  }
+  mo.observe(document.body, { childList: true, subtree: true, characterData: true });
+  document.querySelectorAll('[data-lang]').forEach((b) => (b.onclick = () => set(b.dataset.lang)));
+  root.JetI18N = { lang: () => lang, set, tr, apply };
+  if (lang === 'en') apply(); else document.documentElement.lang = 'th';
+})(window);

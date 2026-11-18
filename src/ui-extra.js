@@ -1,5 +1,5 @@
 /* =====================================================================
- * Jet_HONDA Tune — ui-extra.js
+ * Jet Smart Gauge — ui-extra.js
  * GRID · GRAPH · AFR LOG · DRAG LOG · GPS · TOOLS
  * ===================================================================== */
 (function () {
@@ -61,12 +61,25 @@
     { k: 'AFR', u: '', d: 1, col: '#2fd18b', bar: [10, 18] }, { k: 'INJ', u: 'ms', d: 2 }, { k: 'IGN', u: '°BTDC', d: 1 },
     { k: 'RPM', u: 'rpm', d: 0, bar: [0, 12000], grad: 1 }, { k: 'MAP', u: 'kPa', d: 0 }, { k: 'SPD', u: 'km/h', d: 0 },
     { k: 'EOT', u: '°C', d: 0 }, { k: 'IAT', u: '°C', d: 0 }, { k: 'O2', u: 'V', d: 2 },
+    { k: 'CRP', l: 'CRP volt', u: 'V', d: 2, col: '#ffc233', bar: [0, 5] }, { k: 'GEAR', l: 'GEAR', u: '', d: 0 },
   ];
-  $('#ggrid').innerHTML = GRID.map((g) => `<div class="card gt"><div class="gh"><span>${g.l || g.k}</span><span>${g.u}</span></div><div class="gv" id="gv${g.k}" style="${g.col ? 'color:' + g.col : ''}">--</div>${g.bar ? `<div class="gbar" id="gb${g.k}">${'<i></i>'.repeat(18)}</div>` : ''}</div>`).join('');
+  const OBDG = P.OBD.map(([k, en, th, u, d, f]) => ({ k, en, th, u, d, f }));
+  GRID.forEach((g) => { g.f = 'b'; });
+  const ALLG = GRID.concat(OBDG);  // (GRID array is reused as the 'visible' list)
+  let gFuel = S.gridFuel || 'all';
+  const gLabel = (g) => (window.JetI18N && JetI18N.lang() === 'th' && g.th) ? g.th : (g.en || g.l || g.k);
+  function buildGrid() {
+    const list = ALLG.filter((g) => gFuel === 'all' || g.f === 'b' || g.f === (gFuel === 'gas' ? 'g' : 'd'));
+    $('#ggrid').innerHTML = list.map((g) => `<div class="card gt"><div class="gh"><span>${gLabel(g)}</span><span>${g.u}</span></div><div class="gv" id="gv${g.k}" style="${g.col ? 'color:' + g.col : ''}">--</div>${g.bar ? `<div class="gbar" id="gb${g.k}">${'<i></i>'.repeat(18)}</div>` : ''}</div>`).join('');
+    $$('#gFilter button').forEach((b) => b.classList.toggle('on', b.dataset.f === gFuel));
+    GRID.length = 0; list.forEach((g) => GRID.push(g));
+  }
+  $$('#gFilter button').forEach((b) => b.onclick = () => { gFuel = b.dataset.f; S.gridFuel = gFuel; C.saveS(); buildGrid(); renderGrid(); $('.page.show').scrollTop = 0; });
+  window.addEventListener('jetlang', () => { buildGrid(); renderGrid(); });
   function renderGrid() {
     for (const g of GRID) {
-      const v = last[g.k]; const el = $('#gv' + g.k);
-      el.textContent = v == null ? '--' : (+v).toFixed(g.d);
+      const v = last[g.k]; const el = $('#gv' + g.k); if (!el) continue;
+      el.textContent = v == null ? '--' : g.k === 'GEAR' ? (v === 0 ? 'N' : String(v)) : (+v).toFixed(g.d);
       if (g.bar) {
         const n = v == null ? 0 : Math.round(Math.max(0, Math.min(1, (v - g.bar[0]) / (g.bar[1] - g.bar[0]))) * 18);
         $$('#gb' + g.k + ' i').forEach((e, i) => { const c = i >= n ? '' : g.grad ? (i < 9 ? '#2fd18b' : i < 13 ? '#d6e033' : i < 15 ? '#ffb020' : '#ff4d5e') : g.col; e.style.background = c; e.style.boxShadow = c ? '0 0 6px ' + c : ''; });
@@ -74,22 +87,29 @@
     }
   }
 
+  buildGrid();
+
   /* ================= GRAPH ================= */
   const GS = [
     { k: 'RPM', col: '#ff4d5e', lo: 0, hi: 12000, d: 0 }, { k: 'TPS', col: '#4d8dff', lo: 0, hi: 100, d: 1 },
-    { k: 'SPD', l: 'GPS', col: '#2fd18b', lo: 0, hi: 200, d: 0 }, { k: 'AFR', col: '#ffc233', lo: 10, hi: 18, d: 1 },
+    { k: 'SPD', l: 'GPS', col: '#2fd18b', lo: 0, hi: 200, d: 0 }, { k: 'AFR', src: S.gSrc === 'CRP' ? 'CRP' : 'AFR', col: '#ffc233', lo: 10, hi: 18, d: 1 },
   ];
+  const gsApply = () => { const g = GS[3], c = g.src === 'CRP'; g.l = c ? 'CRP volt' : 'AFR'; g.lo = c ? 0 : 10; g.hi = c ? 5 : 18; g.d = c ? 2 : 1; };
+  gsApply();
   const gbuf = []; let gpause = false; const gmm = {};
   $('#gcards').innerHTML = GS.map((g) => `<div class="card gc" style="--c:${g.col}"><div class="gh"><span id="gl${g.k}">${g.l || g.k}</span><span class="spark">⟋</span></div><div class="gv" id="gg${g.k}">--</div><div class="mm"><span class="lo" id="gn${g.k}">▼ --</span><span class="hi" id="gx${g.k}">▲ --</span></div></div>`).join('');
+  $('#gcards').querySelectorAll('.gc')[3].style.cursor = 'pointer';
+  $('#gcards').querySelectorAll('.gc')[3].onclick = () => { const g = GS[3]; g.src = g.src === 'CRP' ? 'AFR' : 'CRP'; S.gSrc = g.src; C.saveS(); gsApply(); delete gmm.AFR; renderGraphCards(); drawGraph(); };
   $('#gPause').onclick = () => { gpause = !gpause; $('#gPause').textContent = gpause ? '▶ เดินกราฟ' : '⏸ หยุดกราฟ'; };
   $('#gReset').onclick = () => { for (const k in gmm) delete gmm[k]; renderGraphCards(); };
   function graphPush(d) {
-    const s = { t: d.t || Date.now(), RPM: d.RPM, TPS: d.TPS, SPD: d.GPS != null ? d.GPS : d.SPD, AFR: d.AFR };
+    const s = { t: d.t || Date.now(), RPM: d.RPM, TPS: d.TPS, SPD: d.GPS != null ? d.GPS : d.SPD, AFR: d.AFR, CRP: d.CRP };
     if (!gpause) { gbuf.push(s); while (gbuf.length && s.t - gbuf[0].t > 31000) gbuf.shift(); }
-    for (const g of GS) { const v = s[g.k]; if (v == null) continue; const m = gmm[g.k] || (gmm[g.k] = { lo: v, hi: v, v }); m.v = v; m.lo = Math.min(m.lo, v); m.hi = Math.max(m.hi, v); }
+    for (const g of GS) { const v = s[g.src || g.k]; if (v == null) continue; const m = gmm[g.k] || (gmm[g.k] = { lo: v, hi: v, v }); m.v = v; m.lo = Math.min(m.lo, v); m.hi = Math.max(m.hi, v); }
     $('#glSPD').textContent = d.GPS != null ? 'GPS' : 'SPD';
   }
   function renderGraphCards() {
+    $('#glAFR').textContent = GS[3].l;
     for (const g of GS) {
       const m = gmm[g.k];
       $('#gg' + g.k).textContent = m ? (+m.v).toFixed(g.d) : '--';
@@ -109,7 +129,7 @@
     for (const s of GS) {
       g.strokeStyle = s.col; g.lineWidth = 2.6; g.shadowColor = s.col; g.shadowBlur = 8; g.beginPath(); let on = false;
       for (const p of gbuf) {
-        const v = p[s.k]; if (v == null) { on = false; continue; }
+        const v = p[s.src || s.k]; if (v == null) { on = false; continue; }
         const x = pad + (W - 2 * pad) * (1 - (tEnd - p.t) / span), y = bot - (bot - top) * Math.max(0, Math.min(1, (v - s.lo) / (s.hi - s.lo)));
         if (on) g.lineTo(x, y); else { g.moveTo(x, y); on = true; }
       }
@@ -196,26 +216,28 @@
   /* ================= AFR LOG ================= */
   const DEF_Y = [840, 1100, 1200, 1300, 1400, 1500, 1600, 1800, 2000, 2250, 2500, 2750, 3000, 3250, 3500, 4000, 4500, 5000, 5500, 6000, 6500, 7000, 7500, 7750, 8000, 8500, 9000, 9500, 9800];
   const DEF_X = [0, 0.4, 0.8, 1.2, 1.9, 2.5, 3.0, 3.5, 4.0, 4.9, 5.9, 7.9, 9.9, 11.9, 13.9, 15.9, 18.6, 20.9, 26.4, 31.8, 39.5, 44.7, 50.0, 59.3, 72.0];
-  const afr = { xs: DEF_X, ys: DEF_Y, title: 'ค่าเริ่มต้น', sig: '', log: null, dirty: false, rec: S.afrRec !== false };
+  const afr = { xs: DEF_X, ys: DEF_Y, title: 'ค่าเริ่มต้น', sig: '', log: null, dirty: false, rec: S.afrRec !== false, mode: S.logMode === 'crp' ? 'crp' : 'afr' };
+  const isCrp = () => afr.mode === 'crp', LK = () => (isCrp() ? 'CRP' : 'AFR'), LD = () => (isCrp() ? 2 : 1);
   window.JetAfr = afr;
-  const afrColor = (v) => { const stops = [[10.5, [210, 40, 60]], [11.5, [225, 70, 55]], [12.8, [215, 150, 40]], [14.0, [70, 190, 110]], [14.7, [40, 175, 120]], [15.6, [40, 130, 200]], [16.5, [70, 90, 220]], [18, [110, 70, 210]]];
+  const afrColor = (v) => { if (isCrp()) return `hsl(${Math.round(240 - 240 * Math.max(0, Math.min(1, v / 5)))},72%,46%)`;
+     const stops = [[10.5, [210, 40, 60]], [11.5, [225, 70, 55]], [12.8, [215, 150, 40]], [14.0, [70, 190, 110]], [14.7, [40, 175, 120]], [15.6, [40, 130, 200]], [16.5, [70, 90, 220]], [18, [110, 70, 210]]];
     if (v <= stops[0][0]) return `rgb(${stops[0][1]})`; for (let i = 1; i < stops.length; i++) if (v <= stops[i][0]) { const [a, ca] = stops[i - 1], [b, cb] = stops[i], k = (v - a) / (b - a); return `rgb(${ca.map((x, j) => Math.round(x + (cb[j] - x) * k))})`; } return `rgb(${stops[stops.length - 1][1]})`; };
   function afrAxesChanged(force) {
-    const xs = DEF_X, ys = DEF_Y, sig = ys.length + 'x' + xs.length + ':' + ys[0] + '-' + ys[ys.length - 1] + ':' + xs[0] + '-' + xs[xs.length - 1];
+    const xs = DEF_X, ys = DEF_Y, sig = afr.mode + ':' + ys.length + 'x' + xs.length + ':' + ys[0] + '-' + ys[ys.length - 1] + ':' + xs[0] + '-' + xs[xs.length - 1];
     afr.info = axisInfo(null, xs, ys);
     if (sig === afr.sig && afr.log) { afr.title = 'ค่าเริ่มต้น (RPM × TPS)'; if (force && curTab === 'AFR') renderAfr(); return; }
     afrSave(); afr.xs = xs; afr.ys = ys; afr.sig = sig; afr.title = 'ค่าเริ่มต้น (RPM × TPS)';
-    const o = LSget('jht.afr.' + sig, null); afr.log = o ? T.AfrLog.from(o) : new T.AfrLog(ys.length, xs.length);
+    const o = LSget('jht.' + (isCrp() ? 'crp.' : 'afr.') + sig, null); afr.log = o ? T.AfrLog.from(o) : new T.AfrLog(ys.length, xs.length);
     if (curTab === 'AFR') renderAfr();
   }
-  function afrSave() { if (afr.log && afr.dirty) { LSset('jht.afr.' + afr.sig, afr.log.toJSON()); afr.dirty = false; } }
+  function afrSave() { if (afr.log && afr.dirty) { LSset('jht.' + (afr.sig.indexOf('crp:') === 0 ? 'crp.' : 'afr.') + afr.sig, afr.log.toJSON()); afr.dirty = false; } }
   setInterval(afrSave, 5000);
   window.addEventListener('pagehide', afrSave);
   function afrRecord(d) {
-    if (!afr.rec || d.AFR == null || d.RPM == null || !afr.log) return;
+    if (!afr.rec || d[LK()] == null || d.RPM == null || !afr.log) return;
     const p = livePos(afr.info, afr.xs, afr.ys, d);
     if (!p) return;
-    afr.log.add(p.fr, p.fc, d.AFR); afr.dirty = true;
+    afr.log.add(p.fr, p.fc, d[LK()]); afr.dirty = true;
   }
   function renderAfr() {
     if (!afr.log) afrAxesChanged();
@@ -224,15 +246,15 @@
     let h = `<thead><tr><th class="corner">${cornerLab(I)}</th>${xs.map((x) => `<th>${colLab(I, x)}</th>`).join('')}</tr></thead><tbody>`;
     for (let r = 0; r < ys.length; r++) {
       h += `<tr><th class="yh">${rowLab(I, ys[r])}</th>`;
-      for (let c = 0; c < xs.length; c++) { const a = L.get(r, c); h += a ? `<td data-r="${r}" data-c="${c}" style="background:${afrColor(a.avg)};opacity:${Math.min(1, 0.45 + a.n / 10)}">${a.avg.toFixed(1)}</td>` : `<td data-r="${r}" data-c="${c}" class="empty"></td>`; }
+      for (let c = 0; c < xs.length; c++) { const a = L.get(r, c); h += a ? `<td data-r="${r}" data-c="${c}" style="background:${afrColor(a.avg)};opacity:${Math.min(1, 0.45 + a.n / 10)}">${a.avg.toFixed(LD())}</td>` : `<td data-r="${r}" data-c="${c}" class="empty"></td>`; }
       h += '</tr>';
     }
     $('#atab').innerHTML = h + '</tbody>';
     afrInfo(); afrLiveMark(true);
   }
   function afrInfo() {
-    const live = last.AFR != null && Date.now() - (last.t || 0) < 3000;
-    $('#aInfo').textContent = `${afr.ys.length}×${afr.xs.length} · แกนจาก "${afr.title}" · บันทึกแล้ว ${afr.log ? afr.log.filled() : 0} ช่อง · ${live ? 'AFR สด ' + (+last.AFR).toFixed(1) : 'ยังไม่มีข้อมูลสด (ต่อเกจ/เปิด DEMO)'}`;
+    const K = LK(), live = last[K] != null && Date.now() - (last.t || 0) < 3000;
+    $('#aInfo').textContent = `${afr.ys.length}×${afr.xs.length} · แกนจาก "${afr.title}" · บันทึกแล้ว ${afr.log ? afr.log.filled() : 0} ช่อง · ${live ? K + ' สด ' + (+last[K]).toFixed(LD()) : 'ยังไม่มีข้อมูลสด (ต่อเกจ/เปิด DEMO)'}`;
     $('#aRec').classList.toggle('on', afr.rec); $('#aRec').textContent = afr.rec ? '● REC' : '○ REC';
   }
   const aWrap = $('#atab').parentElement, aCur = Cursor(aWrap, $('#atab'));
@@ -240,15 +262,25 @@
   function afrLiveMark() {
     const p = last.RPM != null && Date.now() - (last.t || 0) < 3000 ? livePos(afr.info, afr.xs, afr.ys) : null, I = afr.info;
     if (!p || curTab !== 'AFR') { if (!p) aCur.hide(); return; }
-    aCur.show(p, `${fmtRpm(p.rpm)} rpm · ${I.load} ${(+p.ld).toFixed(1)}${I.unit}` + (last.AFR != null ? ` → AFR ${(+last.AFR).toFixed(1)}` : ''), afr.userT);
+    aCur.show(p, `${fmtRpm(p.rpm)} rpm · ${I.load} ${(+p.ld).toFixed(1)}${I.unit}` + (last[LK()] != null ? ` → ${LK()} ${(+last[LK()]).toFixed(LD())}` : ''), afr.userT);
   }
   $('#atab').addEventListener('click', (e) => {
     const td = e.target.closest('td'); if (!td) return; const r = +td.dataset.r, c = +td.dataset.c, a = afr.log.get(r, c);
     const I = afr.info, where = `${rowLab(I, afr.ys[r])} · ${colLab(I, afr.xs[c])}`;
-    toast(a ? `${where} → AFR เฉลี่ย ${a.avg.toFixed(2)} (min ${a.min.toFixed(1)} / max ${a.max.toFixed(1)}) · ${a.n} ครั้ง` : `${where} — ยังไม่มีข้อมูล`, 4000);
+    toast(a ? `${where} → ${LK()} เฉลี่ย ${a.avg.toFixed(2)} (min ${a.min.toFixed(LD())} / max ${a.max.toFixed(LD())}) · ${a.n} ครั้ง` : `${where} — ยังไม่มีข้อมูล`, 4000);
   });
+  function afrModeUi() {
+    const c = isCrp();
+    $('#aTitle').textContent = c ? 'CRP LOG · ดีเซล' : 'AFR LOG · เบนซิน';
+    $('#aFuel').textContent = c ? '🛢 ดีเซล' : '⛽ เบนซิน';
+    $('.ascale span').textContent = c ? '0 V ต่ำ · 2.5 V · 5 V สูง' : '11.5 รวย · 14.7 · 16.5 บาง';
+    $('.abar').classList.toggle('crp', c);
+    const nb = $('#nav button[data-p="' + C.pageOf('AFR') + '"]'); if (nb) nb.textContent = c ? 'CRP Log' : 'AFR Log';
+  }
+  $('#aFuel').onclick = () => { afrSave(); afr.mode = isCrp() ? 'afr' : 'crp'; S.logMode = afr.mode; C.saveS(); afrModeUi(); afrAxesChanged(); renderAfr(); };
+  afrModeUi();
   $('#aRec').onclick = () => { afr.rec = !afr.rec; S.afrRec = afr.rec; C.saveS(); afrInfo(); };
-  $('#aClr').onclick = async () => { if (await C.ask('ล้าง AFR log ของแกนนี้ทั้งหมด?', true)) { afr.log.clear(); afr.dirty = true; afrSave(); renderAfr(); } };
+  $('#aClr').onclick = async () => { if (await C.ask('ล้าง ' + (isCrp() ? 'CRP' : 'AFR') + ' Log ทั้งหมด?', true)) { afr.log.clear(); afr.dirty = true; afrSave(); renderAfr(); } };
 
   /* ================= DRAG LOG ================= */
   const dt = new T.DragTimer([201, 402, 500, 1000]);
@@ -257,16 +289,22 @@
   function dragFeed(t, v) {
     if (v == null) return;
     drag2.last = { t, v };
+    if (!drag2.armed) return;
     const res = dt.feed(t, v);
     if (dt.state === 'run' && drag2.runningSlot == null) { drag2.runningSlot = true; drag2.view = -1; }
     if (res) {
       const i = drag2.runs.findIndex((r) => !r); const slot = i >= 0 ? i : drag2.runs.reduce((m, r, k) => (r.at < drag2.runs[m].at ? k : m), 0);
-      drag2.runs[slot] = res; drag2.view = slot; drag2.runningSlot = null; LSset('jht.drag', drag2.runs);
+      drag2.runs[slot] = res; drag2.view = slot; drag2.runningSlot = null; drag2.armed = false; LSset('jht.drag', drag2.runs);
       toast(`จบรอบ: ${res.splits[402] ? '402m ' + res.splits[402].toFixed(3) + ' s · ' : ''}MAX ${res.maxV} km/h → RUN ${slot + 1}`, 5000);
     }
     if (dt.state === 'done' && v < 1.5) { if (!drag2.rearm) drag2.rearm = t; else if (t - drag2.rearm > 2000) { dt.reset(); dt.feed(t, v); drag2.rearm = null; } } else drag2.rearm = null;
   }
-  $('#dReset').onclick = async () => { if (!(await C.ask('ล้างผลทั้ง 3 รอบ?', true))) return; drag2.runs = [null, null, null]; drag2.view = 0; dt.reset(); LSset('jht.drag', drag2.runs); renderDrag(); };
+  $('#dStart').onclick = () => {
+    if (drag2.armed) { drag2.armed = false; dt.reset(); drag2.runningSlot = null; drag2.view = 0; toast('หยุด LOG แล้ว'); }
+    else { if (gps.src !== 'gauge') gps.ensurePhone(); dt.reset(); drag2.armed = true; drag2.rearm = null; drag2.runningSlot = null; toast('พร้อมจับเวลา — ออกตัวได้เลย', 3000); }
+    renderDrag();
+  };
+  $('#dReset').onclick = async () => { if (!(await C.ask('ล้างผลทั้ง 3 รอบ?', true))) return; drag2.runs = [null, null, null]; drag2.view = 0; drag2.armed = false; dt.reset(); LSset('jht.drag', drag2.runs); renderDrag(); };
   $('#dSrc').onclick = () => {
     gps.src = { auto: 'gauge', gauge: 'phone', phone: 'auto' }[gps.src]; S.gpsSrc = gps.src; C.saveS();
     if (gps.src === 'gauge') gps.stopPhone(); else gps.ensurePhone(); renderDrag();
@@ -278,7 +316,8 @@
     $$('#dSig i').forEach((e, i) => e.classList.toggle('on', i < bars));
     $('#dSat').textContent = g ? (g.src === 'GAUGE' ? `Satellites in use: ${g.sats} of ${g.satsView || '?'} (เกจ)` : `GPS มือถือ ±${Math.round(g.acc || 0)} m · ~1 ครั้ง/วินาที`) : (gps.err ? 'GPS: ' + gps.err : 'ยังไม่มีสัญญาณ GPS');
     $('#dSpdAcc').textContent = g ? `Speed ${Math.round(g.spd)} km/h` : '';
-    const sEl = $('#dState'); sEl.textContent = !g ? 'NO GPS' : running ? 'RUNNING' : dt.state === 'done' ? 'DONE' : 'READY';
+    const sEl = $('#dState'); sEl.textContent = !g ? 'NO GPS' : running ? 'RUNNING' : dt.state === 'done' && !drag2.armed ? 'DONE' : drag2.armed ? 'READY' : 'STANDBY';
+    $('#dStart').textContent = drag2.armed ? '■ STOP LOG' : '● START LOG';
     sEl.className = 'dstate ' + (!g ? 'bad' : running ? 'run' : 'ok');
     const run = running || drag2.view < 0 ? { splits: dt.splits, speeds: dt.speeds, maxV: Math.round(dt.maxV), time: dt.elapsed, dist: dt.dist } : drag2.runs[drag2.view];
     const row = (lab, tm, sp) => `<tr><th>${lab}</th><td>${tm}</td><td>${sp}</td></tr>`;
@@ -304,11 +343,11 @@
   (function settings() {
     const card = $('#mSet .card'), anchor = card.querySelector('h3:last-of-type');
     const blk = document.createElement('div');
-    blk.innerHTML = `<h3 style="margin-top:16px">AFR / GPS</h3><div class="grid g3">
-      <label class="f">AFR เป้า (เดินทาง)<input id="sAfrC" type="number" step="0.1"></label>
-      <label class="f">AFR เป้า (เต็มคันเร่ง)<input id="sAfrW" type="number" step="0.1"></label>
-      <label class="f">เต็มคันเร่งเมื่อ TPS ≥ (%)<input id="sAfrT" type="number"></label>
-      <label class="f">แหล่ง GPS<select id="sGps"><option value="auto">AUTO (เกจก่อน)</option><option value="gauge">เกจเท่านั้น</option><option value="phone">มือถือเท่านั้น</option></select></label></div>`;
+    blk.innerHTML = `<h3 style="margin-top:16px">ค่า AFR และจีพีเอส</h3><div class="grid g3">
+      <label class="f">เป้า AFR (ขับปกติ)<input id="sAfrC" type="number" step="0.1"></label>
+      <label class="f">เป้า AFR (เปิดคันเร่งเต็ม)<input id="sAfrW" type="number" step="0.1"></label>
+      <label class="f">ถือว่าเปิดเต็มเมื่อคันเร่ง ≥ (%)<input id="sAfrT" type="number"></label>
+      <label class="f">แหล่งสัญญาณจีพีเอส<select id="sGps"><option value="auto">อัตโนมัติ (เกจก่อน)</option><option value="gauge">เกจเท่านั้น</option><option value="phone">มือถือเท่านั้น</option></select></label></div>`;
     card.insertBefore(blk, anchor);
     $('#bSet').addEventListener('click', () => { $('#sAfrC').value = S.afrCruise || 14.2; $('#sAfrW').value = S.afrWot || 12.8; $('#sAfrT').value = S.afrWotTps || 50; $('#sGps').value = gps.src; });
     $('#sSave').addEventListener('click', () => {

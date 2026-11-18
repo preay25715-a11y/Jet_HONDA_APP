@@ -1,5 +1,5 @@
 /* =====================================================================
- * Jet_HONDA Tune — proto.js
+ * Jet Smart Gauge — proto.js
  * Honda / Keihin K-line framing, checksums, MFB-LINK (Smart Gauge) framing,
  * DTC table, live-data decoding, model database.
  *
@@ -225,12 +225,59 @@
   /* ---------- Smart-Gauge sensor block (LINK 0x20) ----------
    * afr u16/100, gpsSpeed u16/10, sats, satsView, lat i32/1e7, lon i32/1e7, eot+40, o2/100, flags
    * flags: b0 AFR valid, b1 GPS fix, b2 EOT valid, b3 O2 valid                                  */
+  // gear from rpm ÷ speed: ratios = rpm per km/h of each gear (1st..n). 0 = neutral/stopped, null = unknown (clutch slip)
+
+  /* ---- OBD-II Mode 01 value catalogue (b = both, g = gasoline, d = diesel) ---- */
+  // [key, English, Thai, unit, decimals, fuel]
+  P.OBD = [
+    ['LOAD', 'Engine load', 'โหลดเครื่อง', '%', 0, 'b'], ['ABSL', 'Absolute load', 'โหลดสัมบูรณ์', '%', 0, 'b'], ['MAF', 'MAF air flow', 'อากาศเข้า MAF', 'g/s', 1, 'b'],
+    ['BARO', 'Barometric', 'ความดันบรรยากาศ', 'kPa', 0, 'b'], ['AMB', 'Ambient temp', 'อุณหภูมิอากาศ', '°C', 0, 'b'], ['TPSR', 'Relative throttle', 'ปีกผีเสื้อสัมพัทธ์', '%', 0, 'b'],
+    ['TPSB', 'Throttle B', 'ปีกผีเสื้อ B', '%', 0, 'b'], ['CMDT', 'Commanded throttle', 'สั่งปีกผีเสื้อ', '%', 0, 'b'], ['APPD', 'Pedal D', 'คันเร่ง D', '%', 0, 'b'], ['APPE', 'Pedal E', 'คันเร่ง E', '%', 0, 'b'],
+    ['FRATE', 'Fuel rate', 'อัตราสิ้นเปลือง', 'L/h', 2, 'b'], ['FUELL', 'Fuel level', 'ระดับน้ำมัน', '%', 0, 'b'], ['FP', 'Fuel pressure', 'แรงดันน้ำมัน', 'kPa', 0, 'g'],
+    ['STFT1', 'Short fuel trim B1', 'ปรับน้ำมันสั้น B1', '%', 1, 'g'], ['LTFT1', 'Long fuel trim B1', 'ปรับน้ำมันยาว B1', '%', 1, 'g'],
+    ['STFT2', 'Short fuel trim B2', 'ปรับน้ำมันสั้น B2', '%', 1, 'g'], ['LTFT2', 'Long fuel trim B2', 'ปรับน้ำมันยาว B2', '%', 1, 'g'],
+    ['LAMB', 'Lambda B1S1', 'แลมบ์ดา B1S1', 'λ', 3, 'g'], ['EQR', 'Cmd equiv. ratio', 'สั่งอัตราส่วนผสม', 'λ', 3, 'g'], ['ETH', 'Ethanol', 'เอทานอล', '%', 0, 'g'],
+    ['EVAPC', 'EVAP purge', 'EVAP purge', '%', 0, 'g'], ['EVAPP', 'EVAP pressure', 'ความดัน EVAP', 'Pa', 0, 'g'],
+    ['CAT11', 'Catalyst B1S1', 'อุณหภูมิแคท B1S1', '°C', 0, 'g'], ['CAT12', 'Catalyst B1S2', 'อุณหภูมิแคท B1S2', '°C', 0, 'g'],
+    ['CAT21', 'Catalyst B2S1', 'อุณหภูมิแคท B2S1', '°C', 0, 'g'], ['CAT22', 'Catalyst B2S2', 'อุณหภูมิแคท B2S2', '°C', 0, 'g'],
+    ['EGRC', 'EGR commanded', 'สั่ง EGR', '%', 0, 'b'], ['EGRE', 'EGR error', 'EGR คลาดเคลื่อน', '%', 1, 'b'],
+    ['RUNT', 'Run time', 'เวลาเครื่องทำงาน', 's', 0, 'b'], ['WARM', 'Warm-ups since clear', 'รอบอุ่นเครื่อง', '', 0, 'b'],
+    ['DISTC', 'Dist since clear', 'ระยะหลังลบโค้ด', 'km', 0, 'b'], ['CLRT', 'Time since clear', 'เวลาหลังลบโค้ด', 'min', 0, 'b'],
+    ['MILD', 'Dist with MIL', 'ระยะทางไฟ MIL', 'km', 0, 'b'], ['MILT', 'Time with MIL', 'เวลาไฟ MIL', 'min', 0, 'b'], ['DTCN', 'DTC count', 'จำนวนโค้ดปัญหา', '', 0, 'b'],
+    ['TQD', 'Demand torque', 'แรงบิดที่ต้องการ', '%', 0, 'b'], ['TQA', 'Actual torque', 'แรงบิดจริง', '%', 0, 'b'], ['TQR', 'Reference torque', 'แรงบิดอ้างอิง', 'Nm', 0, 'b'],
+    ['FRPR', 'Rail pressure (rel)', 'แรงดันรางสัมพัทธ์', 'kPa', 0, 'd'], ['FRP', 'Common-rail pressure', 'แรงดันคอมมอนเรล', 'kPa', 0, 'd'],
+    ['INJT', 'Injection timing', 'องศาฉีดน้ำมัน', '°', 1, 'd'], ['BOOST', 'Boost pressure', 'แรงดันบูสต์', 'kPa', 0, 'd'], ['VGT', 'VGT position', 'ตำแหน่ง VGT', '%', 0, 'd'],
+    ['EXHP', 'Exhaust pressure', 'แรงดันไอเสีย', 'kPa', 0, 'd'], ['TURBO', 'Turbo speed', 'รอบเทอร์โบ', 'rpm', 0, 'd'], ['CACT', 'Charge air temp', 'อุณหภูมิอากาศอัด', '°C', 0, 'd'],
+    ['EGT1', 'EGT bank 1', 'อุณหภูมิไอเสีย B1', '°C', 0, 'd'], ['EGT2', 'EGT bank 2', 'อุณหภูมิไอเสีย B2', '°C', 0, 'd'],
+    ['DPFT', 'DPF temp', 'อุณหภูมิ DPF', '°C', 0, 'd'], ['DPFD', 'DPF Δ pressure', 'ความดันต่าง DPF', 'kPa', 1, 'd'], ['NOX', 'NOx sensor', 'เซ็นเซอร์ NOx', 'ppm', 0, 'd'], ['REAG', 'Reagent level', 'ระดับ AdBlue', '%', 0, 'd'],
+  ];
+  // plausible demo numbers for the simulator
+  P.obdDemo = (rpm, tps, spd, s) => {
+    const w = tps > 50, r = rpm / 10500, o = (a, f) => Math.sin(s * f) * a;
+    return {
+      LOAD: 18 + r * 60 + o(2, 3), ABSL: 20 + r * 70, MAF: 2 + r * 55 + o(0.5, 4), BARO: 100, AMB: 31, TPSR: tps * 0.95, TPSB: 100 - tps * 0.9, CMDT: tps, APPD: tps * 0.92, APPE: tps * 0.46,
+      FRATE: 0.6 + r * 11, FUELL: 62 - (s % 60) * 0.02, FP: 300 + o(4, 2), STFT1: o(4, 5), LTFT1: 1.6, STFT2: o(3, 6), LTFT2: -0.8, LAMB: w ? 0.87 : 1 + o(0.03, 2), EQR: w ? 0.87 : 1,
+      ETH: 0, EVAPC: w ? 0 : 12, EVAPP: -120 + o(30, 1), CAT11: 480 + r * 280, CAT12: 450 + r * 240, CAT21: 470 + r * 260, CAT22: 440 + r * 230, EGRC: 8 + r * 20, EGRE: o(1.2, 3),
+      RUNT: Math.round(s), WARM: 14, DISTC: 212, CLRT: 4310, MILD: 0, MILT: 0, DTCN: 0, TQD: tps * 0.8, TQA: tps * 0.78, TQR: 120,
+      FRPR: 28000 + r * 140000 + o(800, 3), FRP: 32000 + r * 150000, INJT: 4 + r * 14, BOOST: 100 + r * 150 * (w ? 1 : 0.3), VGT: 20 + r * 60, EXHP: 105 + r * 120,
+      TURBO: Math.round(20000 + r * 130000), CACT: 38 + r * 30, EGT1: 260 + r * 420, EGT2: 250 + r * 400, DPFT: 300 + r * 250, DPFD: 1.5 + r * 6, NOX: 80 + r * 400, REAG: 74,
+    };
+  };
+  P.parseRatios = (t) => String(t || '').split(/[\s,;]+/).map(Number).filter((x) => x > 0);
+  P.computeGear = (rpm, spd, ratios) => {
+    if (rpm == null || spd == null || !ratios || !ratios.length) return null;
+    if (spd < 3 || rpm < 400) return 0;
+    const r = rpm / spd; let best = -1, bd = 9;
+    ratios.forEach((x, i) => { const e = Math.abs(Math.log(r / x)); if (e < bd) { bd = e; best = i; } });
+    return bd < 0.2 ? best + 1 : null;
+  };
   P.decodeSensors = (p) => {
     if (!p || p.length < 18) return null;
     const u16 = (i) => p[i] | (p[i + 1] << 8), i32 = (i) => (p[i] | (p[i + 1] << 8) | (p[i + 2] << 16) | (p[i + 3] << 24));
     const f = p[17];
     return { afr: u16(0) / 100, spd: u16(2) / 10, sats: p[4], satsView: p[5], lat: i32(6) / 1e7, lon: i32(10) / 1e7, eot: p[14] - 40, o2: p[15] / 100,
-      afrOk: !!(f & 1), gpsOk: !!(f & 2), eotOk: !!(f & 4), o2Ok: !!(f & 8), fix: !!(f & 2), t: Date.now() };
+      afrOk: !!(f & 1), gpsOk: !!(f & 2), eotOk: !!(f & 4), o2Ok: !!(f & 8), fix: !!(f & 2), t: Date.now(),
+      crp: p.length >= 20 ? u16(18) / 1000 : 0, crpOk: p.length >= 20 && !!(f & 16), gear: p.length >= 21 ? p[20] : 0, gearOk: p.length >= 21 && !!(f & 32) };
   };
 
   /* ---------- XDF that matches the DEMO ECU image ---------- */

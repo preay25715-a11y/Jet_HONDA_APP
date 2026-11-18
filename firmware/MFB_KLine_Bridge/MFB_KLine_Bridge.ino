@@ -56,7 +56,7 @@ __attribute__((weak)) void mfbOnFileReceived(const char *path, uint32_t size) { 
 
 // ---- sensors the gauge owns (wideband AFR, GPS, EOT, O2) ----
 // Fill this from your gauge firmware (override this weak function). Leave *Ok=false for what you don't have.
-struct MfbSensors { float afr; float gpsKmh; uint8_t sats, satsView; double lat, lon; int eotC; float o2V; bool afrOk, gpsOk, eotOk, o2Ok; };
+struct MfbSensors { float afr; float gpsKmh; uint8_t sats, satsView; double lat, lon; int eotC; float o2V; bool afrOk, gpsOk, eotOk, o2Ok; float crpV; uint8_t gear; bool crpOk, gearOk; };  // crpV = Common Rail Pressure sensor volt, gear 0=N
 __attribute__((weak)) void mfbGetSensors(MfbSensors &s) { memset(&s, 0, sizeof(s)); }
 
 static void sendFrame(uint8_t ch, uint8_t type, const uint8_t *p, uint16_t n) {
@@ -144,13 +144,14 @@ static void handle(uint8_t ch, uint8_t type, uint8_t *p, uint16_t n) {
     } break;
     case L_SENSORS: {
       MfbSensors s; mfbGetSensors(s);
-      uint8_t p[18]; uint16_t a = (uint16_t)(s.afr * 100 + 0.5f), v = (uint16_t)(s.gpsKmh * 10 + 0.5f);
+      uint8_t p[21]; uint16_t a = (uint16_t)(s.afr * 100 + 0.5f), v = (uint16_t)(s.gpsKmh * 10 + 0.5f);
       int32_t la = (int32_t)(s.lat * 1e7), lo = (int32_t)(s.lon * 1e7);
       p[0] = a & 255; p[1] = a >> 8; p[2] = v & 255; p[3] = v >> 8; p[4] = s.sats; p[5] = s.satsView;
       memcpy(p + 6, &la, 4); memcpy(p + 10, &lo, 4);      // ESP32 is little-endian
       p[14] = (uint8_t)constrain(s.eotC + 40, 0, 255); p[15] = (uint8_t)constrain((int)(s.o2V * 100 + 0.5f), 0, 255);
-      p[16] = 0; p[17] = (s.afrOk ? 1 : 0) | (s.gpsOk ? 2 : 0) | (s.eotOk ? 4 : 0) | (s.o2Ok ? 8 : 0);
-      reply(ch, type, 0, p, 18);
+      p[16] = 0; p[17] = (s.afrOk ? 1 : 0) | (s.gpsOk ? 2 : 0) | (s.eotOk ? 4 : 0) | (s.o2Ok ? 8 : 0) | (s.crpOk ? 16 : 0) | (s.gearOk ? 32 : 0);
+      uint16_t cm = (uint16_t)constrain((int)(s.crpV * 1000 + 0.5f), 0, 65535); p[18] = cm & 255; p[19] = cm >> 8; p[20] = s.gear;
+      reply(ch, type, 0, p, 21);
     } break;
     case L_FLIST: {
       String s; File d = LittleFS.open("/ecu"); File f = d ? d.openNextFile() : File();

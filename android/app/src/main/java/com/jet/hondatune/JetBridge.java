@@ -105,7 +105,19 @@ public class JetBridge {
 
     @JavascriptInterface
     public String info() {
-        return "{\"app\":\"Jet_HONDA Tune\",\"android\":" + Build.VERSION.SDK_INT + ",\"model\":" + q(Build.MODEL) + "}";
+        return "{\"app\":\"Jet Smart Gauge\",\"android\":" + Build.VERSION.SDK_INT + ",\"model\":" + q(Build.MODEL) + "}";
+    }
+
+    /** Stable per-device id for the licence (first 10 hex chars of SHA-256(ANDROID_ID)). */
+    @JavascriptInterface
+    public String deviceId() {
+        try {
+            String id = android.provider.Settings.Secure.getString(act.getContentResolver(), android.provider.Settings.Secure.ANDROID_ID);
+            byte[] h = java.security.MessageDigest.getInstance("SHA-256").digest(("jsg:" + id).getBytes("UTF-8"));
+            StringBuilder sb = new StringBuilder();
+            for (int i = 0; i < 5; i++) sb.append(String.format("%02x", h[i]));
+            return sb.toString();
+        } catch (Exception e) { return ""; }
     }
 
     @JavascriptInterface

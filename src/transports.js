@@ -1,5 +1,5 @@
 /* =====================================================================
- * Jet_HONDA Tune — transports.js (browser)
+ * Jet Smart Gauge — transports.js (browser)
  *  1) DirectKLine  : USB K-line cable (FTDI / CH340 / KKL) via Web Serial, 10400 baud
  *  2) GaugeLink    : Smart Gauge (ESP32) via Bluetooth LE (Nordic UART) or USB serial,
  *                    speaking MFB-LINK; the gauge does the K-line timing.

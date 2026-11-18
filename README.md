@@ -1,9 +1,9 @@
-# Jet_HONDA Tune
+# Jet Smart Gauge
 
 > **อัปเดตล่าสุด:** เอาหน้า TUNE, ดูดไฟล์ และอัดไฟล์ออกแล้ว หน้าที่เหลือคือ Dash · Grid · Graph · AFR · Drag · DTC · Tools · Setup (ส่วนอธิบายหน้าที่ถูกเอาออกด้านล่างเป็นของเก่า)
 
 โปรแกรมดูด/อัดไฟล์ ECU Honda (Keihin K-line) ธีมน้ำเงิน-ดำ เชื่อมกับ Smart Gauge ได้
-เป็นไฟล์ HTML ไฟล์เดียว: `dist/Jet_HONDA_Tune.html` เปิดด้วย **Chrome / Edge** บนมือถือ Android หรือคอม
+เป็นไฟล์ HTML ไฟล์เดียว: `dist/Jet_Smart_Gauge.html` เปิดด้วย **Chrome / Edge** บนมือถือ Android หรือคอม
 
 ## เปิดใช้งาน
 - Web Serial และ Web Bluetooth ต้องรันใน "secure context" ให้เปิดไฟล์ผ่าน `https://` (เช่น GitHub Pages / Netlify) หรือ `http://localhost`
@@ -117,8 +117,8 @@ flags: bit0 AFR ถูกต้อง, bit1 GPS fix, bit2 EOT, bit3 O2
 1. สร้าง repo ใหม่บน GitHub เช่น `JetHondaTune` แล้วอัปโหลดไฟล์ทั้งหมดในโฟลเดอร์นี้ ต้องมีโฟลเดอร์ `.github/workflows/` ไปด้วย
    ถ้าอัปโหลดผ่านเว็บแล้วโฟลเดอร์ `.github` ไม่ขึ้น ให้กด Add file → Create new file ตั้งชื่อ `.github/workflows/build-apk.yml`
    แล้ววางเนื้อหาจากไฟล์นั้นลงไป
-2. เข้าแท็บ **Actions** → เลือก "Build Jet_HONDA Tune APK" → กด **Run workflow** (ทุกครั้งที่ push ก็จะ build ให้เอง) ใช้เวลาราว 4–6 นาที
-3. เข้าแท็บ **Releases** แล้วดาวน์โหลด `Jet_HONDA_Tune.apk` บนมือถือได้เลย
+2. เข้าแท็บ **Actions** → เลือก "Build Jet Smart Gauge APK" → กด **Run workflow** (ทุกครั้งที่ push ก็จะ build ให้เอง) ใช้เวลาราว 4–6 นาที
+3. เข้าแท็บ **Releases** แล้วดาวน์โหลด `Jet_Smart_Gauge.apk` บนมือถือได้เลย
 4. ติดตั้ง: อนุญาต "ติดตั้งแอปที่ไม่รู้จัก" ให้เบราว์เซอร์หรือแอปไฟล์ → เปิดแอป → อนุญาต "อุปกรณ์ใกล้เคียง/Bluetooth" ตอนเสียบสาย OTG
    จะมีหน้าต่างขออนุญาตใช้ USB ให้กดตกลง
 
@@ -140,7 +140,7 @@ src/ui-extra.js    หน้า Grid / Graph / Tune / AFR / Drag / Tools
 src/transports.js  Web Serial (สาย USB) และ Smart Gauge (BLE / USB)
 src/app.js, style.css, index.html   UI
 
-build.py           รวมทุกไฟล์เป็น dist/Jet_HONDA_Tune.html
+build.py           รวมทุกไฟล์เป็น dist/Jet_Smart_Gauge.html
 test/test.js       node test/test.js (ทดสอบทั้ง workflow กับกล่องจำลอง)
 android/           แอป Android (MainActivity + JetBridge: USB OTG / BLE / บันทึกไฟล์)
 .github/workflows/build-apk.yml   สร้าง APK อัตโนมัติบน GitHub
@@ -149,3 +149,10 @@ android/           แอป Android (MainActivity + JetBridge: USB OTG / BLE / 
 ## ที่มาของโปรโตคอล
 พอร์ตมาจากโปรเจกต์โอเพนซอร์ส GPL ได้แก่ eculib/HondaECU (RyanHope และ fork) และ TunerPro-HondaECU (AlexDev-TH)
 รวมถึงบันทึก Honda_Keihin_KLine_Protocol ถ้าจะแจกจ่ายต่อ ควรใช้สัญญาอนุญาต GPL-3.0 ด้วย
+
+## License (ต้องมี License ก่อนใช้งาน)
+- เปิดแอปครั้งแรกจะเจอหน้าล็อก แสดง **รหัสเครื่อง** (เช่น `326E2-26C26`) → ส่งให้ร้านเพื่อขอ License → วางแล้วกด "เปิดใช้งาน"
+- License ผูกกับเครื่องเดียว (Android ใช้ ANDROID_ID) ตรวจแบบออฟไลน์ด้วยลายเซ็น Ed25519 — ในแอปมีเฉพาะกุญแจสาธารณะ
+- ออก License ด้วย `Jet_License_Generator_PRIVATE.html` (เก็บเฉพาะที่ร้าน) หรือ `python3 tools/license_issue.py --seed <ไฟล์กุญแจลับ> --device XXXXX-XXXXX --name ชื่อ --days 365`
+- **ห้ามอัปกุญแจลับขึ้น GitHub / ห้ามแจกลูกค้า** · ถ้าลูกค้าล้างข้อมูลแอปบนเว็บ รหัสเครื่องอาจเปลี่ยน (บน APK ไม่เปลี่ยน)
+- โหมด DEMO ถูกเอาออกจากตัวแอปแล้ว (เหลือเฉพาะใน `python3 build.py --dev` สำหรับทดสอบ ไม่ใช้แจก)

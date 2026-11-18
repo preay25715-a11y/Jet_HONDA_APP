@@ -1,5 +1,5 @@
 /* =====================================================================
- * Jet_HONDA Tune — sim.js
+ * Jet Smart Gauge — sim.js
  * Virtual Keihin ECU used by DEMO mode and by the test-suite.
  * Speaks the same frames as a real ECU, including the full flash sequence.
  * ===================================================================== */
@@ -32,7 +32,7 @@
   class SimTransport {
     constructor(o) {
       o = o || {};
-      this.name = 'DEMO'; this.fw = 'Jet_HONDA GAUGE (จำลอง)';
+      this.name = 'DEMO'; this.fw = 'Jet Smart Gauge (จำลอง)';
       this.kind = 'demo';
       this.latency = o.latency == null ? 2 : o.latency;
       this.size = (o.sizeKB || 64) * 1024;
@@ -136,9 +136,13 @@
       if (ph < 4) { spd = 0; tps = 0; rpm = 1500 + Math.sin(s * 3) * 30; }
       else if (ph < 18) { const t = ph - 4; spd = 168 * (1 - Math.exp(-t / 6)); tps = 92 + Math.sin(s * 9) * 3; rpm = 4500 + ((spd * 97) % 5200); }
       else { const t = ph - 18, v0 = 168 * (1 - Math.exp(-14 / 6)); spd = Math.max(0, v0 * (1 - t / 7)); tps = 0; rpm = 1500 + spd * 30; }
+      const R = [140, 92, 68, 54, 45, 38]; let gear = 0;
+      if (spd >= 3) { gear = R.length; for (let i = 0; i < R.length; i++) if (spd * R[i] <= 9300) { gear = i + 1; break; } rpm = spd * R[gear - 1]; }
+      else rpm = tps > 50 ? 5200 : 1500 + Math.sin(s * 3) * 30;
       const wot = tps > 50;
       return { spd, tps, rpm: Math.round(Math.min(rpm, 10500)), map: wot ? 95 : 32, inj: wot ? 6.0 + Math.sin(s * 5) * 0.1 : 2.1, ign: wot ? 27.9 : 12,
-        afr: wot ? 12.7 + Math.sin(s * 7) * 0.35 + (rpm > 8000 ? 0.6 : 0) : 14.6 + Math.sin(s * 2) * 0.4, eot: 78, o2: wot ? 0.81 : 0.45 + Math.sin(s * 4) * 0.35 };
+        afr: wot ? 12.7 + Math.sin(s * 7) * 0.35 + (rpm > 8000 ? 0.6 : 0) : 14.6 + Math.sin(s * 2) * 0.4, eot: 78, o2: wot ? 0.81 : 0.45 + Math.sin(s * 4) * 0.35,
+        gear, crp: 0.9 + Math.min(10500, rpm) / 10500 * 2.2 + (wot ? 1.0 : 0) + Math.sin(s * 6) * 0.04 };
     }
     // Smart-Gauge sensor block (AFR wideband + GPS) — same fields as LINK SENSORS
     async sensors() {
@@ -147,7 +151,7 @@
       if (this.gpsT) { const dt = (now - this.gpsT) / 1000; this.lat += (d.spd / 3.6) * dt / 111320; }
       else this.lat = 13.7563;
       this.gpsT = now;
-      return { afr: +d.afr.toFixed(2), spd: +d.spd.toFixed(1), sats: 19, satsView: 26, fix: true, lat: this.lat, lon: 100.5018, eot: d.eot, o2: +d.o2.toFixed(2), afrOk: true, gpsOk: true, eotOk: true, o2Ok: true, t: now };
+      return { afr: +d.afr.toFixed(2), spd: +d.spd.toFixed(1), sats: 19, satsView: 26, fix: true, lat: this.lat, lon: 100.5018, eot: d.eot, o2: +d.o2.toFixed(2), crp: +d.crp.toFixed(3), gear: d.gear, obd: P.obdDemo(d.rpm, d.tps, d.spd, Date.now() / 1000), crpOk: true, gearOk: true, afrOk: true, gpsOk: true, eotOk: true, o2Ok: true, t: now };
     }
     table(t) {
       if (t === 0x00) return [0x4B, 0x30, 0x33, 0x48, 0x01, 0x10, 0x22];  // "K03H"..

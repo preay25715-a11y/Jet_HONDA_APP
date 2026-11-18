@@ -1,5 +1,5 @@
 /* =====================================================================
- * Jet_HONDA Tune — tune.js
+ * Jet Smart Gauge — tune.js
  * Map-table engine: TunerPro XDF parsing, table read/write on a .bin,
  * AFR log aggregation and AFR-based fuel correction (FIT), drag-run timing.
  * Pure logic — no DOM — so it runs in the browser and in node tests.

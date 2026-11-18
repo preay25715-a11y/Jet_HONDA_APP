@@ -1,11 +1,19 @@
-import pathlib
-s=pathlib.Path(__file__).parent/'src'
-h=(s/'index.html').read_text()
-js='\n'.join((s/f).read_text() for f in ['proto.js','ecu.js','sim.js','tune.js','transports.js','app.js','ui-extra.js'])
-h=h.replace('/*@@CSS@@*/',(s/'style.css').read_text()).replace('/*@@JS@@*/',js.replace('</script','<\\/script'))
-R=pathlib.Path(__file__).parent/'assets'
-h=h.replace('@@LOGO_S@@','data:image/webp;base64,'+(R/'logo_small.b64').read_text()).replace('@@LOGO_B@@','data:image/webp;base64,'+(R/'logo_big.b64').read_text())
-o=pathlib.Path(__file__).parent/'dist'; o.mkdir(exist_ok=True)
-(o/'Jet_HONDA_Tune.html').write_text(h); print('ok',len(h))
-a=pathlib.Path(__file__).parent/'android'/'app'/'src'/'main'/'assets'
+import pathlib, sys
+DEV = '--dev' in sys.argv
+B = pathlib.Path(__file__).parent
+s = B/'src'
+h = (s/'index.html').read_text()
+files = ['vendor/nacl-fast.min.js', 'license.js', 'proto.js', 'ecu.js'] + (['sim.js'] if DEV else []) + ['tune.js', 'transports.js', 'app.js', 'i18n.js', 'ui-extra.js']
+js = '\n'.join((s/f).read_text() for f in files)
+if DEV: js = 'window.JET_DEV=1;\n' + js   # test build only: no licence, DEMO available — never shipped
+h = h.replace('/*@@CSS@@*/', (s/'style.css').read_text()).replace('/*@@JS@@*/', js.replace('</script', '<\\/script'))
+h = h.replace('<!--DEVBTN-->', '<button class="mini" id="bDemo">DEMO</button>' if DEV else '')
+h = h.replace('<!--DEVOPT-->', '<div class="opt" data-c="demo"><div class="ic">🎮</div><div><b>DEMO</b></div></div>' if DEV else '')
+R = B/'assets'
+h = h.replace('@@LOGO_S@@', 'data:image/webp;base64,' + (R/'logo_small.b64').read_text()).replace('@@LOGO_B@@', 'data:image/webp;base64,' + (R/'logo_big.b64').read_text())
+o = B/'dist'; o.mkdir(exist_ok=True)
+if DEV:
+    (o/'dev_test.html').write_text(h); print('dev ok', len(h)); sys.exit()
+(o/'Jet_Smart_Gauge.html').write_text(h); print('ok', len(h))
+a = B/'android'/'app'/'src'/'main'/'assets'
 if a.parent.exists(): a.mkdir(exist_ok=True); (a/'index.html').write_text(h); print('-> android assets')
