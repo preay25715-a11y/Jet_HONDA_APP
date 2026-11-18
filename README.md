@@ -156,3 +156,8 @@ android/           แอป Android (MainActivity + JetBridge: USB OTG / BLE / 
 - ออก License ด้วย `Jet_License_Generator_PRIVATE.html` (เก็บเฉพาะที่ร้าน) หรือ `python3 tools/license_issue.py --seed <ไฟล์กุญแจลับ> --device XXXXX-XXXXX --name ชื่อ --days 365`
 - **ห้ามอัปกุญแจลับขึ้น GitHub / ห้ามแจกลูกค้า** · ถ้าลูกค้าล้างข้อมูลแอปบนเว็บ รหัสเครื่องอาจเปลี่ยน (บน APK ไม่เปลี่ยน)
 - โหมด DEMO ถูกเอาออกจากตัวแอปแล้ว (เหลือเฉพาะใน `python3 build.py --dev` สำหรับทดสอบ ไม่ใช้แจก)
+
+## เวอร์ชันและอัปเดต
+- เลขเวอร์ชันอยู่ในไฟล์ `VERSION` (เช่น `1.1.0`) — ใช้ทั้งในแอป (Setup → เวอร์ชันและอัปเดต), versionName/versionCode ของ APK และชื่อ Release ใน GitHub (`v1.1.0`)
+- ออกอัปเดต: แก้เลขใน `VERSION` → อัปโหลดขึ้น GitHub → Actions build → ได้ Release ใหม่พร้อม APK
+- ในแอป: ใส่ `ชื่อ/โปรเจกต์` ของ GitHub แล้วกด "ตรวจสอบอัปเดต" → ถ้ามีเวอร์ชันใหม่จะมีปุ่มดาวน์โหลด APK (ติดตั้งทับของเดิมได้ License ยังอยู่) · เช็กอัตโนมัติวันละครั้งเมื่อตั้งค่าไว้

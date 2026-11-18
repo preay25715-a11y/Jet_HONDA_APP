@@ -120,6 +120,72 @@ public class JetBridge {
         } catch (Exception e) { return ""; }
     }
 
+    /** Opens a web page / APK download in the phone's browser. */
+    @JavascriptInterface
+    public void openUrl(String url) {
+        try {
+            if (url == null || !url.startsWith("https://")) return;
+            Intent i = new Intent(Intent.ACTION_VIEW, Uri.parse(url));
+            i.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+            act.startActivity(i);
+        } catch (Exception e) { /* ignore */ }
+    }
+
+    /** In-app update: download the APK (https only) to cache and hand it to the system installer. Progress → JetEvt('upd', {...}). */
+    @JavascriptInterface
+    public void installApk(final String url) {
+        if (url == null || !url.startsWith("https://")) { emit("upd", "{\"s\":\"err\",\"m\":\"bad url\"}"); return; }
+        if (Build.VERSION.SDK_INT >= 26 && !act.getPackageManager().canRequestPackageInstalls()) {
+            emit("upd", "{\"s\":\"perm\"}");
+            try {
+                Intent s = new Intent(android.provider.Settings.ACTION_MANAGE_UNKNOWN_APP_SOURCES, Uri.parse("package:" + act.getPackageName()));
+                s.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+                act.startActivity(s);
+            } catch (Exception e) { /* ignore */ }
+            return;
+        }
+        new Thread(() -> {
+            try {
+                java.io.File dir = new java.io.File(act.getCacheDir(), "updates");
+                dir.mkdirs();
+                java.io.File out = new java.io.File(dir, "update.apk");
+                java.net.HttpURLConnection c = (java.net.HttpURLConnection) new java.net.URL(url).openConnection();
+                c.setInstanceFollowRedirects(true);
+                c.setConnectTimeout(15000);
+                c.setReadTimeout(30000);
+                int code = c.getResponseCode();
+                if (code / 100 == 3) { // cross-host redirect (GitHub → objects.githubusercontent.com)
+                    String loc = c.getHeaderField("Location");
+                    c.disconnect();
+                    c = (java.net.HttpURLConnection) new java.net.URL(loc).openConnection();
+                    c.setConnectTimeout(15000);
+                    c.setReadTimeout(30000);
+                    code = c.getResponseCode();
+                }
+                if (code != 200) throw new Exception("HTTP " + code);
+                long total = c.getContentLengthLong(), got = 0;
+                try (java.io.InputStream in = c.getInputStream(); java.io.FileOutputStream fo = new java.io.FileOutputStream(out)) {
+                    byte[] buf = new byte[32768];
+                    int n, last = -1;
+                    while ((n = in.read(buf)) > 0) {
+                        fo.write(buf, 0, n);
+                        got += n;
+                        int pct = total > 0 ? (int) (got * 100 / total) : 0;
+                        if (pct != last) { last = pct; emit("upd", "{\"s\":\"dl\",\"p\":" + pct + "}"); }
+                    }
+                }
+                Uri uri = androidx.core.content.FileProvider.getUriForFile(act, act.getPackageName() + ".fileprovider", out);
+                Intent i = new Intent(Intent.ACTION_VIEW);
+                i.setDataAndType(uri, "application/vnd.android.package-archive");
+                i.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION | Intent.FLAG_ACTIVITY_NEW_TASK);
+                act.startActivity(i);
+                emit("upd", "{\"s\":\"done\"}");
+            } catch (Exception e) {
+                emit("upd", "{\"s\":\"err\",\"m\":" + q(String.valueOf(e.getMessage())) + "}");
+            }
+        }).start();
+    }
+
     @JavascriptInterface
     public void keepScreen(boolean on) { act.keepScreen(on); }
 

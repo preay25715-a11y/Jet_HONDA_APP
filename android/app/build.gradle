@@ -1,5 +1,9 @@
 plugins { id 'com.android.application' }
 
+def verName = new File(rootProject.projectDir, '../VERSION').text.trim()
+def verParts = verName.tokenize('.')
+def verCode = verParts[0].toInteger() * 10000 + verParts[1].toInteger() * 100 + verParts[2].toInteger()
+
 android {
     namespace 'com.jet.hondatune'
     compileSdk 35
@@ -7,8 +11,8 @@ android {
         applicationId 'com.jet.hondatune'
         minSdk 24
         targetSdk 35
-        versionCode 1
-        versionName '1.0'
+        versionCode verCode
+        versionName verName
     }
     signingConfigs {
         jet {
