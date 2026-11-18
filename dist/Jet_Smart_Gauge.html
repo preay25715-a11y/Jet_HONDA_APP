@@ -563,7 +563,7 @@ table.mtab{border-collapse:separate;border-spacing:0;font-family:var(--disp);fon
   <h3 style="margin-top:6px">ภาษา</h3>
   <div class="row langrow"><button class="btn" data-lang="th">ไทย</button><button class="btn" data-lang="en">English</button></div>
   <h3 style="margin-top:16px">⬆ เวอร์ชันและอัปเดต</h3>
-  <div class="gsect"><div class="kv"><span>เวอร์ชันที่ใช้</span><span id="verNow">v1.1.0</span><span>เวอร์ชันล่าสุด</span><span id="verNew">—</span></div>
+  <div class="gsect"><div class="kv"><span>เวอร์ชันที่ใช้</span><span id="verNow">v1.1.1</span><span>เวอร์ชันล่าสุด</span><span id="verNew">—</span></div>
     <label class="f">ที่อยู่โปรเจกต์ GitHub (เช่น ชื่อ/โปรเจกต์ หรือลิงก์)<input id="updRepo" placeholder="owner/repo" autocapitalize="none" spellcheck="false"></label>
     <div class="row"><button class="btn" id="updCheck">🔄 ตรวจสอบอัปเดต</button><button class="btn pri" id="updGet" hidden>⬇ อัปเดตเลย</button></div>
     <div class="mut" id="updMsg"></div></div>
@@ -2692,7 +2692,7 @@ table.mtab{border-collapse:separate;border-spacing:0;font-family:var(--disp);fon
 (function (root) {
   'use strict';
   const C = root.JetCore, $ = (s) => document.querySelector(s);
-  const VER = '1.1.0';
+  const VER = '1.1.1';
   const num = (v) => String(v).replace(/^v/i, '').split('.').map((x) => parseInt(x, 10) || 0);
   const newer = (a, b) => { const x = num(a), y = num(b); for (let i = 0; i < 3; i++) { if ((x[i] || 0) !== (y[i] || 0)) return (x[i] || 0) > (y[i] || 0); } return false; };
   const repoOf = (s) => { s = String(s || '').trim().replace(/^https?:\/\/github\.com\//i, '').replace(/\.git$/i, '').replace(/\/+$/, ''); const m = s.match(/^([\w.-]+)\/([\w.-]+)/); return m ? m[1] + '/' + m[2] : ''; };
