@@ -81,17 +81,46 @@
 
   // BLE (Nordic UART) through the app — the app shows its own device picker
   class NativeBle {
-    async open() {
+    async open(addr) {
       const p = waitEvt('ble-open', 90000);
       Bus.h['ble-data'] = (b) => this.onData && this.onData(b64d(b));
       Bus.h['ble-lost'] = () => this.onLost && this.onLost();
-      root.JetNative.bleConnect();
+      if (addr) root.JetNative.bleOpen(addr); else root.JetNative.bleConnect();
       const r = await p;
       if (!r || !r.ok) throw new Error(r ? r.err : 'เชื่อมต่อ Bluetooth ไม่สำเร็จ');
       this.name = r.name;
     }
     async write(bytes) { if (!root.JetNative.bleWrite(b64e(bytes))) throw new Error('Bluetooth ยังไม่พร้อม'); }
     async close() { Bus.h['ble-data'] = Bus.h['ble-lost'] = null; root.JetNative.bleClose(); }
+  }
+
+  // classic Bluetooth SPP (ELM327 mini and most cheap OBD-II dongles)
+  class NativeSpp {
+    async open(addr) {
+      const p = waitEvt('spp-open', 45000);
+      Bus.h['spp-data'] = (b) => this.onData && this.onData(b64d(b));
+      Bus.h['spp-lost'] = () => this.onLost && this.onLost();
+      root.JetNative.sppOpen(addr);
+      const r = await p;
+      if (!r || !r.ok) { Bus.h['spp-data'] = Bus.h['spp-lost'] = null; throw new Error(r ? r.err : 'เชื่อมต่อ Bluetooth ไม่สำเร็จ (หมดเวลา)'); }
+      this.name = r.name;
+    }
+    async write(bytes) { if (!root.JetNative.sppWrite(b64e(bytes))) throw new Error('Bluetooth ยังไม่พร้อม'); }
+    async close() { Bus.h['spp-data'] = Bus.h['spp-lost'] = null; root.JetNative.sppClose(); }
+  }
+  // unified device finder: bonded + classic discovery + BLE scan. mode: 'all' | 'obd' | 'gauge'
+  async function btPick(mode) {
+    const p = waitEvt('bt-pick', 180000);
+    root.JetNative.btPick(mode || 'all');
+    const r = await p;
+    if (!r || !r.ok) throw new Error(r && r.err ? r.err : 'ไม่ได้เลือกอุปกรณ์');
+    return r;
+  }
+  // open an OBD adapter chosen with btPick: SPP first for classic/paired, BLE UART otherwise
+  async function openObdStream(dev) {
+    let err;
+    if (dev.classic || dev.bonded || !dev.ble) { try { const s = new NativeSpp(); await s.open(dev.addr); s.name = s.name || dev.name; return s; } catch (e) { err = e; if (!dev.ble) throw e; } }
+    try { const s = new NativeBle(); await s.open(dev.addr); s.name = s.name || dev.name; return s; } catch (e) { throw err || e; }
   }
 
   /* ---------------- 1) direct USB K-line cable ---------------- */
@@ -138,6 +167,7 @@
     async open() {
       if (NATIVE) {
         this.s = this.via === 'usb' ? new NativeUsbStream() : new NativeBle();
+        if (this.addr) this.s.open = ((o) => () => o.call(this.s, this.addr))(this.s.open);
         this.s.onData = (v) => this.parser.push(v);
         this.s.onLost = () => { this.lost = true; if (this.onLost) this.onLost(); };
         if (this.via === 'usb') { await this.s.open(115200, true); this.name = 'GAUGE USB'; }
@@ -216,4 +246,5 @@
   root.JetApp = NATIVE ? { saveFile: (name, u8, mime) => root.JetNative.saveFile(name, b64e(u8), mime || ''), keepScreen: (on) => root.JetNative.keepScreen(!!on) } : null;
   root.DirectKLine = DirectKLine;
   root.GaugeLink = GaugeLink;
+  root.JetBt = { btPick, openObdStream, NativeSpp, NativeBle };
 })(window);

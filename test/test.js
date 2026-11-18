@@ -85,3 +85,18 @@ const { SimTransport } = require('../src/sim.js');
   console.log('✔ tune engine (XDF / LE / signed / col-major / AFR log / fit / sensors)');
   console.log('\nALL TESTS PASSED');
 })().catch((e) => { console.error('FAIL', e); process.exit(1); });
+
+// ---- ELM327 / OBD-II driver ----
+(async () => {
+  const { Elm327, FakeElm } = require('../src/elm.js');
+  for (const diesel of [false, true]) {
+    const e = new Elm327(new FakeElm({ diesel })); await e.init();
+    assert.strictEqual(e.fuel, diesel ? 'd' : 'g');
+    let d; for (let i = 0; i < 9; i++) d = await e.readLive();
+    assert(d.RPM > 600 && d.ECT === 90 && d.SPD === 62 && Math.abs(d.BATT - 14) < 0.1, 'elm live');
+    if (diesel) assert(d.BOOST > 100 && d.FRP === 30000, 'diesel pids');
+    assert.deepStrictEqual((await e.readDTC()).current, ['P0301', 'P0420']);
+    assert(await e.clearDTC()); assert.deepStrictEqual((await e.readDTC()).current, []);
+  }
+  console.log('ELM327 tests passed');
+})().catch((x) => { console.error(x); process.exit(1); });

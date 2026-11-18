@@ -161,3 +161,9 @@ android/           แอป Android (MainActivity + JetBridge: USB OTG / BLE / 
 - เลขเวอร์ชันอยู่ในไฟล์ `VERSION` (เช่น `1.1.0`) — ใช้ทั้งในแอป (Setup → เวอร์ชันและอัปเดต), versionName/versionCode ของ APK และชื่อ Release ใน GitHub (`v1.1.0`)
 - ออกอัปเดต: แก้เลขใน `VERSION` → อัปโหลดขึ้น GitHub → Actions build → ได้ Release ใหม่พร้อม APK
 - ในแอป: ใส่ `ชื่อ/โปรเจกต์` ของ GitHub แล้วกด "ตรวจสอบอัปเดต" → ถ้ามีเวอร์ชันใหม่จะมีปุ่มดาวน์โหลด APK (ติดตั้งทับของเดิมได้ License ยังอยู่) · เช็กอัตโนมัติวันละครั้งเมื่อตั้งค่าไว้
+
+## v1.2.0 — OBD-II Bluetooth (ELM327)
+- Setup → **ค้นหาบลูทูธ / Search Bluetooth** now lists paired devices + Classic discovery + BLE scan together, labelled **★ Smart Gauge**, **🚗 OBD** or other. Pick one and the app connects by type.
+- **🚗 เชื่อม OBD-II (ELM327)** (Setup or Connect menu) supports the ELM327 Mini and clones: Bluetooth Classic SPP (pair in phone settings first, PIN `1234` or `0000`) and BLE UART (FFF0, FFE0, 18F0, ISSC, Nordic, or any notify+write service).
+- `src/elm.js`: AT init, protocol auto-detect, supported-PID scan, multi-PID polling (petrol + diesel), battery via `ATRV`, DTC read (03/07) and clear (04). Values feed Dash/Grid/Graph/Logs; generic P/U-code descriptions added.
+- ELM327 connects through the car's OBD port only (not the Honda K-line ECU tools).

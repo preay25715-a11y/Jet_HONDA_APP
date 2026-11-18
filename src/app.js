@@ -120,19 +120,23 @@
       ['ช่องทาง', via], ['เฟิร์มแวร์', g ? esc(g.fw || '—') : '—'],
       ['ใช้เป็นตัวต่อสาย K-line', g && st.t === g ? '<span class="okc">ใช่</span>' : 'ไม่'], ['เซ็นเซอร์', g ? (fresh ? `ไวด์แบนด์ ${ok(s.afrOk)} จีพีเอส ${ok(s.gpsOk)}${s.gpsOk ? ' (' + s.sats + ')' : ''} อุณหภูมิน้ำมันเครื่อง ${ok(s.eotOk)} ออกซิเจน ${ok(s.o2Ok)}` : g.noSensors ? 'เฟิร์มแวร์ไม่รองรับ' : 'รอข้อมูล…') : '—'],
     ].map(([k, v]) => `<span>${k}</span><span>${v}</span>`).join('');
-    $('#gOff').disabled = !g;
+    const o = st.t && st.t.kind === 'obd' ? st.t : null;
+    $('#obdInfo').innerHTML = o ? '🚗 OBD-II: <span class="okc">เชื่อมแล้ว</span> · ' + esc(o.name) + ' · ' + (o.pidList ? o.pidList.length : 0) + ' ค่า · ' + (o.fuel === 'd' ? 'ดีเซล' : 'เบนซิน') : '🚗 OBD-II: ยังไม่เชื่อม';
+    $('#gOff').disabled = !g && !o;
   }
   $('#bSet').addEventListener('click', renderGauge);
   setInterval(() => { if ($('#mSet').classList.contains('show')) renderGauge(); }, 1000);
-  const gConnect = async () => { await connect(S.gaugeKl ? 'gauge-ble' : 'gauge-only'); renderGauge(); };
+  const gConnect = async () => { await connectBt('all'); renderGauge(); };
   $('#gBle').onclick = () => gConnect();
+  if ($('#gObd')) $('#gObd').onclick = async () => { await connectBt('obd'); renderGauge(); };
   $('#gOff').onclick = async () => {
+    if (st.t && st.t.kind === 'obd') { await disconnect(); pills(); renderGauge(); toast('ตัดการเชื่อมต่อ OBD แล้ว'); return; }
     if (!st.gauge) return;
     if (st.gauge === st.t) await disconnect(); else { try { await st.gauge.close(); } catch (e) {} st.gauge = null; st.sens = null; }
     pills(); renderGauge(); toast('ตัดการเชื่อมต่อเกจแล้ว');
   };
   if ($('#bDemo')) $('#bDemo').onclick = () => (st.t && st.t.kind === 'demo') ? disconnect() : connect('demo');
-  $$('#mConnect .opt').forEach((o) => o.onclick = () => { modal('#mConnect', false); connect(o.dataset.c); });
+  $$('#mConnect .opt').forEach((o) => o.onclick = () => { modal('#mConnect', false); o.dataset.c === 'obd' ? connectBt('obd') : connect(o.dataset.c); });
   $('#bDisc').onclick = () => { modal('#mConnect', false); disconnect(); };
 
   async function disconnect() {
@@ -141,14 +145,38 @@
     try { if (st.gauge && st.gauge !== st.t) await st.gauge.close(); } catch (e) {}
     st.t = st.gauge = st.ecu = null; pills(); renderEcu(); log('info', 'ตัดการเชื่อมต่อ');
   }
-  async function connect(kind) {
+  // find any Bluetooth device (paired + classic + BLE) and connect it by type: Smart Gauge / OBD-II (ELM327 etc.)
+  async function connectBt(mode) {
+    if (!window.JetLic || !JetLic.ok()) return;
+    if (!window.JetBt) { return connect(mode === 'obd' ? 'obd' : 'gauge-only'); }
+    try {
+      toast('เลือกอุปกรณ์ Bluetooth…');
+      const dev = await JetBt.btPick(mode);
+      if (dev.kind === 'gauge') return connect('gauge-only', dev);
+      return connect('obd', dev);
+    } catch (e) { if (e.message !== 'ยกเลิก') { log('err', e.message || e); toast(e.message || String(e), 4000); } }
+  }
+  async function connect(kind, dev) {
     if (!window.JetLic || !JetLic.ok()) return;
     try {
+      if (kind === 'obd') {
+        if (!window.JetBt) throw new Error('เชื่อม ELM327 ได้เฉพาะในแอป Android');
+        if (!dev) { dev = await JetBt.btPick('obd'); }
+        await disconnect();
+        toast('กำลังเชื่อม ' + (dev.name || 'OBD-II') + '…', 3000);
+        const stream = await JetBt.openObdStream(dev);
+        const t = new Elm327(stream, { name: 'OBD ' + (dev.name || stream.name || 'ELM327'), log });
+        try { await t.init(); } catch (e) { try { await stream.close(); } catch (x) {} throw e; }
+        t.onLost = () => { log('err', 'OBD หลุดการเชื่อมต่อ'); toast('OBD หลุดการเชื่อมต่อ'); stopLive(); st.t = null; st.ecu = null; pills(); };
+        st.t = t; st.ecu = t; pills();
+        log('info', 'เชื่อม ' + t.name + (t.ver ? ' · ' + t.ver : '')); toast('เชื่อม OBD-II แล้ว'); startLive();
+        return;
+      }
       if (kind === 'gauge-only' || kind === 'gauge-only-usb') {
         const via = kind === 'gauge-only-usb' ? 'usb' : 'ble';
         if (via === 'usb' && window.JetApp && st.t && st.t.kind === 'usb') throw new Error('มือถือมีพอร์ต USB เดียว (ใช้กับสาย K-line อยู่) — ต่อเกจด้วย Bluetooth แทน');
         if (st.gauge && st.gauge !== st.t) { try { await st.gauge.close(); } catch (e) {} }
-        const g = new GaugeLink(via); await g.open(); st.gauge = g; g.onLost = () => { if (st.gauge === g) st.gauge = null; pills(); toast('เกจหลุดการเชื่อมต่อ'); };
+        const g = new GaugeLink(via); if (dev && dev.addr) g.addr = dev.addr; await g.open(); st.gauge = g; g.onLost = () => { if (st.gauge === g) st.gauge = null; pills(); toast('เกจหลุดการเชื่อมต่อ'); };
         log('info', 'เชื่อมเกจแล้ว ' + (g.fw || '')); toast('เชื่อมเกจแล้ว'); pills(); return;
       }
       await disconnect();

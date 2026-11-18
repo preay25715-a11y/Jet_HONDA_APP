@@ -139,6 +139,7 @@
 <!-- connect -->
 <div class="modal" id="mConnect"><div class="card">
   <h2>เชื่อมต่อ</h2>
+  <div class="opt" data-c="obd"><div class="ic">🚗</div><div><b>OBD-II Bluetooth (ELM327 Mini และรุ่นอื่น)</b><small>เสียบช่อง OBD ของรถ · จับคู่ PIN 1234 หรือ 0000 · ดูค่าสด + DTC</small></div></div>
   <div class="opt" data-c="usb"><div class="ic">🔌</div><div><b>สาย K-LINE USB (FTDI / CH340 / KKL)</b><small>ต่อมือถือ OTG หรือคอม · Chrome รองรับ Web Serial</small></div></div>
   <div class="opt" data-c="gauge-ble"><div class="ic">📶</div><div><b>Smart Gauge ผ่าน Bluetooth</b><small>เกจทำหน้าที่เป็นตัวต่อ K-line + รับไฟล์ไปแฟลชเอง</small></div></div>
   <div class="opt" data-c="gauge-usb"><div class="ic">🧩</div><div><b>Smart Gauge ผ่านสาย USB</b><small>เหมือน Bluetooth แต่เร็วกว่า</small></div></div>
@@ -163,9 +164,11 @@
   <div class="gsect"><div class="kv" id="licInfo"></div></div>
   <h3 style="margin-top:16px">📶 ค้นหาบลูทูธ</h3>
   <div class="gsect">
+    <div class="mut" id="obdInfo" style="margin-bottom:8px"></div>
     <div class="kv" id="gInfo"></div>
     <div class="row" style="margin-top:10px">
       <button class="btn pri" id="gBle">📶 ค้นหาบลูทูธ</button>
+      <button class="btn" id="gObd">🚗 เชื่อม OBD-II (ELM327)</button>
       <button class="btn red" id="gOff">ตัดการเชื่อมต่อ</button>
     </div>
   </div>

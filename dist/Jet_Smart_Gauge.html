@@ -547,6 +547,7 @@ table.mtab{border-collapse:separate;border-spacing:0;font-family:var(--disp);fon
 <!-- connect -->
 <div class="modal" id="mConnect"><div class="card">
   <h2>เชื่อมต่อ</h2>
+  <div class="opt" data-c="obd"><div class="ic">🚗</div><div><b>OBD-II Bluetooth (ELM327 Mini และรุ่นอื่น)</b><small>เสียบช่อง OBD ของรถ · จับคู่ PIN 1234 หรือ 0000 · ดูค่าสด + DTC</small></div></div>
   <div class="opt" data-c="usb"><div class="ic">🔌</div><div><b>สาย K-LINE USB (FTDI / CH340 / KKL)</b><small>ต่อมือถือ OTG หรือคอม · Chrome รองรับ Web Serial</small></div></div>
   <div class="opt" data-c="gauge-ble"><div class="ic">📶</div><div><b>Smart Gauge ผ่าน Bluetooth</b><small>เกจทำหน้าที่เป็นตัวต่อ K-line + รับไฟล์ไปแฟลชเอง</small></div></div>
   <div class="opt" data-c="gauge-usb"><div class="ic">🧩</div><div><b>Smart Gauge ผ่านสาย USB</b><small>เหมือน Bluetooth แต่เร็วกว่า</small></div></div>
@@ -563,7 +564,7 @@ table.mtab{border-collapse:separate;border-spacing:0;font-family:var(--disp);fon
   <h3 style="margin-top:6px">ภาษา</h3>
   <div class="row langrow"><button class="btn" data-lang="th">ไทย</button><button class="btn" data-lang="en">English</button></div>
   <h3 style="margin-top:16px">⬆ เวอร์ชันและอัปเดต</h3>
-  <div class="gsect"><div class="kv"><span>เวอร์ชันที่ใช้</span><span id="verNow">v1.1.1</span><span>เวอร์ชันล่าสุด</span><span id="verNew">—</span></div>
+  <div class="gsect"><div class="kv"><span>เวอร์ชันที่ใช้</span><span id="verNow">v1.2.0</span><span>เวอร์ชันล่าสุด</span><span id="verNew">—</span></div>
     <label class="f">ที่อยู่โปรเจกต์ GitHub (เช่น ชื่อ/โปรเจกต์ หรือลิงก์)<input id="updRepo" placeholder="owner/repo" autocapitalize="none" spellcheck="false"></label>
     <div class="row"><button class="btn" id="updCheck">🔄 ตรวจสอบอัปเดต</button><button class="btn pri" id="updGet" hidden>⬇ อัปเดตเลย</button></div>
     <div class="mut" id="updMsg"></div></div>
@@ -571,9 +572,11 @@ table.mtab{border-collapse:separate;border-spacing:0;font-family:var(--disp);fon
   <div class="gsect"><div class="kv" id="licInfo"></div></div>
   <h3 style="margin-top:16px">📶 ค้นหาบลูทูธ</h3>
   <div class="gsect">
+    <div class="mut" id="obdInfo" style="margin-bottom:8px"></div>
     <div class="kv" id="gInfo"></div>
     <div class="row" style="margin-top:10px">
       <button class="btn pri" id="gBle">📶 ค้นหาบลูทูธ</button>
+      <button class="btn" id="gObd">🚗 เชื่อม OBD-II (ELM327)</button>
       <button class="btn red" id="gOff">ตัดการเชื่อมต่อ</button>
     </div>
   </div>
@@ -850,6 +853,28 @@ table.mtab{border-collapse:separate;border-spacing:0;font-family:var(--disp);fon
     '21-1': 'O2 sensor', '23-1': 'O2 sensor heater', '29-1': 'IACV / ISC valve',
     '33-2': 'EEPROM ใน ECU', '54-1': 'Bank angle sensor แรงดันต่ำ', '54-2': 'Bank angle sensor แรงดันสูง',
   };
+
+  // generic OBD-II (SAE J2012) codes, shown when a car is read through an ELM327
+  Object.assign(P.DTC, {
+    P0010: 'วาล์ว VVT/แคมชาฟต์ B1 ผิดปกติ', P0016: 'ตำแหน่งแคมชาฟต์กับเพลาข้อเหวี่ยงไม่ตรง', P0030: 'ฮีตเตอร์ O2 B1S1 วงจรผิดปกติ',
+    P0087: 'แรงดันรางเชื้อเพลิงต่ำเกินไป', P0100: 'เซ็นเซอร์ MAF วงจรผิดปกติ', P0101: 'ค่า MAF อยู่นอกช่วง', P0105: 'เซ็นเซอร์ MAP วงจรผิดปกติ',
+    P0106: 'ค่า MAP อยู่นอกช่วง', P0110: 'เซ็นเซอร์อุณหภูมิอากาศเข้า (IAT) ผิดปกติ', P0115: 'เซ็นเซอร์อุณหภูมิน้ำ (ECT) ผิดปกติ',
+    P0116: 'ค่า ECT อยู่นอกช่วง', P0117: 'ECT สัญญาณต่ำ', P0118: 'ECT สัญญาณสูง', P0120: 'เซ็นเซอร์ตำแหน่งปีกผีเสื้อ (TPS) ผิดปกติ',
+    P0121: 'ค่า TPS อยู่นอกช่วง', P0122: 'TPS สัญญาณต่ำ', P0123: 'TPS สัญญาณสูง', P0125: 'เครื่องอุ่นช้าเกินไปเข้าสู่ closed loop',
+    P0130: 'เซ็นเซอร์ O2 B1S1 วงจรผิดปกติ', P0131: 'O2 B1S1 แรงดันต่ำ', P0132: 'O2 B1S1 แรงดันสูง', P0133: 'O2 B1S1 ตอบสนองช้า',
+    P0134: 'O2 B1S1 ไม่มีสัญญาณ', P0135: 'ฮีตเตอร์ O2 B1S1 ผิดปกติ', P0137: 'O2 B1S2 แรงดันต่ำ', P0138: 'O2 B1S2 แรงดันสูง', P0141: 'ฮีตเตอร์ O2 B1S2 ผิดปกติ',
+    P0171: 'ส่วนผสมบางเกินไป (Bank 1)', P0172: 'ส่วนผสมหนาเกินไป (Bank 1)', P0174: 'ส่วนผสมบางเกินไป (Bank 2)', P0175: 'ส่วนผสมหนาเกินไป (Bank 2)',
+    P0190: 'เซ็นเซอร์แรงดันรางเชื้อเพลิงผิดปกติ', P0201: 'หัวฉีดสูบ 1 วงจรผิดปกติ', P0202: 'หัวฉีดสูบ 2 วงจรผิดปกติ', P0203: 'หัวฉีดสูบ 3 วงจรผิดปกติ', P0204: 'หัวฉีดสูบ 4 วงจรผิดปกติ',
+    P0217: 'เครื่องร้อนจัด', P0220: 'เซ็นเซอร์ TPS/คันเร่ง B ผิดปกติ', P0230: 'ปั๊มเชื้อเพลิงวงจรผิดปกติ', P0234: 'บูสต์สูงเกินกำหนด', P0236: 'เซ็นเซอร์บูสต์ผิดปกติ',
+    P0238: 'เซ็นเซอร์บูสต์สัญญาณสูง', P0299: 'บูสต์ต่ำกว่ากำหนด', P0300: 'จุดระเบิดพลาดหลายสูบ/สุ่มสูบ', P0301: 'จุดระเบิดพลาดสูบ 1', P0302: 'จุดระเบิดพลาดสูบ 2',
+    P0303: 'จุดระเบิดพลาดสูบ 3', P0304: 'จุดระเบิดพลาดสูบ 4', P0325: 'เซ็นเซอร์น็อก ผิดปกติ', P0335: 'เซ็นเซอร์ตำแหน่งเพลาข้อเหวี่ยง (CKP) ผิดปกติ',
+    P0340: 'เซ็นเซอร์แคมชาฟต์ (CMP) ผิดปกติ', P0400: 'ระบบ EGR ผิดปกติ', P0401: 'EGR ไหลน้อยเกินไป', P0402: 'EGR ไหลมากเกินไป', P0420: 'ประสิทธิภาพแคทาไลติก B1 ต่ำ',
+    P0430: 'ประสิทธิภาพแคทาไลติก B2 ต่ำ', P0440: 'ระบบ EVAP ผิดปกติ', P0442: 'EVAP รั่วเล็กน้อย', P0446: 'วาล์วระบาย EVAP ผิดปกติ', P0455: 'EVAP รั่วมาก',
+    P0500: 'เซ็นเซอร์ความเร็วรถผิดปกติ', P0505: 'ระบบควบคุมรอบเดินเบาผิดปกติ', P0506: 'รอบเดินเบาต่ำกว่ากำหนด', P0507: 'รอบเดินเบาสูงกว่ากำหนด',
+    P0562: 'แรงดันระบบไฟต่ำ', P0563: 'แรงดันระบบไฟสูง', P0600: 'การสื่อสารซีเรียลกับ ECU ผิดปกติ', P0601: 'หน่วยความจำ ECU ผิดปกติ', P0606: 'โปรเซสเซอร์ ECU ผิดปกติ',
+    P0620: 'วงจรไดชาร์จผิดปกติ', P0627: 'ปั๊มเชื้อเพลิงวงจรเปิด', P0700: 'ระบบเกียร์อัตโนมัติผิดปกติ', P2002: 'ประสิทธิภาพ DPF ต่ำ', P2096: 'ระบบแก้ไขเชื้อเพลิงหลัง Cat บางเกินไป',
+    P2263: 'ประสิทธิภาพระบบเทอร์โบ/บูสต์ต่ำ', P2002_: '', U0100: 'ขาดการสื่อสารกับ ECM/PCM', U0121: 'ขาดการสื่อสารกับ ABS', U0155: 'ขาดการสื่อสารกับชุดมาตร',
+  });
   P.dtcText = (k) => P.DTC[k] || 'ไม่มีคำอธิบายในฐานข้อมูล (ดูคู่มือซ่อมรุ่นนั้น)';
 
   /* ---------- Live data : table 0x11 (community-decoded layout) ----------
@@ -1514,6 +1539,226 @@ table.mtab{border-collapse:separate;border-spacing:0;font-family:var(--disp);fon
 })(typeof window !== 'undefined' ? window : globalThis);
 
 /* =====================================================================
+ * Jet Smart Gauge — elm.js
+ * ELM327 / OBD-II driver (Bluetooth Classic SPP or BLE UART — any ELM327 clone).
+ *   stream: { write(bytes), onData(u8) , close() }
+ * Acts as both the "transport" (kind 'obd') and the "ecu" object used by the app:
+ *   readLive() -> {RPM,SPD,TPS,ECT,IAT,MAP,BATT,IGN,...OBD keys}, readDTC(), clearDTC()
+ * ===================================================================== */
+(function (root) {
+  'use strict';
+  const P = (typeof module !== 'undefined' && module.exports) ? require('./proto.js') : root.HP;
+  const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+  const A = (b) => b[0], B = (b) => b[1], C = (b) => b[2], D = (b) => b[3];
+  const u16 = (b) => b[0] * 256 + b[1];
+  const s16 = (b) => { const v = u16(b); return v > 32767 ? v - 65536 : v; };
+  // pid -> [key, byteCount, decoder]. keys not in the core set map to P.OBD keys.
+  const PIDS = {
+    0x04: ['LOAD', 1, (b) => A(b) * 100 / 255], 0x05: ['ECT', 1, (b) => A(b) - 40], 0x06: ['STFT1', 1, (b) => A(b) * 100 / 128 - 100],
+    0x07: ['LTFT1', 1, (b) => A(b) * 100 / 128 - 100], 0x08: ['STFT2', 1, (b) => A(b) * 100 / 128 - 100], 0x09: ['LTFT2', 1, (b) => A(b) * 100 / 128 - 100],
+    0x0A: ['FP', 1, (b) => A(b) * 3], 0x0B: ['MAP', 1, A], 0x0C: ['RPM', 2, (b) => u16(b) / 4], 0x0D: ['SPD', 1, A], 0x0E: ['IGN', 1, (b) => A(b) / 2 - 64],
+    0x0F: ['IAT', 1, (b) => A(b) - 40], 0x10: ['MAF', 2, (b) => u16(b) / 100], 0x11: ['TPS', 1, (b) => A(b) * 100 / 255],
+    0x1F: ['RUNT', 2, u16], 0x21: ['MILD', 2, u16], 0x22: ['FRPR', 2, (b) => u16(b) * 0.079], 0x23: ['FRP', 2, (b) => u16(b) * 10],
+    0x2C: ['EGRC', 1, (b) => A(b) * 100 / 255], 0x2D: ['EGRE', 1, (b) => A(b) * 100 / 128 - 100], 0x2E: ['EVAPC', 1, (b) => A(b) * 100 / 255],
+    0x2F: ['FUELL', 1, (b) => A(b) * 100 / 255], 0x30: ['WARM', 1, A], 0x31: ['DISTC', 2, u16], 0x32: ['EVAPP', 2, (b) => s16(b) / 4],
+    0x33: ['BARO', 1, A], 0x34: ['LAMB', 4, (b) => u16(b) * 2 / 65536],
+    0x3C: ['CAT11', 2, (b) => u16(b) / 10 - 40], 0x3D: ['CAT21', 2, (b) => u16(b) / 10 - 40], 0x3E: ['CAT12', 2, (b) => u16(b) / 10 - 40], 0x3F: ['CAT22', 2, (b) => u16(b) / 10 - 40],
+    0x42: ['BATT', 2, (b) => u16(b) / 1000], 0x43: ['ABSL', 2, (b) => u16(b) * 100 / 255], 0x44: ['EQR', 2, (b) => u16(b) * 2 / 65536],
+    0x45: ['TPSR', 1, (b) => A(b) * 100 / 255], 0x46: ['AMB', 1, (b) => A(b) - 40], 0x47: ['TPSB', 1, (b) => A(b) * 100 / 255],
+    0x49: ['APPD', 1, (b) => A(b) * 100 / 255], 0x4A: ['APPE', 1, (b) => A(b) * 100 / 255], 0x4C: ['CMDT', 1, (b) => A(b) * 100 / 255],
+    0x4D: ['MILT', 2, u16], 0x4E: ['CLRT', 2, u16], 0x52: ['ETH', 1, (b) => A(b) * 100 / 255], 0x5C: ['EOT', 1, (b) => A(b) - 40],
+    0x5D: ['INJT', 2, (b) => u16(b) / 128 - 210], 0x5E: ['FRATE', 2, (b) => u16(b) * 0.05],
+    0x61: ['TQD', 1, (b) => A(b) - 125], 0x62: ['TQA', 1, (b) => A(b) - 125], 0x63: ['TQR', 2, u16],
+    0x6F: ['BOOST', 1, (b) => B(b) * 2], 0x70: ['BOOST', 9, (b) => u16(b.slice(1, 3)) / 8], 0x73: ['EXHP', 5, (b) => u16(b.slice(1, 3)) / 10],
+    0x74: ['TURBO', 5, (b) => u16(b.slice(1, 3)) * 10], 0x78: ['EGT1', 9, (b) => u16(b.slice(1, 3)) / 10 - 40], 0x79: ['EGT2', 9, (b) => u16(b.slice(1, 3)) / 10 - 40],
+    0x7A: ['DPFD', 7, (b) => s16(b.slice(1, 3)) / 100], 0x7C: ['DPFT', 9, (b) => u16(b.slice(1, 3)) / 10 - 40],
+    0x77: ['CACT', 5, (b) => B(b) - 40], 0x6B: ['EXHP', 5, (b) => u16(b.slice(1, 3)) / 10], 0x7F: ['RUNT', 13, (b) => (b[1] << 24 | b[2] << 16 | b[3] << 8 | b[4]) >>> 0],
+    0x83: ['NOX', 5, (b) => u16(b.slice(1, 3))], 0x85: ['NOX', 9, (b) => u16(b.slice(1, 3))],
+  };
+  // polled every cycle (fast) vs. every Nth cycle (slow)
+  const FAST = ['RPM', 'SPD', 'TPS', 'MAP', 'ECT', 'IAT', 'LOAD', 'IGN', 'MAF', 'BOOST'];
+  const MAX_PER_REQ = 6;
+
+  class Elm327 {
+    constructor(stream, o) {
+      o = o || {};
+      this.kind = 'obd'; this.name = o.name || 'ELM327'; this.via = 'bt'; this.s = stream; this.state = 'OFF';
+      this.buf = ''; this.waiter = null; this.supported = new Set(); this.cycle = 0; this.last = {}; this.log = o.log || (() => {});
+      this.fuel = 'g'; this.proto = ''; this.ver = ''; this.stats = { tx: 0, rx: 0, retry: 0, bad: 0 };
+      stream.onData = (u) => this._rx(u);
+      stream.onLost = () => { this.state = 'OFF'; if (this.onLost) this.onLost(); };
+    }
+    _rx(u) {
+      for (let i = 0; i < u.length; i++) this.buf += String.fromCharCode(u[i]);
+      if (this.buf.indexOf('>') >= 0 && this.waiter) { const w = this.waiter; this.waiter = null; const t = this.buf; this.buf = ''; w(t); }
+    }
+    /** send an AT/OBD command, resolve with cleaned lines (prompt '>' ends the answer) */
+    async query(cmd, timeout) {
+      const tm = timeout || 2500;
+      this.buf = '';
+      const p = new Promise((res) => { this.waiter = res; setTimeout(() => { if (this.waiter === res) { this.waiter = null; const t = this.buf; this.buf = ''; res(t.indexOf('>') >= 0 ? t : null); } }, tm); });
+      this.stats.tx++;
+      await this.s.write(Array.from(cmd + '\r', (c) => c.charCodeAt(0)));
+      const raw = await p;
+      if (raw == null) { this.stats.bad++; return null; }
+      this.stats.rx++;
+      return raw.replace(/>/g, '').split(/[\r\n]+/).map((l) => l.trim()).filter((l) => l && l.toUpperCase() !== cmd.toUpperCase());
+    }
+    async init() {
+      this.state = 'INIT';
+      let r = await this.query('ATZ', 4000);
+      if (!r) { r = await this.query('ATI', 3000); if (!r) throw new Error('ELM327 ไม่ตอบ — ตรวจว่าเสียบที่รถและจับคู่ Bluetooth แล้ว (PIN 1234 / 0000)'); }
+      this.ver = (r.find((l) => /ELM|OBD|v\d/i.test(l)) || '').replace(/[^\x20-\x7e]/g, '');
+      for (const c of ['ATE0', 'ATL0', 'ATS0', 'ATH0', 'ATAT1', 'ATST32']) await this.query(c, 1500);
+      let ok = false;
+      // auto protocol; first 0100 can be slow (SEARCHING…, bus init)
+      await this.query('ATSP0', 1500);
+      for (let i = 0; i < 3 && !ok; i++) {
+        const l = await this.query('0100', 12000);
+        if (l && l.some((x) => /41\s?00/.test(x.replace(/\s/g, '').replace(/^SEARCHING\.\.\./, '')))) ok = true;
+        else if (l && l.some((x) => /UNABLE|ERROR|NO DATA|CAN ERROR|BUS/i.test(x))) await sleep(500);
+      }
+      if (!ok) { this.state = 'NOECU'; throw new Error('ต่อ ELM327 ได้ แต่ไม่เจอ ECU — เปิดสวิตช์กุญแจ (ON) แล้วลองใหม่'); }
+      const pr = await this.query('ATDPN', 1500); this.proto = pr ? pr.join('').replace(/^A/, '') : '';
+      await this._scan();
+      this.state = 'OK';
+      return true;
+    }
+    _hexBytes(lines, mode, pid) {
+      // join all lines; with ATH0/ATS0 each ECU's reply is "41 0C 1A F8". use the first one that matches
+      const head = (mode + 0x40).toString(16).toUpperCase().padStart(2, '0') + (pid == null ? '' : pid.toString(16).toUpperCase().padStart(2, '0'));
+      const out = [];
+      for (const l of lines) {
+        const h = l.replace(/[^0-9A-Fa-f]/g, '').toUpperCase();
+        if (!/^[0-9A-F]+$/.test(h)) continue;
+        const i = h.indexOf(head);
+        if (i < 0) continue;
+        const bytes = h.slice(i + head.length).match(/../g) || [];
+        out.push(bytes.map((x) => parseInt(x, 16)));
+      }
+      return out;
+    }
+    async _scan() {
+      this.supported = new Set();
+      let base = 0;
+      for (let k = 0; k < 8; k++) {
+        const pid = k * 0x20;
+        const l = await this.query('01' + pid.toString(16).toUpperCase().padStart(2, '0'), 3000);
+        if (!l) break;
+        const r = this._hexBytes(l, 1, pid)[0];
+        if (!r || r.length < 4) break;
+        const m = (r[0] << 24 | r[1] << 16 | r[2] << 8 | r[3]) >>> 0;
+        for (let i = 0; i < 32; i++) if (m & (1 << (31 - i))) this.supported.add(pid + i + 1);
+        if (!(m & 1)) break;
+      }
+      // fuel type (PID 51): 4 = diesel
+      if (this.supported.has(0x51)) { const l = await this.query('0151', 1500); const r = l && this._hexBytes(l, 1, 0x51)[0]; if (r && r.length) this.fuel = r[0] === 4 ? 'd' : 'g'; }
+      else this.fuel = [0x70, 0x23, 0x78, 0x7C, 0x83].some((p) => this.supported.has(p)) && !this.supported.has(0x0E) ? 'd' : 'g';
+      this.pidList = Array.from(this.supported).filter((p) => PIDS[p]).sort((a, b) => a - b);
+      this.log('info', 'OBD-II: รองรับ ' + this.pidList.length + ' ค่า · ' + (this.fuel === 'd' ? 'ดีเซล' : 'เบนซิน') + (this.proto ? ' · โปรโตคอล ' + this.proto : ''));
+    }
+    async _read(pids) {
+      const out = {};
+      const cmd = '01' + pids.map((p) => p.toString(16).toUpperCase().padStart(2, '0')).join('') ;
+      const l = await this.query(cmd, 2500);
+      if (!l) return out;
+      // multiple PIDs in one answer: "41 0C xx xx 0D yy" (single-ECU) — walk the byte stream
+      for (const ln of l) {
+        const h = ln.replace(/[^0-9A-Fa-f]/g, '');
+        if (!/^41/i.test(h)) continue;
+        const by = (h.slice(2).match(/../g) || []).map((x) => parseInt(x, 16));
+        let i = 0;
+        while (i < by.length) {
+          const pid = by[i], e = PIDS[pid];
+          if (!e) break;
+          const data = by.slice(i + 1, i + 1 + e[1]);
+          if (data.length < e[1]) break;
+          const v = e[2](data); if (isFinite(v)) out[e[0]] = v;
+          i += 1 + e[1];
+        }
+      }
+      return out;
+    }
+    async readLive() {
+      if (this.state !== 'OK') return null;
+      const sup = this.pidList, slowTurn = this.cycle++ % 8 === 0;
+      const want = sup.filter((p) => { const k = PIDS[p][0]; return FAST.includes(k) || slowTurn; });
+      // battery voltage from the adapter itself when PID 42 is not offered
+      const d = Object.assign({}, this.last);
+      // group requests: ELM327 allows up to 6 PIDs per request on CAN
+      for (let i = 0; i < want.length; i += MAX_PER_REQ) {
+        const g = want.slice(i, i + MAX_PER_REQ);
+        let r = await this._read(g);
+        if (!Object.keys(r).length && g.length > 1) { r = {}; for (const p of g) Object.assign(r, await this._read([p])); }
+        Object.assign(d, r);
+      }
+      if (slowTurn && !this.supported.has(0x42)) { const l = await this.query('ATRV', 1500); const m = l && /([0-9.]+)\s*V/i.exec(l.join(' ')); if (m) d.BATT = parseFloat(m[1]); }
+      if (!want.length) return null;
+      this.last = d;
+      return Object.assign({}, d);   // OBD keys (P.OBD) feed Dash/Grid directly
+    }
+    async readDTC() {
+      const dec = (by) => { const o = []; for (let i = 0; i + 1 < by.length; i += 2) { const a = by[i], b = by[i + 1]; if (!a && !b) continue; o.push('PCBU'[a >> 6] + ((a >> 4) & 3) + (a & 15).toString(16).toUpperCase() + (b >> 4).toString(16).toUpperCase() + (b & 15).toString(16).toUpperCase()); } return o; };
+      const get = async (cmd, mode) => {
+        const l = await this.query(cmd, 5000); if (!l) return [];
+        const codes = [];
+        for (const ln of l) {
+          const h = ln.replace(/[^0-9A-Fa-f]/g, '').toUpperCase(); if (!h.startsWith(mode)) continue;
+          let by = (h.slice(2).match(/../g) || []).map((x) => parseInt(x, 16));
+          if (by.length % 2) by = by.slice(1);               // CAN: leading count byte
+          codes.push(...dec(by));
+        }
+        return Array.from(new Set(codes));
+      };
+      const cur = await get('03', '43'), pend = await get('07', '47');
+      return { current: cur, past: pend };
+    }
+    async clearDTC() { const l = await this.query('04', 5000); return !!(l && l.some((x) => /44/.test(x))); }
+    async detect() { return this.state; }
+    async flashCount() { return null; }
+    async close() { this.state = 'OFF'; try { await this.s.close(); } catch (e) {} }
+  }
+
+  /* ---------------- scripted ELM327 emulator (tests) ---------------- */
+  class FakeElm {
+    constructor(o) { o = o || {}; this.diesel = !!o.diesel; this.t = 0; this.buf = ''; this.dtc = ['P0301', 'P0420']; this.cleared = false; }
+    write(bytes) {
+      for (const b of bytes) this.buf += String.fromCharCode(b);
+      let i; while ((i = this.buf.indexOf('\r')) >= 0) { const c = this.buf.slice(0, i).trim().toUpperCase(); this.buf = this.buf.slice(i + 1); setTimeout(() => this._on(c), 1); }
+      return Promise.resolve(true);
+    }
+    _say(t) { if (this.onData) this.onData(Uint8Array.from(Array.from(t + '\r\r>', (c) => c.charCodeAt(0)))); }
+    _val(pid) {
+      const t = this.t += 0.1, rpm = 1500 + 800 * Math.sin(t), h = (n) => n.toString(16).toUpperCase().padStart(2, '0');
+      const M = { 0x04: [60], 0x05: [40 + 90], 0x0B: [50], 0x0C: [(rpm * 4) >> 8, (rpm * 4) & 255], 0x0D: [62], 0x0E: [128 + 20], 0x0F: [40 + 33], 0x11: [30], 0x42: [0x36, 0xB0], 0x5C: [40 + 95], 0x51: [this.diesel ? 4 : 1], 0x33: [100], 0x2F: [128],
+        0x70: [3, 0x03, 0xE8, 0, 0, 0, 0, 0, 0], 0x23: [0x0B, 0xB8] };
+      return M[pid] ? M[pid].map(h).join('') : null;
+    }
+    _on(c) {
+      if (c === 'ATZ') return this._say('\rELM327 v1.5');
+      if (/^AT/.test(c)) return this._say(c === 'ATRV' ? '12.6V' : c === 'ATDPN' ? 'A6' : 'OK');
+      if (c === '03') return this._say(this.cleared ? '43 00' : '43 02 03 01 04 20');
+      if (c === '07') return this._say('47 00');
+      if (c === '04') { this.cleared = true; return this._say('44'); }
+      if (/^01[0-9A-F]{2}/.test(c)) {
+        const pids = c.slice(2).match(/../g).map((x) => parseInt(x, 16)); let out = '41';
+        for (const p of pids) {
+          if (p % 0x20 === 0) { const base = p; const sup = this.diesel ? [0x04, 0x05, 0x0B, 0x0C, 0x0D, 0x0F, 0x11, 0x23, 0x42, 0x51, 0x5C, 0x70] : [0x04, 0x05, 0x0B, 0x0C, 0x0D, 0x0E, 0x0F, 0x11, 0x2F, 0x33, 0x42, 0x51, 0x5C]; let m = 0; for (const s of sup) if (s > base && s <= base + 32) m |= 1 << (31 - (s - base - 1)); if (sup.some((s) => s > base + 32)) m |= 1; out += (p).toString(16).padStart(2, '0').toUpperCase() + [m >>> 24, (m >>> 16) & 255, (m >>> 8) & 255, m & 255].map((x) => x.toString(16).padStart(2, '0')).join('').toUpperCase(); continue; }
+          const v = this._val(p); if (v == null) continue; out += p.toString(16).toUpperCase().padStart(2, '0') + v;
+        }
+        return this._say(out.length > 2 ? out.replace(/(..)/g, '$1 ').trim() : 'NO DATA');
+      }
+      this._say('?');
+    }
+    close() { return Promise.resolve(); }
+  }
+
+  const E = { Elm327, FakeElm, ELM_PIDS: PIDS };
+  if (typeof module !== 'undefined' && module.exports) module.exports = E;
+  else Object.assign(root, E);
+})(typeof window !== 'undefined' ? window : globalThis);
+
+/* =====================================================================
  * Jet Smart Gauge — transports.js (browser)
  *  1) DirectKLine  : USB K-line cable (FTDI / CH340 / KKL) via Web Serial, 10400 baud
  *  2) GaugeLink    : Smart Gauge (ESP32) via Bluetooth LE (Nordic UART) or USB serial,
@@ -1596,17 +1841,46 @@ table.mtab{border-collapse:separate;border-spacing:0;font-family:var(--disp);fon
 
   // BLE (Nordic UART) through the app — the app shows its own device picker
   class NativeBle {
-    async open() {
+    async open(addr) {
       const p = waitEvt('ble-open', 90000);
       Bus.h['ble-data'] = (b) => this.onData && this.onData(b64d(b));
       Bus.h['ble-lost'] = () => this.onLost && this.onLost();
-      root.JetNative.bleConnect();
+      if (addr) root.JetNative.bleOpen(addr); else root.JetNative.bleConnect();
       const r = await p;
       if (!r || !r.ok) throw new Error(r ? r.err : 'เชื่อมต่อ Bluetooth ไม่สำเร็จ');
       this.name = r.name;
     }
     async write(bytes) { if (!root.JetNative.bleWrite(b64e(bytes))) throw new Error('Bluetooth ยังไม่พร้อม'); }
     async close() { Bus.h['ble-data'] = Bus.h['ble-lost'] = null; root.JetNative.bleClose(); }
+  }
+
+  // classic Bluetooth SPP (ELM327 mini and most cheap OBD-II dongles)
+  class NativeSpp {
+    async open(addr) {
+      const p = waitEvt('spp-open', 45000);
+      Bus.h['spp-data'] = (b) => this.onData && this.onData(b64d(b));
+      Bus.h['spp-lost'] = () => this.onLost && this.onLost();
+      root.JetNative.sppOpen(addr);
+      const r = await p;
+      if (!r || !r.ok) { Bus.h['spp-data'] = Bus.h['spp-lost'] = null; throw new Error(r ? r.err : 'เชื่อมต่อ Bluetooth ไม่สำเร็จ (หมดเวลา)'); }
+      this.name = r.name;
+    }
+    async write(bytes) { if (!root.JetNative.sppWrite(b64e(bytes))) throw new Error('Bluetooth ยังไม่พร้อม'); }
+    async close() { Bus.h['spp-data'] = Bus.h['spp-lost'] = null; root.JetNative.sppClose(); }
+  }
+  // unified device finder: bonded + classic discovery + BLE scan. mode: 'all' | 'obd' | 'gauge'
+  async function btPick(mode) {
+    const p = waitEvt('bt-pick', 180000);
+    root.JetNative.btPick(mode || 'all');
+    const r = await p;
+    if (!r || !r.ok) throw new Error(r && r.err ? r.err : 'ไม่ได้เลือกอุปกรณ์');
+    return r;
+  }
+  // open an OBD adapter chosen with btPick: SPP first for classic/paired, BLE UART otherwise
+  async function openObdStream(dev) {
+    let err;
+    if (dev.classic || dev.bonded || !dev.ble) { try { const s = new NativeSpp(); await s.open(dev.addr); s.name = s.name || dev.name; return s; } catch (e) { err = e; if (!dev.ble) throw e; } }
+    try { const s = new NativeBle(); await s.open(dev.addr); s.name = s.name || dev.name; return s; } catch (e) { throw err || e; }
   }
 
   /* ---------------- 1) direct USB K-line cable ---------------- */
@@ -1653,6 +1927,7 @@ table.mtab{border-collapse:separate;border-spacing:0;font-family:var(--disp);fon
     async open() {
       if (NATIVE) {
         this.s = this.via === 'usb' ? new NativeUsbStream() : new NativeBle();
+        if (this.addr) this.s.open = ((o) => () => o.call(this.s, this.addr))(this.s.open);
         this.s.onData = (v) => this.parser.push(v);
         this.s.onLost = () => { this.lost = true; if (this.onLost) this.onLost(); };
         if (this.via === 'usb') { await this.s.open(115200, true); this.name = 'GAUGE USB'; }
@@ -1731,6 +2006,7 @@ table.mtab{border-collapse:separate;border-spacing:0;font-family:var(--disp);fon
   root.JetApp = NATIVE ? { saveFile: (name, u8, mime) => root.JetNative.saveFile(name, b64e(u8), mime || ''), keepScreen: (on) => root.JetNative.keepScreen(!!on) } : null;
   root.DirectKLine = DirectKLine;
   root.GaugeLink = GaugeLink;
+  root.JetBt = { btPick, openObdStream, NativeSpp, NativeBle };
 })(window);
 
 /* =====================================================================
@@ -1855,19 +2131,23 @@ table.mtab{border-collapse:separate;border-spacing:0;font-family:var(--disp);fon
       ['ช่องทาง', via], ['เฟิร์มแวร์', g ? esc(g.fw || '—') : '—'],
       ['ใช้เป็นตัวต่อสาย K-line', g && st.t === g ? '<span class="okc">ใช่</span>' : 'ไม่'], ['เซ็นเซอร์', g ? (fresh ? `ไวด์แบนด์ ${ok(s.afrOk)} จีพีเอส ${ok(s.gpsOk)}${s.gpsOk ? ' (' + s.sats + ')' : ''} อุณหภูมิน้ำมันเครื่อง ${ok(s.eotOk)} ออกซิเจน ${ok(s.o2Ok)}` : g.noSensors ? 'เฟิร์มแวร์ไม่รองรับ' : 'รอข้อมูล…') : '—'],
     ].map(([k, v]) => `<span>${k}</span><span>${v}</span>`).join('');
-    $('#gOff').disabled = !g;
+    const o = st.t && st.t.kind === 'obd' ? st.t : null;
+    $('#obdInfo').innerHTML = o ? '🚗 OBD-II: <span class="okc">เชื่อมแล้ว</span> · ' + esc(o.name) + ' · ' + (o.pidList ? o.pidList.length : 0) + ' ค่า · ' + (o.fuel === 'd' ? 'ดีเซล' : 'เบนซิน') : '🚗 OBD-II: ยังไม่เชื่อม';
+    $('#gOff').disabled = !g && !o;
   }
   $('#bSet').addEventListener('click', renderGauge);
   setInterval(() => { if ($('#mSet').classList.contains('show')) renderGauge(); }, 1000);
-  const gConnect = async () => { await connect(S.gaugeKl ? 'gauge-ble' : 'gauge-only'); renderGauge(); };
+  const gConnect = async () => { await connectBt('all'); renderGauge(); };
   $('#gBle').onclick = () => gConnect();
+  if ($('#gObd')) $('#gObd').onclick = async () => { await connectBt('obd'); renderGauge(); };
   $('#gOff').onclick = async () => {
+    if (st.t && st.t.kind === 'obd') { await disconnect(); pills(); renderGauge(); toast('ตัดการเชื่อมต่อ OBD แล้ว'); return; }
     if (!st.gauge) return;
     if (st.gauge === st.t) await disconnect(); else { try { await st.gauge.close(); } catch (e) {} st.gauge = null; st.sens = null; }
     pills(); renderGauge(); toast('ตัดการเชื่อมต่อเกจแล้ว');
   };
   if ($('#bDemo')) $('#bDemo').onclick = () => (st.t && st.t.kind === 'demo') ? disconnect() : connect('demo');
-  $$('#mConnect .opt').forEach((o) => o.onclick = () => { modal('#mConnect', false); connect(o.dataset.c); });
+  $$('#mConnect .opt').forEach((o) => o.onclick = () => { modal('#mConnect', false); o.dataset.c === 'obd' ? connectBt('obd') : connect(o.dataset.c); });
   $('#bDisc').onclick = () => { modal('#mConnect', false); disconnect(); };
 
   async function disconnect() {
@@ -1876,14 +2156,38 @@ table.mtab{border-collapse:separate;border-spacing:0;font-family:var(--disp);fon
     try { if (st.gauge && st.gauge !== st.t) await st.gauge.close(); } catch (e) {}
     st.t = st.gauge = st.ecu = null; pills(); renderEcu(); log('info', 'ตัดการเชื่อมต่อ');
   }
-  async function connect(kind) {
+  // find any Bluetooth device (paired + classic + BLE) and connect it by type: Smart Gauge / OBD-II (ELM327 etc.)
+  async function connectBt(mode) {
+    if (!window.JetLic || !JetLic.ok()) return;
+    if (!window.JetBt) { return connect(mode === 'obd' ? 'obd' : 'gauge-only'); }
+    try {
+      toast('เลือกอุปกรณ์ Bluetooth…');
+      const dev = await JetBt.btPick(mode);
+      if (dev.kind === 'gauge') return connect('gauge-only', dev);
+      return connect('obd', dev);
+    } catch (e) { if (e.message !== 'ยกเลิก') { log('err', e.message || e); toast(e.message || String(e), 4000); } }
+  }
+  async function connect(kind, dev) {
     if (!window.JetLic || !JetLic.ok()) return;
     try {
+      if (kind === 'obd') {
+        if (!window.JetBt) throw new Error('เชื่อม ELM327 ได้เฉพาะในแอป Android');
+        if (!dev) { dev = await JetBt.btPick('obd'); }
+        await disconnect();
+        toast('กำลังเชื่อม ' + (dev.name || 'OBD-II') + '…', 3000);
+        const stream = await JetBt.openObdStream(dev);
+        const t = new Elm327(stream, { name: 'OBD ' + (dev.name || stream.name || 'ELM327'), log });
+        try { await t.init(); } catch (e) { try { await stream.close(); } catch (x) {} throw e; }
+        t.onLost = () => { log('err', 'OBD หลุดการเชื่อมต่อ'); toast('OBD หลุดการเชื่อมต่อ'); stopLive(); st.t = null; st.ecu = null; pills(); };
+        st.t = t; st.ecu = t; pills();
+        log('info', 'เชื่อม ' + t.name + (t.ver ? ' · ' + t.ver : '')); toast('เชื่อม OBD-II แล้ว'); startLive();
+        return;
+      }
       if (kind === 'gauge-only' || kind === 'gauge-only-usb') {
         const via = kind === 'gauge-only-usb' ? 'usb' : 'ble';
         if (via === 'usb' && window.JetApp && st.t && st.t.kind === 'usb') throw new Error('มือถือมีพอร์ต USB เดียว (ใช้กับสาย K-line อยู่) — ต่อเกจด้วย Bluetooth แทน');
         if (st.gauge && st.gauge !== st.t) { try { await st.gauge.close(); } catch (e) {} }
-        const g = new GaugeLink(via); await g.open(); st.gauge = g; g.onLost = () => { if (st.gauge === g) st.gauge = null; pills(); toast('เกจหลุดการเชื่อมต่อ'); };
+        const g = new GaugeLink(via); if (dev && dev.addr) g.addr = dev.addr; await g.open(); st.gauge = g; g.onLost = () => { if (st.gauge === g) st.gauge = null; pills(); toast('เกจหลุดการเชื่อมต่อ'); };
         log('info', 'เชื่อมเกจแล้ว ' + (g.fw || '')); toast('เชื่อมเกจแล้ว'); pills(); return;
       }
       await disconnect();
@@ -2226,6 +2530,11 @@ table.mtab{border-collapse:separate;border-spacing:0;font-family:var(--disp);fon
     ['เหมือน Bluetooth แต่เร็วกว่า', 'Like Bluetooth but faster'], ['เชื่อมเกจเพื่อส่งไฟล์อย่างเดียว (Bluetooth)', 'Connect gauge for file transfer only (Bluetooth)'], ['ใช้คู่กับสาย USB ได้', 'Can be used together with a USB cable'],
     ['DEMO (กล่องจำลอง)', 'DEMO (simulated ECU)'], ['ทดลองทุกฟังก์ชันโดยไม่ต้องต่อรถ', 'Try every function without a vehicle'], ['GPS เกจ', 'GPS Gauge'], ['GPS มือถือ', 'GPS Phone'], ['Jet Smart Gauge (จำลอง)', 'Jet Smart Gauge (simulated)'],
     ['พร้อมใช้งาน · Web Serial:', 'Ready · Web Serial:'], ['Jet Smart Gauge (Android APP) พร้อมใช้งาน', 'Jet Smart Gauge (Android APP) ready'],
+    ['🚗 เชื่อม OBD-II (ELM327)', '🚗 Connect OBD-II (ELM327)'], ['OBD-II Bluetooth (ELM327 Mini และรุ่นอื่น)', 'OBD-II Bluetooth (ELM327 Mini & others)'],
+    ['เสียบช่อง OBD ของรถ · จับคู่ PIN 1234 หรือ 0000 · ดูค่าสด + DTC', 'Plug into the car OBD port · pair with PIN 1234 or 0000 · live data + DTC'],
+    ['🚗 OBD-II: ยังไม่เชื่อม', '🚗 OBD-II: not connected'], ['🚗 OBD-II:', '🚗 OBD-II:'], ['ดีเซล', 'Diesel'], ['เบนซิน', 'Petrol'],
+    ['เลือกอุปกรณ์ Bluetooth…', 'Choose a Bluetooth device…'], ['เชื่อม OBD-II แล้ว', 'OBD-II connected'], ['ตัดการเชื่อมต่อ OBD แล้ว', 'OBD disconnected'],
+    ['OBD หลุดการเชื่อมต่อ', 'OBD connection lost'], ['เชื่อม ELM327 ได้เฉพาะในแอป Android', 'ELM327 works only in the Android app'],
     ['ตั้งค่า', 'SETTINGS'], ['ภาษา', 'Language'], ['ค้นหาบลูทูธ', 'Search Bluetooth'], ['📶 ค้นหาบลูทูธ', '📶 Search Bluetooth'], ['ค่า AFR และจีพีเอส', 'AFR & GPS'],
     ['เป้า AFR (ขับปกติ)', 'Target AFR (cruise)'], ['เป้า AFR (เปิดคันเร่งเต็ม)', 'Target AFR (full throttle)'], ['ถือว่าเปิดเต็มเมื่อคันเร่ง ≥ (%)', 'Full throttle when pedal ≥ (%)'],
     ['แหล่งสัญญาณจีพีเอส', 'GPS source'], ['อัตโนมัติ (เกจก่อน)', 'AUTO (gauge first)'], ['โหมดสาธิต (จำลอง)', 'DEMO (simulated)'], ['ใช้เป็นตัวต่อสาย K-line', 'Used as K-line adapter'],
@@ -2692,7 +3001,7 @@ table.mtab{border-collapse:separate;border-spacing:0;font-family:var(--disp);fon
 (function (root) {
   'use strict';
   const C = root.JetCore, $ = (s) => document.querySelector(s);
-  const VER = '1.1.1';
+  const VER = '1.2.0';
   const num = (v) => String(v).replace(/^v/i, '').split('.').map((x) => parseInt(x, 10) || 0);
   const newer = (a, b) => { const x = num(a), y = num(b); for (let i = 0; i < 3; i++) { if ((x[i] || 0) !== (y[i] || 0)) return (x[i] || 0) > (y[i] || 0); } return false; };
   const repoOf = (s) => { s = String(s || '').trim().replace(/^https?:\/\/github\.com\//i, '').replace(/\.git$/i, '').replace(/\/+$/, ''); const m = s.match(/^([\w.-]+)\/([\w.-]+)/); return m ? m[1] + '/' + m[2] : ''; };

@@ -12,6 +12,7 @@ import android.bluetooth.BluetoothGattDescriptor;
 import android.bluetooth.BluetoothGattService;
 import android.bluetooth.BluetoothManager;
 import android.bluetooth.BluetoothProfile;
+import android.bluetooth.BluetoothSocket;
 import android.bluetooth.le.BluetoothLeScanner;
 import android.bluetooth.le.ScanCallback;
 import android.bluetooth.le.ScanRecord;
@@ -388,11 +389,14 @@ public class JetBridge {
         bleQ.clear();
         bleWriting = false;
         final String name = dev.getName() == null ? dev.getAddress() : dev.getName();
+        final boolean[] discStarted = {false};
         BluetoothGattCallback cb = new BluetoothGattCallback() {
             @Override
             public void onConnectionStateChange(BluetoothGatt g, int status, int state) {
                 if (state == BluetoothProfile.STATE_CONNECTED) {
                     g.requestMtu(247);
+                    // some OBD dongles never answer the MTU request: start service discovery anyway
+                    ui.postDelayed(() -> { if (!discStarted[0]) { discStarted[0] = true; g.discoverServices(); } }, 2000);
                 } else if (state == BluetoothProfile.STATE_DISCONNECTED) {
                     if (bleReady) emit("ble-lost", "{}");
                     else bleFail("เชื่อมต่อ Bluetooth ไม่สำเร็จ (status " + status + ")");
@@ -405,23 +409,21 @@ public class JetBridge {
             @Override
             public void onMtuChanged(BluetoothGatt g, int m, int status) {
                 if (status == BluetoothGatt.GATT_SUCCESS) mtu = m;
-                g.discoverServices();
+                if (!discStarted[0]) { discStarted[0] = true; g.discoverServices(); }
             }
 
             @Override
             public void onServicesDiscovered(BluetoothGatt g, int status) {
-                BluetoothGattService s = g.getService(NUS);
-                if (s == null) { bleFail("อุปกรณ์นี้ไม่มีบริการ MFB-LINK (Nordic UART)"); g.disconnect(); return; }
-                rxCh = s.getCharacteristic(NUS_RX);
-                txCh = s.getCharacteristic(NUS_TX);
-                if (rxCh == null || txCh == null) { bleFail("ไม่พบช่องสื่อสาร RX/TX"); g.disconnect(); return; }
+                if (!pickUart(g)) { bleFail("อุปกรณ์นี้ไม่มีช่องสื่อสารแบบ UART ที่รองรับ (ถ้าเป็น ELM327 แบบ Bluetooth ธรรมดา ให้จับคู่ในตั้งค่ามือถือก่อน)"); g.disconnect(); return; }
                 g.setCharacteristicNotification(txCh, true);
                 BluetoothGattDescriptor d = txCh.getDescriptor(CCCD);
                 if (d == null) { bleReady = true; emit("ble-open", "{\"ok\":true,\"name\":" + q(name) + "}"); return; }
+                final byte[] en = (txCh.getProperties() & BluetoothGattCharacteristic.PROPERTY_NOTIFY) != 0
+                        ? BluetoothGattDescriptor.ENABLE_NOTIFICATION_VALUE : BluetoothGattDescriptor.ENABLE_INDICATION_VALUE;
                 if (Build.VERSION.SDK_INT >= 33) {
-                    g.writeDescriptor(d, BluetoothGattDescriptor.ENABLE_NOTIFICATION_VALUE);
+                    g.writeDescriptor(d, en);
                 } else {
-                    d.setValue(BluetoothGattDescriptor.ENABLE_NOTIFICATION_VALUE);
+                    d.setValue(en);
                     g.writeDescriptor(d);
                 }
             }
@@ -479,10 +481,13 @@ public class JetBridge {
             bleWriting = true;
         }
         boolean ok;
+        final int pr = rxCh.getProperties();
+        final int wt = ((pr & BluetoothGattCharacteristic.PROPERTY_WRITE) == 0 && (pr & BluetoothGattCharacteristic.PROPERTY_WRITE_NO_RESPONSE) != 0)
+                ? BluetoothGattCharacteristic.WRITE_TYPE_NO_RESPONSE : BluetoothGattCharacteristic.WRITE_TYPE_DEFAULT;
         if (Build.VERSION.SDK_INT >= 33) {
-            ok = gatt.writeCharacteristic(rxCh, c, BluetoothGattCharacteristic.WRITE_TYPE_DEFAULT) == 0;
+            ok = gatt.writeCharacteristic(rxCh, c, wt) == 0;
         } else {
-            rxCh.setWriteType(BluetoothGattCharacteristic.WRITE_TYPE_DEFAULT);
+            rxCh.setWriteType(wt);
             rxCh.setValue(c);
             ok = gatt.writeCharacteristic(rxCh);
         }
@@ -499,6 +504,271 @@ public class JetBridge {
         bleQ.clear();
         try { if (gatt != null) { gatt.disconnect(); gatt.close(); } } catch (Exception ignore) { }
         gatt = null;
+    }
+
+
+    /* ======================= unified Bluetooth finder (BLE + classic + paired) ======================= */
+
+    static final String[][] UARTS = {
+        {"6e400001-b5a3-f393-e0a9-e50e24dcca9e", "6e400002-b5a3-f393-e0a9-e50e24dcca9e", "6e400003-b5a3-f393-e0a9-e50e24dcca9e"},   // Nordic UART (Smart Gauge)
+        {"0000fff0-0000-1000-8000-00805f9b34fb", "0000fff2-0000-1000-8000-00805f9b34fb", "0000fff1-0000-1000-8000-00805f9b34fb"},   // vGate / Veepeak / many ELM BLE
+        {"0000ffe0-0000-1000-8000-00805f9b34fb", "0000ffe1-0000-1000-8000-00805f9b34fb", "0000ffe1-0000-1000-8000-00805f9b34fb"},   // HM-10 style
+        {"000018f0-0000-1000-8000-00805f9b34fb", "00002af1-0000-1000-8000-00805f9b34fb", "00002af0-0000-1000-8000-00805f9b34fb"},   // OBDLink / Carista style
+        {"49535343-fe7d-4ae5-8fa9-9fafd205e455", "49535343-8841-43f4-a8d4-ecbe34729bb3", "49535343-1e4d-4bd9-ba61-23c647249616"},   // ISSC / Microchip
+    };
+    static final UUID SPP = UUID.fromString("00001101-0000-1000-8000-00805f9b34fb");
+
+    /** chooses write (rxCh) + notify (txCh) characteristics: known UART services first, then any service with notify+write */
+    boolean pickUart(BluetoothGatt g) {
+        for (String[] u : UARTS) {
+            BluetoothGattService sv = g.getService(UUID.fromString(u[0]));
+            if (sv == null) continue;
+            BluetoothGattCharacteristic w = sv.getCharacteristic(UUID.fromString(u[1])), n = sv.getCharacteristic(UUID.fromString(u[2]));
+            if (w != null && n != null) { rxCh = w; txCh = n; return true; }
+        }
+        for (BluetoothGattService sv : g.getServices()) {
+            String id = sv.getUuid().toString();
+            if (id.startsWith("00001800") || id.startsWith("00001801") || id.startsWith("0000180a")) continue;
+            BluetoothGattCharacteristic w = null, n = null;
+            for (BluetoothGattCharacteristic c : sv.getCharacteristics()) {
+                int p = c.getProperties();
+                if (n == null && (p & (BluetoothGattCharacteristic.PROPERTY_NOTIFY | BluetoothGattCharacteristic.PROPERTY_INDICATE)) != 0) n = c;
+                if (w == null && (p & (BluetoothGattCharacteristic.PROPERTY_WRITE | BluetoothGattCharacteristic.PROPERTY_WRITE_NO_RESPONSE)) != 0) w = c;
+            }
+            if (w != null && n != null) { rxCh = w; txCh = n; return true; }
+        }
+        return false;
+    }
+
+    static String kindOf(String n, boolean nus) {
+        if (nus) return "gauge";
+        if (n == null) return "other";
+        String l = n.toLowerCase();
+        if (l.startsWith("mfb") || l.startsWith("jet")) return "gauge";
+        if (l.matches(".*(elm|obd|vlink|v-link|vgate|veepeak|konnwei|kw9|kw8|icar|carista|bafx|autel|launch|thinkdiag|fixd|viecar|kingbolen|diag|scan|can.?bus|v1\\.5|v2\\.1|android-vlink|ios-vlink).*")) return "obd";
+        return "other";
+    }
+
+    static class Ent {
+        BluetoothDevice dev; String name; boolean ble, classic, bonded, nus; int rssi = -127;
+        String kind() { return kindOf(name, nus); }
+    }
+
+    BroadcastReceiver discRx;
+
+    void stopBt() {
+        stopScan();
+        try { if (discRx != null) act.unregisterReceiver(discRx); } catch (Exception ignore) { }
+        discRx = null;
+        try {
+            BluetoothManager bm = (BluetoothManager) act.getSystemService(Context.BLUETOOTH_SERVICE);
+            if (bm != null && bm.getAdapter() != null) bm.getAdapter().cancelDiscovery();
+        } catch (Exception ignore) { }
+    }
+
+    /** mode: "all" | "obd" | "gauge" (only changes the sort order/title). Result: event 'bt-pick' {ok, addr, name, kind} */
+    @JavascriptInterface
+    public void btPick(final String mode) { ui.post(() -> btPickDialog(mode)); }
+
+    void btFail(String msg) { emit("bt-pick", "{\"ok\":false,\"err\":" + q(msg) + "}"); }
+
+    void btPickDialog(final String mode) {
+        if (!act.hasBlePermission()) { act.askPermissions(); btFail("กรุณาอนุญาตสิทธิ์ Bluetooth/อุปกรณ์ใกล้เคียง แล้วกดค้นหาอีกครั้ง"); return; }
+        BluetoothManager bm = (BluetoothManager) act.getSystemService(Context.BLUETOOTH_SERVICE);
+        final BluetoothAdapter ad = bm == null ? null : bm.getAdapter();
+        if (ad == null) { btFail("เครื่องนี้ไม่มี Bluetooth"); return; }
+        if (!ad.isEnabled()) { btFail("เปิด Bluetooth ก่อน"); return; }
+        bleClose();
+        stopBt();
+
+        final ArrayList<Ent> ents = new ArrayList<>();
+        final ArrayList<Ent> shown = new ArrayList<>();
+        final ArrayAdapter<String> lab = new ArrayAdapter<>(act, android.R.layout.select_dialog_item);
+        final boolean[] done = {false};
+        final Runnable[] refresh = new Runnable[1];
+        final String want = "obd".equals(mode) ? "obd" : "gauge".equals(mode) ? "gauge" : "";
+        refresh[0] = () -> {
+            shown.clear();
+            for (Ent e : ents) shown.add(e);
+            java.util.Collections.sort(shown, (a, b) -> {
+                int ra = rank(a, want), rb = rank(b, want);
+                if (ra != rb) return ra - rb;
+                return b.rssi - a.rssi;
+            });
+            lab.clear();
+            for (Ent e : shown) {
+                String k = e.kind();
+                String tag = "gauge".equals(k) ? "★ Smart Gauge · " : "obd".equals(k) ? "🚗 OBD · " : "";
+                String how = e.bonded ? "จับคู่แล้ว" : (e.classic && !e.ble ? "Bluetooth" : "BLE");
+                lab.add(tag + (e.name == null ? "(ไม่มีชื่อ)" : e.name) + "\n" + e.dev.getAddress() + "  ·  " + how + (e.rssi > -127 ? "  ·  " + e.rssi + " dBm" : ""));
+            }
+            lab.notifyDataSetChanged();
+        };
+        final AlertDialog dlg = new AlertDialog.Builder(act)
+                .setTitle("ค้นหาอุปกรณ์ Bluetooth (กำลังค้นหา…)")
+                .setAdapter(lab, (d, which) -> {
+                    done[0] = true;
+                    stopBt();
+                    Ent e = shown.get(which);
+                    emit("bt-pick", "{\"ok\":true,\"addr\":" + q(e.dev.getAddress()) + ",\"name\":" + q(e.name == null ? e.dev.getAddress() : e.name)
+                            + ",\"kind\":" + q(e.kind()) + ",\"ble\":" + e.ble + ",\"classic\":" + (e.classic || e.bonded) + ",\"bonded\":" + e.bonded + "}");
+                })
+                .setNegativeButton("ยกเลิก", (d, w) -> { })
+                .setNeutralButton("ค้นหาใหม่", null)
+                .create();
+        dlg.setOnDismissListener(d -> { stopBt(); if (!done[0]) btFail("ยกเลิก"); });
+
+        final Runnable[] startScan = new Runnable[1];
+        startScan[0] = () -> {
+            stopBt();
+            // 1) devices already paired with the phone (ELM327 clones are almost always here)
+            try {
+                for (BluetoothDevice bd : ad.getBondedDevices()) addEnt(ents, bd, true, false, true, false, -127);
+            } catch (Exception ignore) { }
+            refresh[0].run();
+            // 2) classic discovery
+            discRx = new BroadcastReceiver() {
+                @Override @SuppressWarnings("deprecation")
+                public void onReceive(Context c, Intent i) {
+                    String a = i.getAction();
+                    if (BluetoothDevice.ACTION_FOUND.equals(a)) {
+                        BluetoothDevice bd = i.getParcelableExtra(BluetoothDevice.EXTRA_DEVICE);
+                        short rssi = i.getShortExtra(BluetoothDevice.EXTRA_RSSI, Short.MIN_VALUE);
+                        if (bd != null) { addEnt(ents, bd, false, true, bd.getBondState() == BluetoothDevice.BOND_BONDED, false, rssi == Short.MIN_VALUE ? -127 : rssi); refresh[0].run(); }
+                    } else if (BluetoothAdapter.ACTION_DISCOVERY_FINISHED.equals(a)) {
+                        if (dlg.isShowing() && ents.isEmpty()) dlg.setTitle("ไม่พบอุปกรณ์ — เสียบ ELM327 ที่รถ/เปิดเกจ แล้วกด “ค้นหาใหม่”");
+                    }
+                }
+            };
+            IntentFilter f = new IntentFilter(BluetoothDevice.ACTION_FOUND);
+            f.addAction(BluetoothAdapter.ACTION_DISCOVERY_FINISHED);
+            act.registerReceiver(discRx, f);
+            try { ad.startDiscovery(); } catch (Exception ignore) { }
+            // 3) BLE scan
+            scanner = ad.getBluetoothLeScanner();
+            if (scanner != null) {
+                scanCb = new ScanCallback() {
+                    @Override
+                    public void onScanResult(int type, ScanResult r) {
+                        BluetoothDevice bd = r.getDevice();
+                        ScanRecord rec = r.getScanRecord();
+                        boolean nus = false;
+                        if (rec != null && rec.getServiceUuids() != null)
+                            for (ParcelUuid u : rec.getServiceUuids()) if (NUS.equals(u.getUuid())) nus = true;
+                        String n = rec != null ? rec.getDeviceName() : null;
+                        if (n == null) n = bd.getName();
+                        Ent e = addEnt(ents, bd, false, false, bd.getBondState() == BluetoothDevice.BOND_BONDED, true, r.getRssi());
+                        if (n != null && e.name == null) e.name = n;
+                        if (nus) e.nus = true;
+                        refresh[0].run();
+                    }
+                };
+                try { scanner.startScan(null, new ScanSettings.Builder().setScanMode(ScanSettings.SCAN_MODE_LOW_LATENCY).build(), scanCb); } catch (Exception ignore) { }
+            }
+            ui.postDelayed(() -> { if (dlg.isShowing() && !done[0]) dlg.setTitle(ents.isEmpty() ? "ไม่พบอุปกรณ์ — กด “ค้นหาใหม่”" : "เลือกอุปกรณ์"); }, 12000);
+        };
+        dlg.show();
+        dlg.getButton(AlertDialog.BUTTON_NEUTRAL).setOnClickListener(v -> { ents.clear(); refresh[0].run(); dlg.setTitle("ค้นหาอุปกรณ์ Bluetooth (กำลังค้นหา…)"); startScan[0].run(); });
+        startScan[0].run();
+    }
+
+    static int rank(Ent e, String want) {
+        String k = e.kind();
+        if (!want.isEmpty() && want.equals(k)) return 0;
+        if ("gauge".equals(k) || "obd".equals(k)) return 1;
+        if (e.name != null) return e.bonded ? 2 : 3;
+        return 4;
+    }
+
+    Ent addEnt(ArrayList<Ent> list, BluetoothDevice bd, boolean bonded, boolean classic, boolean isBonded, boolean ble, int rssi) {
+        Ent e = null;
+        for (Ent x : list) if (x.dev.getAddress().equals(bd.getAddress())) { e = x; break; }
+        if (e == null) { e = new Ent(); e.dev = bd; list.add(e); }
+        String n = null;
+        try { n = bd.getName(); } catch (Exception ignore) { }
+        if (n != null) e.name = n;
+        e.bonded |= bonded || isBonded;
+        e.classic |= classic;
+        e.ble |= ble;
+        if (rssi > e.rssi) e.rssi = rssi;
+        if (!e.ble && !e.classic) { try { int t = bd.getType(); e.classic = t == BluetoothDevice.DEVICE_TYPE_CLASSIC || t == BluetoothDevice.DEVICE_TYPE_DUAL; e.ble = t == BluetoothDevice.DEVICE_TYPE_LE || t == BluetoothDevice.DEVICE_TYPE_DUAL; } catch (Exception ignore) { } }
+        return e;
+    }
+
+    /** open a picked device over BLE UART (answers with 'ble-open') */
+    @JavascriptInterface
+    public void bleOpen(final String addr) {
+        ui.post(() -> {
+            try {
+                BluetoothManager bm = (BluetoothManager) act.getSystemService(Context.BLUETOOTH_SERVICE);
+                bleClose();
+                bleGattConnect(bm.getAdapter().getRemoteDevice(addr));
+            } catch (Exception e) { bleFail("เชื่อมต่อไม่สำเร็จ: " + e.getMessage()); }
+        });
+    }
+
+    /* ======================= classic Bluetooth SPP (ELM327 mini etc.) ======================= */
+
+    BluetoothSocket sock;
+    java.io.OutputStream sockOut;
+    volatile boolean sppUp = false;
+
+    @JavascriptInterface
+    public void sppOpen(final String addr) {
+        sppClose();
+        new Thread(() -> {
+            String err = "";
+            try {
+                BluetoothManager bm = (BluetoothManager) act.getSystemService(Context.BLUETOOTH_SERVICE);
+                BluetoothAdapter ad = bm.getAdapter();
+                ad.cancelDiscovery();
+                BluetoothDevice dev = ad.getRemoteDevice(addr);
+                BluetoothSocket s = null;
+                for (int attempt = 0; attempt < 3 && s == null; attempt++) {
+                    try {
+                        BluetoothSocket t;
+                        if (attempt == 0) t = dev.createRfcommSocketToServiceRecord(SPP);                 // secure (asks pairing PIN: 1234 / 0000)
+                        else if (attempt == 1) t = dev.createInsecureRfcommSocketToServiceRecord(SPP);   // insecure
+                        else t = (BluetoothSocket) dev.getClass().getMethod("createRfcommSocket", int.class).invoke(dev, 1);   // channel-1 fallback used by many clones
+                        t.connect();
+                        s = t;
+                    } catch (Exception e) {
+                        err = String.valueOf(e.getMessage());
+                        try { Thread.sleep(400); } catch (InterruptedException ignore) { }
+                    }
+                }
+                if (s == null) throw new Exception(err);
+                sock = s;
+                sockOut = s.getOutputStream();
+                sppUp = true;
+                String n = dev.getName();
+                emit("spp-open", "{\"ok\":true,\"name\":" + q(n == null ? addr : n) + "}");
+                java.io.InputStream in = s.getInputStream();
+                byte[] buf = new byte[1024];
+                int n2;
+                while (sppUp && (n2 = in.read(buf)) > 0) emit("spp-data", q(b64(buf, n2)));
+            } catch (Exception e) {
+                if (!sppUp) { emit("spp-open", "{\"ok\":false,\"err\":" + q("เชื่อมต่อไม่สำเร็จ: " + e.getMessage() + " (จับคู่ในตั้งค่ามือถือก่อน PIN 1234 หรือ 0000)") + "}"); return; }
+            }
+            if (sppUp) { sppUp = false; emit("spp-lost", "{}"); }
+        }, "spp-io").start();
+    }
+
+    @JavascriptInterface
+    public boolean sppWrite(String b64) {
+        try {
+            if (!sppUp || sockOut == null) return false;
+            synchronized (this) { sockOut.write(unb64(b64)); sockOut.flush(); }
+            return true;
+        } catch (Exception e) { return false; }
+    }
+
+    @JavascriptInterface
+    public void sppClose() {
+        sppUp = false;
+        try { if (sock != null) sock.close(); } catch (Exception ignore) { }
+        sock = null;
+        sockOut = null;
     }
 
     /* ======================= files ======================= */
@@ -529,7 +799,8 @@ public class JetBridge {
 
     void closeAll() {
         usbClose();
-        stopScan();
+        stopBt();
         bleClose();
+        sppClose();
     }
 }

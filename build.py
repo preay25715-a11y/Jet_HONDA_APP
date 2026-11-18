@@ -3,7 +3,7 @@ DEV = '--dev' in sys.argv
 B = pathlib.Path(__file__).parent
 s = B/'src'
 h = (s/'index.html').read_text()
-files = ['vendor/nacl-fast.min.js', 'license.js', 'proto.js', 'ecu.js'] + (['sim.js'] if DEV else []) + ['tune.js', 'transports.js', 'app.js', 'i18n.js', 'ui-extra.js', 'update.js']
+files = ['vendor/nacl-fast.min.js', 'license.js', 'proto.js', 'ecu.js'] + (['sim.js'] if DEV else []) + ['tune.js', 'elm.js', 'transports.js', 'app.js', 'i18n.js', 'ui-extra.js', 'update.js']
 VER = (B/'VERSION').read_text().strip()
 js = '\n'.join((s/f).read_text() for f in files)
 if DEV: js = 'window.JET_DEV=1;\n' + js   # test build only: no licence, DEMO available — never shipped
