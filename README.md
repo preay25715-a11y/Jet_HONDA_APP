@@ -179,4 +179,7 @@ android/           แอป Android (MainActivity + JetBridge: USB OTG / BLE / 
 - AFR Log works from an ELM327 (RPM × throttle, or engine load when the car has no throttle PID). New orange status line on the AFR page says why it is not recording (not connected, no LIVE, no RPM, no AFR/lambda from the car, REC off).
 
 ## v1.3.2
-- Version badge (e.g. `v1.3.2`) next to the program name in the header and on the licence screen.
+- Version badge (e.g. `v1.3.3`) placed after "By เปรียวจูนเนอร์" in the header and on the licence screen.
+
+## v1.3.3
+- Version badge moved behind "By เปรียวจูนเนอร์".
