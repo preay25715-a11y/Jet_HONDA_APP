@@ -113,3 +113,18 @@ const { SimTransport } = require('../src/sim.js');
   }
   console.log('ELM327 v1.3.1 tests passed');
 })().catch((x) => { console.error(x); process.exit(1); });
+
+// ---- ELM327 emulation by the HONDA-KLINE bridge (protocol H, one PID per request, PID D1 injector, blink-code DTC) ----
+(async () => {
+  const { Elm327, FakeElm } = require('../src/elm.js');
+  const e = new Elm327(new FakeElm({ honda: true })); await e.init();
+  assert.strictEqual(e.honda, true, 'honda bridge detected');
+  assert.strictEqual(e.single, true, 'one PID per request');
+  assert.strictEqual(e.fuel, 'g', 'bike = petrol');
+  let d; for (let i = 0; i < 14; i++) d = await e.readLive();
+  assert(d.RPM > 600 && d.ECT === 90 && d.TPS > 10, 'live ' + JSON.stringify(d));
+  assert(Math.abs(d.INJ - 6) < 0.01, 'INJ (PID D1, 0.01 ms) ' + d.INJ);
+  const t = await e.readDTC();
+  assert(t.current.includes('12-1') && t.current.includes('21-2'), 'blink codes ' + JSON.stringify(t));
+  console.log('HONDA-KLINE bridge tests passed', JSON.stringify(t));
+})().catch((x) => { console.error(x); process.exit(1); });

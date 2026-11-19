@@ -181,5 +181,14 @@ android/           แอป Android (MainActivity + JetBridge: USB OTG / BLE / 
 ## v1.3.2
 - Version badge (e.g. `v1.3.3`) placed after "By เปรียวจูนเนอร์" in the header and on the licence screen.
 
+## v1.4.0
+- Data brought over from the user's own projects **JetOBD2HONDA** (Smart Gauge HONDA K-line + CAN) and **JetSmartGaugeCAR** (Smart Gauge CAR):
+  - **HONDA-KLINE bridge** (ESP32 presenting itself as ELM327): recognised by name in the Bluetooth finder, protocol `H` detected (one PID per request, petrol), custom **PID D1 = injector pulse (ms)** read, Honda **blink-code DTCs** (`12-1`, `21-2` …) decoded from Mode 03/07 and cleared with Mode 04, shown with the Thai descriptions.
+  - **Model data** for every Honda motorcycle from the gauge firmware: tank (L), redline (rpm), cylinders, injector flow (cc/min) and gearbox set → picking a model in Setup fills gauge scale, **gear ratios**, tank, injector flow and redline (all editable).
+  - **Fuel rate / economy** derived from injector pulse × injector flow × injections (`FRATE` L/h, `KPL` km/L) when the bike has no fuel-rate PID.
+  - New group **Honda cars (ELM327)** (City, Civic, Jazz, Brio, Mobilio, BR-V, HR-V, CR-V, Accord) with tank/redline from the CAR project; 36 more OBD-II fault codes with Thai text.
+- Verified: table 0x11 layout in the app is identical to the bridge's (RPM, TPS, ECT, IAT, MAP, battery, speed, injector, ignition).
+- Test: `HONDA-KLINE bridge tests passed` (node) + Playwright run with an emulated bridge.
+
 ## v1.3.3
 - Version badge moved behind "By เปรียวจูนเนอร์".

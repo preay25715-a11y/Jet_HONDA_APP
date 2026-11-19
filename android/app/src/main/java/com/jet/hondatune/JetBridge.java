@@ -545,6 +545,7 @@ public class JetBridge {
         if (n == null) return "other";
         String l = n.toLowerCase();
         if (l.startsWith("mfb") || l.startsWith("jet")) return "gauge";
+        if (l.matches(".*(honda-kline|k-?line|honda.?bridge).*")) return "obd";   // our own HONDA-KLINE bridge (ELM327 emulation)
         if (l.matches(".*(elm|obd|vlink|v-link|vgate|veepeak|konnwei|kw9|kw8|icar|carista|bafx|autel|launch|thinkdiag|fixd|viecar|kingbolen|diag|scan|can.?bus|v1\\.5|v2\\.1|android-vlink|ios-vlink).*")) return "obd";
         return "other";
     }

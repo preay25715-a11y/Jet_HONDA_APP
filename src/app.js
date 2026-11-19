@@ -121,7 +121,7 @@
       ['ใช้เป็นตัวต่อสาย K-line', g && st.t === g ? '<span class="okc">ใช่</span>' : 'ไม่'], ['เซ็นเซอร์', g ? (fresh ? `ไวด์แบนด์ ${ok(s.afrOk)} จีพีเอส ${ok(s.gpsOk)}${s.gpsOk ? ' (' + s.sats + ')' : ''} อุณหภูมิน้ำมันเครื่อง ${ok(s.eotOk)} ออกซิเจน ${ok(s.o2Ok)}` : g.noSensors ? 'เฟิร์มแวร์ไม่รองรับ' : 'รอข้อมูล…') : '—'],
     ].map(([k, v]) => `<span>${k}</span><span>${v}</span>`).join('');
     const o = st.t && st.t.kind === 'obd' ? st.t : null;
-    $('#obdInfo').innerHTML = o ? '🚗 OBD-II: <span class="okc">เชื่อมแล้ว</span> · ' + esc(o.name) + ' · ' + (o.pidList ? o.pidList.length : 0) + ' ค่า · ' + (o.fuel === 'd' ? 'ดีเซล' : 'เบนซิน') : '🚗 OBD-II: ยังไม่เชื่อม';
+    $('#obdInfo').innerHTML = o ? '🚗 OBD-II: <span class="okc">เชื่อมแล้ว</span> · ' + esc(o.name) + ' · ' + (o.pidList ? o.pidList.length : 0) + ' ค่า · ' + (o.honda ? 'HONDA PGM-FI (มอเตอร์ไซค์)' : o.fuel === 'd' ? 'ดีเซล' : 'เบนซิน') : '🚗 OBD-II: ยังไม่เชื่อม';
     $('#gOff').disabled = !g && !o;
   }
   $('#bSet').addEventListener('click', renderGauge);

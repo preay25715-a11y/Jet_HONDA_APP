@@ -33,10 +33,11 @@
     0x74: ['TURBO', 5, (b) => u16(b.slice(1, 3)) * 10], 0x78: ['EGT1', 9, (b) => u16(b.slice(1, 3)) / 10 - 40], 0x79: ['EGT2', 9, (b) => u16(b.slice(1, 3)) / 10 - 40],
     0x7A: ['DPFD', 7, (b) => s16(b.slice(1, 3)) / 100], 0x7C: ['DPFT', 9, (b) => u16(b.slice(1, 3)) / 10 - 40],
     0x77: ['CACT', 5, (b) => B(b) - 40], 0x6B: ['EXHP', 5, (b) => u16(b.slice(1, 3)) / 10], 0x7F: ['RUNT', 13, (b) => (b[1] << 24 | b[2] << 16 | b[3] << 8 | b[4]) >>> 0],
+    0xD1: ['INJ', 2, (b) => u16(b) / 100],
     0x83: ['NOX', 5, (b) => u16(b.slice(1, 3))], 0x85: ['NOX', 9, (b) => u16(b.slice(1, 3))],
   };
   // polled every cycle (fast) vs. every Nth cycle (slow)
-  const FAST = ['RPM', 'SPD', 'TPS', 'MAP', 'ECT', 'IAT', 'LOAD', 'IGN', 'MAF', 'BOOST', 'LAMB', 'O2'];
+  const FAST = ['RPM', 'SPD', 'TPS', 'MAP', 'ECT', 'IAT', 'LOAD', 'IGN', 'MAF', 'BOOST', 'LAMB', 'O2', 'INJ'];
   const MAX_PER_REQ = 6;
 
   class Elm327 {
@@ -44,7 +45,7 @@
       o = o || {};
       this.kind = 'obd'; this.name = o.name || 'ELM327'; this.via = 'bt'; this.s = stream; this.state = 'OFF';
       this.buf = ''; this.waiter = null; this.supported = new Set(); this.cycle = 0; this.last = {}; this.log = o.log || (() => {});
-      this.fuel = 'g'; this.proto = ''; this.ver = ''; this.single = false; this.shortCnt = 0; this.stats = { tx: 0, rx: 0, retry: 0, bad: 0 };
+      this.fuel = 'g'; this.proto = ''; this.ver = ''; this.single = false; this.honda = false; this.shortCnt = 0; this.stats = { tx: 0, rx: 0, retry: 0, bad: 0 };
       stream.onData = (u) => this._rx(u);
       stream.onLost = () => { this.state = 'OFF'; if (this.onLost) this.onLost(); };
     }
@@ -80,6 +81,7 @@
       }
       if (!ok) { this.state = 'NOECU'; throw new Error('ต่อ ELM327 ได้ แต่ไม่เจอ ECU — เปิดสวิตช์กุญแจ (ON) แล้วลองใหม่'); }
       const pr = await this.query('ATDPN', 1500); this.proto = pr ? pr.join('').replace(/^A/, '') : '';
+      this.honda = /^H/.test(this.proto);          // HONDA-KLINE bridge speaking the Honda PGM-FI tables (protocol 'H')
       this.single = !/^[6-9]/.test(this.proto);    // several PIDs per request only work on CAN; older ISO/KWP/J1850 cars need one PID per request
       await this._scan();
       this.state = 'OK';
@@ -112,8 +114,10 @@
         for (let i = 0; i < 32; i++) if (m & (1 << (31 - i))) this.supported.add(pid + i + 1);
         if (!(m & 1)) break;
       }
+      if (this.honda && !this.supported.has(0xD1)) { const l = await this.query('01D1', 1500); const r = l && this._hexBytes(l, 1, 0xD1)[0]; if (r && r.length >= 2) this.supported.add(0xD1); }
       // fuel type (PID 51): 4 = diesel
       if (this.supported.has(0x51)) { const l = await this.query('0151', 1500); const r = l && this._hexBytes(l, 1, 0x51)[0]; if (r && r.length) this.fuel = r[0] === 4 ? 'd' : 'g'; }
+      else if (this.honda) this.fuel = 'g';
       else this.fuel = [0x70, 0x23, 0x78, 0x7C, 0x83].some((p) => this.supported.has(p)) && !this.supported.has(0x0E) ? 'd' : 'g';
       this.pidList = Array.from(this.supported).filter((p) => PIDS[p]).sort((a, b) => a - b);
       this.log('info', 'OBD-II: รองรับ ' + this.pidList.length + ' ค่า · ' + (this.fuel === 'd' ? 'ดีเซล' : 'เบนซิน') + (this.proto ? ' · โปรโตคอล ' + this.proto : ''));
@@ -145,7 +149,7 @@
       // tier 1 (every cycle): RPM / speed / throttle / MAP — one short request = fastest refresh
       // tier 2 (every 3rd cycle): the other Dash values;  tier 3 (every 12th): everything else
       const c = this.cycle++, key = (p) => PIDS[p][0];
-      const T1 = ['RPM', 'SPD', 'TPS', 'MAP', 'LAMB'];
+      const T1 = this.single ? ['RPM', 'TPS', 'SPD', 'LAMB'] : ['RPM', 'SPD', 'TPS', 'MAP', 'LAMB'];   // one PID per request = each costs a round trip
       const t1 = this.pidList.filter((p) => T1.includes(key(p))), rest = this.pidList.filter((p) => !T1.includes(key(p)));
       const want = t1.slice();
       for (const p of rest) { const k = key(p); if (FAST.includes(k) ? c % 3 === 0 : c % 12 === 0) want.push(p); }
@@ -167,7 +171,7 @@
       return Object.assign({}, d);   // OBD keys (P.OBD) feed Dash/Grid directly
     }
     async readDTC() {
-      const dec = (by) => { const o = []; for (let i = 0; i + 1 < by.length; i += 2) { const a = by[i], b = by[i + 1]; if (!a && !b) continue; o.push('PCBU'[a >> 6] + ((a >> 4) & 3) + (a & 15).toString(16).toUpperCase() + (b >> 4).toString(16).toUpperCase() + (b & 15).toString(16).toUpperCase()); } return o; };
+      const dec = (by) => { const o = []; for (let i = 0; i + 1 < by.length; i += 2) { const a = by[i], b = by[i + 1]; if (!a && !b) continue; if (this.honda) { o.push(a + '-' + b); continue; } o.push('PCBU'[a >> 6] + ((a >> 4) & 3) + (a & 15).toString(16).toUpperCase() + (b >> 4).toString(16).toUpperCase() + (b & 15).toString(16).toUpperCase()); } return o; };
       const get = async (cmd, mode) => {
         const l = await this.query(cmd, 5000); if (!l) return [];
         const codes = [];
@@ -190,7 +194,7 @@
 
   /* ---------------- scripted ELM327 emulator (tests) ---------------- */
   class FakeElm {
-    constructor(o) { o = o || {}; this.diesel = !!o.diesel; this.noMulti = !!o.noMulti; this.lambda = o.lambda !== false; this.t = 0; this.buf = ''; this.dtc = ['P0301', 'P0420']; this.cleared = false; }
+    constructor(o) { o = o || {}; this.diesel = !!o.diesel; this.noMulti = !!o.noMulti || !!o.honda; this.hondaBridge = !!o.honda; this.lambda = o.lambda !== false; this.t = 0; this.buf = ''; this.dtc = ['P0301', 'P0420']; this.cleared = false; }
     write(bytes) {
       for (const b of bytes) this.buf += String.fromCharCode(b);
       let i; while ((i = this.buf.indexOf('\r')) >= 0) { const c = this.buf.slice(0, i).trim().toUpperCase(); this.buf = this.buf.slice(i + 1); setTimeout(() => this._on(c), 1); }
@@ -200,19 +204,19 @@
     _val(pid) {
       const t = this.t += 0.1, rpm = 1500 + 800 * Math.sin(t), h = (n) => n.toString(16).toUpperCase().padStart(2, '0');
       const M = { 0x04: [60], 0x05: [40 + 90], 0x0B: [50], 0x0C: [(rpm * 4) >> 8, (rpm * 4) & 255], 0x0D: [62], 0x0E: [128 + 20], 0x0F: [40 + 33], 0x11: [30], 0x42: [0x36, 0xB0], 0x5C: [40 + 95], 0x51: [this.diesel ? 4 : 1], 0x33: [100], 0x2F: [128],
-        0x70: [3, 0x03, 0xE8, 0, 0, 0, 0, 0, 0], 0x23: [0x0B, 0xB8], 0x34: [0x7D, 0xB8, 0x80, 0x00] };
+        0x70: [3, 0x03, 0xE8, 0, 0, 0, 0, 0, 0], 0x23: [0x0B, 0xB8], 0x34: [0x7D, 0xB8, 0x80, 0x00], 0xD1: [0x02, 0x58] };
       return M[pid] ? M[pid].map(h).join('') : null;
     }
     _on(c) {
       if (c === 'ATZ') return this._say('\rELM327 v1.5');
-      if (/^AT/.test(c)) return this._say(c === 'ATRV' ? '12.6V' : c === 'ATDPN' ? (this.noMulti ? 'A5' : 'A6') : 'OK');
-      if (c === '03') return this._say(this.cleared ? '43 00' : '43 02 03 01 04 20');
+      if (/^AT/.test(c)) return this._say(c === 'ATRV' ? '12.6V' : c === 'ATDPN' ? (this.hondaBridge ? 'AH' : this.noMulti ? 'A5' : 'A6') : 'OK');
+      if (c === '03') return this._say(this.cleared ? '43 00 00 00 00 00 00' : this.hondaBridge ? '43 0C 01 15 02 00 00' : '43 02 03 01 04 20');
       if (c === '07') return this._say('47 00');
       if (c === '04') { this.cleared = true; return this._say('44'); }
       if (/^01[0-9A-F]{2}/.test(c)) {
         let pids = c.slice(2).match(/../g).map((x) => parseInt(x, 16)); if (this.noMulti && pids.length > 1) pids = pids.slice(0, 1); let out = '41';
         for (const p of pids) {
-          if (p % 0x20 === 0) { const base = p; const sup = this.diesel ? [0x04, 0x05, 0x0B, 0x0C, 0x0D, 0x0F, 0x11, 0x23, 0x42, 0x51, 0x5C, 0x70] : [0x04, 0x05, 0x0B, 0x0C, 0x0D, 0x0E, 0x0F, 0x11, 0x2F, 0x33, 0x42, 0x51, 0x5C].concat(this.lambda ? [0x34] : []); let m = 0; for (const s of sup) if (s > base && s <= base + 32) m |= 1 << (31 - (s - base - 1)); if (sup.some((s) => s > base + 32)) m |= 1; out += (p).toString(16).padStart(2, '0').toUpperCase() + [m >>> 24, (m >>> 16) & 255, (m >>> 8) & 255, m & 255].map((x) => x.toString(16).padStart(2, '0')).join('').toUpperCase(); continue; }
+          if (p % 0x20 === 0) { const base = p; const sup = this.diesel ? [0x04, 0x05, 0x0B, 0x0C, 0x0D, 0x0F, 0x11, 0x23, 0x42, 0x51, 0x5C, 0x70] : [0x04, 0x05, 0x0B, 0x0C, 0x0D, 0x0E, 0x0F, 0x11, 0x2F, 0x33, 0x42, 0x51, 0x5C].concat(this.lambda ? [0x34] : []).concat(this.hondaBridge ? [0xD1] : []); let m = 0; for (const s of sup) if (s > base && s <= base + 32) m |= 1 << (31 - (s - base - 1)); if (sup.some((s) => s > base + 32)) m |= 1; out += (p).toString(16).padStart(2, '0').toUpperCase() + [m >>> 24, (m >>> 16) & 255, (m >>> 8) & 255, m & 255].map((x) => x.toString(16).padStart(2, '0')).join('').toUpperCase(); continue; }
           const v = this._val(p); if (v == null) continue; out += p.toString(16).toUpperCase().padStart(2, '0') + v;
         }
         return this._say(out.length > 2 ? out.replace(/(..)/g, '$1 ').trim() : 'NO DATA');
