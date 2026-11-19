@@ -167,3 +167,9 @@ android/           แอป Android (MainActivity + JetBridge: USB OTG / BLE / 
 - **🚗 เชื่อม OBD-II (ELM327)** (Setup or Connect menu) supports the ELM327 Mini and clones: Bluetooth Classic SPP (pair in phone settings first, PIN `1234` or `0000`) and BLE UART (FFF0, FFE0, 18F0, ISSC, Nordic, or any notify+write service).
 - `src/elm.js`: AT init, protocol auto-detect, supported-PID scan, multi-PID polling (petrol + diesel), battery via `ATRV`, DTC read (03/07) and clear (04). Values feed Dash/Grid/Graph/Logs; generic P/U-code descriptions added.
 - ELM327 connects through the car's OBD port only (not the Honda K-line ECU tools).
+
+## v1.3.0 — Honda Thailand models, faster live data, AFR/CRP log fix
+- Setup → 🏍 **รุ่นรถ**: ~65 Honda models sold in Thailand (Wave/Dream/Cub, Click/PCX/ADV/Forza/Scoopy…, Monkey/MSX/Dax/CT125, CBR/CB, Rebel, CRF/Transalp/Africa Twin, Gold Wing). Sets gauge RPM scale and gear count; CVT models hide the gear box. Gear ratios are rough defaults — use **เรียนรู้เกียร์** (hold a gear 2 s) to learn the real ones.
+- Live data: no pause between requests, gauge sensors polled on their own loop, ELM327 polls RPM/SPD/TPS/MAP every cycle and slower values less often, removed the per-segment glow filter and bar transitions (the main cause of lag on phones), Grid only repaints changed cells.
+- Grid: **✔ เฉพาะค่าที่มี** (default) shows only values that actually arrive; derived values (load, lambda, baro, run time, distance) are filled in when the ECU doesn't provide them.
+- Fixed: **CRP Log never recorded** (CRP volt was rejected by the AFR range filter). AFR Log verified.

@@ -141,19 +141,22 @@
     }
     async readLive() {
       if (this.state !== 'OK') return null;
-      const sup = this.pidList, slowTurn = this.cycle++ % 8 === 0;
-      const want = sup.filter((p) => { const k = PIDS[p][0]; return FAST.includes(k) || slowTurn; });
-      // battery voltage from the adapter itself when PID 42 is not offered
+      // tier 1 (every cycle): RPM / speed / throttle / MAP — one short request = fastest refresh
+      // tier 2 (every 3rd cycle): the other Dash values;  tier 3 (every 12th): everything else
+      const c = this.cycle++, key = (p) => PIDS[p][0];
+      const T1 = ['RPM', 'SPD', 'TPS', 'MAP'];
+      const t1 = this.pidList.filter((p) => T1.includes(key(p))), rest = this.pidList.filter((p) => !T1.includes(key(p)));
+      const want = t1.slice();
+      for (const p of rest) { const k = key(p); if (FAST.includes(k) ? c % 3 === 0 : c % 12 === 0) want.push(p); }
+      if (!want.length) return null;
       const d = Object.assign({}, this.last);
-      // group requests: ELM327 allows up to 6 PIDs per request on CAN
       for (let i = 0; i < want.length; i += MAX_PER_REQ) {
         const g = want.slice(i, i + MAX_PER_REQ);
         let r = await this._read(g);
         if (!Object.keys(r).length && g.length > 1) { r = {}; for (const p of g) Object.assign(r, await this._read([p])); }
         Object.assign(d, r);
       }
-      if (slowTurn && !this.supported.has(0x42)) { const l = await this.query('ATRV', 1500); const m = l && /([0-9.]+)\s*V/i.exec(l.join(' ')); if (m) d.BATT = parseFloat(m[1]); }
-      if (!want.length) return null;
+      if (c % 12 === 0 && !this.supported.has(0x42)) { const l = await this.query('ATRV', 1500); const m = l && /([0-9.]+)\s*V/i.exec(l.join(' ')); if (m) d.BATT = parseFloat(m[1]); }
       this.last = d;
       return Object.assign({}, d);   // OBD keys (P.OBD) feed Dash/Grid directly
     }

@@ -97,7 +97,7 @@
   // classic Bluetooth SPP (ELM327 mini and most cheap OBD-II dongles)
   class NativeSpp {
     async open(addr) {
-      const p = waitEvt('spp-open', 45000);
+      const p = waitEvt('spp-open', 150000);
       Bus.h['spp-data'] = (b) => this.onData && this.onData(b64d(b));
       Bus.h['spp-lost'] = () => this.onLost && this.onLost();
       root.JetNative.sppOpen(addr);
@@ -216,7 +216,7 @@
       if (this.noSensors) return null;
       const r = await this.request(P.LINK.SENSORS, [], 700);
       if (!r || r[0] !== 0) { this.sensorFails = (this.sensorFails || 0) + 1; if (this.sensorFails > 3) this.noSensors = true; return null; }
-      this.sensorFails = 0; return P.decodeSensors(r.slice(1));
+      this.sensorFails = 0; const o = P.decodeSensors(r.slice(1)); if (o) o.t = Date.now(); return o;
     }
     async txrx(frame, ml, timeout) {
       const r = await this.request(P.LINK.TXRX, [ml, timeout & 0xFF, timeout >> 8, ...frame], timeout + 1200);

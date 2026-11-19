@@ -568,12 +568,38 @@ public class JetBridge {
 
     /** mode: "all" | "obd" | "gauge" (only changes the sort order/title). Result: event 'bt-pick' {ok, addr, name, kind} */
     @JavascriptInterface
-    public void btPick(final String mode) { ui.post(() -> btPickDialog(mode)); }
+    public void btPick(final String mode) {
+        ui.post(() -> {
+            try { btPickDialog(mode); }
+            catch (Throwable e) { btFail("ค้นหา Bluetooth ผิดพลาด: " + e); }
+        });
+    }
+
+    @JavascriptInterface
+    public void openAppSettings() {
+        try {
+            Intent i = new Intent(android.provider.Settings.ACTION_APPLICATION_DETAILS_SETTINGS, Uri.parse("package:" + act.getPackageName()));
+            i.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+            act.startActivity(i);
+        } catch (Exception ignore) { }
+    }
+
+    @JavascriptInterface
+    public void openBtSettings() {
+        try { Intent i = new Intent(android.provider.Settings.ACTION_BLUETOOTH_SETTINGS); i.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK); act.startActivity(i); } catch (Exception ignore) { }
+    }
 
     void btFail(String msg) { emit("bt-pick", "{\"ok\":false,\"err\":" + q(msg) + "}"); }
 
     void btPickDialog(final String mode) {
-        if (!act.hasBlePermission()) { act.askPermissions(); btFail("กรุณาอนุญาตสิทธิ์ Bluetooth/อุปกรณ์ใกล้เคียง แล้วกดค้นหาอีกครั้ง"); return; }
+        if (!act.hasBlePermission()) { act.askPermissions(); btFail("PERM:ยังไม่ได้อนุญาตสิทธิ์ “อุปกรณ์ใกล้เคียง/Bluetooth” — กดอนุญาต แล้วกดค้นหาอีกครั้ง (ถ้าไม่ขึ้นช่องถาม ให้ไปตั้งค่าแอป → สิทธิ์)"); return; }
+        if (Build.VERSION.SDK_INT < 31) {
+            try {
+                android.location.LocationManager lm = (android.location.LocationManager) act.getSystemService(Context.LOCATION_SERVICE);
+                boolean on = lm != null && (lm.isProviderEnabled(android.location.LocationManager.GPS_PROVIDER) || lm.isProviderEnabled(android.location.LocationManager.NETWORK_PROVIDER));
+                if (!on) { btFail("LOC:Android รุ่นนี้ต้องเปิด “ตำแหน่ง (Location/GPS)” ก่อนจึงจะค้นหา Bluetooth เจอ — เปิดแล้วกดค้นหาอีกครั้ง"); return; }
+            } catch (Exception ignore) { }
+        }
         BluetoothManager bm = (BluetoothManager) act.getSystemService(Context.BLUETOOTH_SERVICE);
         final BluetoothAdapter ad = bm == null ? null : bm.getAdapter();
         if (ad == null) { btFail("เครื่องนี้ไม่มี Bluetooth"); return; }
@@ -626,6 +652,7 @@ public class JetBridge {
                 for (BluetoothDevice bd : ad.getBondedDevices()) addEnt(ents, bd, true, false, true, false, -127);
             } catch (Exception ignore) { }
             refresh[0].run();
+            if (!ents.isEmpty()) dlg.setTitle("เลือกอุปกรณ์ (กำลังค้นหาเพิ่ม…)");
             // 2) classic discovery
             discRx = new BroadcastReceiver() {
                 @Override @SuppressWarnings("deprecation")
@@ -642,8 +669,11 @@ public class JetBridge {
             };
             IntentFilter f = new IntentFilter(BluetoothDevice.ACTION_FOUND);
             f.addAction(BluetoothAdapter.ACTION_DISCOVERY_FINISHED);
-            act.registerReceiver(discRx, f);
-            try { ad.startDiscovery(); } catch (Exception ignore) { }
+            try {
+                if (Build.VERSION.SDK_INT >= 33) act.registerReceiver(discRx, f, Context.RECEIVER_EXPORTED);
+                else act.registerReceiver(discRx, f);
+                ad.startDiscovery();
+            } catch (Throwable ignore) { }
             // 3) BLE scan
             scanner = ad.getBluetoothLeScanner();
             if (scanner != null) {
@@ -665,7 +695,7 @@ public class JetBridge {
                 };
                 try { scanner.startScan(null, new ScanSettings.Builder().setScanMode(ScanSettings.SCAN_MODE_LOW_LATENCY).build(), scanCb); } catch (Exception ignore) { }
             }
-            ui.postDelayed(() -> { if (dlg.isShowing() && !done[0]) dlg.setTitle(ents.isEmpty() ? "ไม่พบอุปกรณ์ — กด “ค้นหาใหม่”" : "เลือกอุปกรณ์"); }, 12000);
+            ui.postDelayed(() -> { if (dlg.isShowing() && !done[0]) dlg.setTitle(ents.isEmpty() ? "ไม่พบอุปกรณ์ — เสียบ ELM327 ที่รถ เปิดกุญแจ ON แล้วกด “ค้นหาใหม่”" : "เลือกอุปกรณ์"); }, 12000);
         };
         dlg.show();
         dlg.getButton(AlertDialog.BUTTON_NEUTRAL).setOnClickListener(v -> { ents.clear(); refresh[0].run(); dlg.setTitle("ค้นหาอุปกรณ์ Bluetooth (กำลังค้นหา…)"); startScan[0].run(); });
@@ -723,18 +753,37 @@ public class JetBridge {
                 BluetoothAdapter ad = bm.getAdapter();
                 ad.cancelDiscovery();
                 BluetoothDevice dev = ad.getRemoteDevice(addr);
+                if (dev.getBondState() != BluetoothDevice.BOND_BONDED) {
+                    // pair first (phone shows the PIN box: ELM327 = 1234 or 0000) and wait for it
+                    final java.util.concurrent.CountDownLatch bonded = new java.util.concurrent.CountDownLatch(1);
+                    BroadcastReceiver br = new BroadcastReceiver() {
+                        @Override public void onReceive(Context c, Intent i) {
+                            BluetoothDevice d = i.getParcelableExtra(BluetoothDevice.EXTRA_DEVICE);
+                            if (d != null && addr.equalsIgnoreCase(d.getAddress()) && i.getIntExtra(BluetoothDevice.EXTRA_BOND_STATE, -1) == BluetoothDevice.BOND_BONDED) bonded.countDown();
+                        }
+                    };
+                    try {
+                        IntentFilter bf = new IntentFilter(BluetoothDevice.ACTION_BOND_STATE_CHANGED);
+                        if (Build.VERSION.SDK_INT >= 33) act.registerReceiver(br, bf, Context.RECEIVER_EXPORTED); else act.registerReceiver(br, bf);
+                        dev.createBond();
+                        bonded.await(60, java.util.concurrent.TimeUnit.SECONDS);
+                    } catch (Exception ignore) { }
+                    try { act.unregisterReceiver(br); } catch (Exception ignore) { }
+                    if (dev.getBondState() != BluetoothDevice.BOND_BONDED) throw new Exception("จับคู่ไม่สำเร็จ — ใส่ PIN 1234 หรือ 0000 ในช่องที่เด้งขึ้น (หรือจับคู่ในตั้งค่า Bluetooth ของมือถือก่อน)");
+                    Thread.sleep(800);
+                }
                 BluetoothSocket s = null;
-                for (int attempt = 0; attempt < 3 && s == null; attempt++) {
+                for (int attempt = 0; attempt < 5 && s == null; attempt++) {
                     try {
                         BluetoothSocket t;
-                        if (attempt == 0) t = dev.createRfcommSocketToServiceRecord(SPP);                 // secure (asks pairing PIN: 1234 / 0000)
-                        else if (attempt == 1) t = dev.createInsecureRfcommSocketToServiceRecord(SPP);   // insecure
+                        if (attempt == 0 || attempt == 3) t = dev.createRfcommSocketToServiceRecord(SPP);               // secure
+                        else if (attempt == 1 || attempt == 4) t = dev.createInsecureRfcommSocketToServiceRecord(SPP); // insecure
                         else t = (BluetoothSocket) dev.getClass().getMethod("createRfcommSocket", int.class).invoke(dev, 1);   // channel-1 fallback used by many clones
                         t.connect();
                         s = t;
                     } catch (Exception e) {
                         err = String.valueOf(e.getMessage());
-                        try { Thread.sleep(400); } catch (InterruptedException ignore) { }
+                        try { Thread.sleep(1000); } catch (InterruptedException ignore) { }
                     }
                 }
                 if (s == null) throw new Exception(err);
@@ -748,7 +797,7 @@ public class JetBridge {
                 int n2;
                 while (sppUp && (n2 = in.read(buf)) > 0) emit("spp-data", q(b64(buf, n2)));
             } catch (Exception e) {
-                if (!sppUp) { emit("spp-open", "{\"ok\":false,\"err\":" + q("เชื่อมต่อไม่สำเร็จ: " + e.getMessage() + " (จับคู่ในตั้งค่ามือถือก่อน PIN 1234 หรือ 0000)") + "}"); return; }
+                if (!sppUp) { emit("spp-open", "{\"ok\":false,\"err\":" + q("เชื่อมต่อไม่สำเร็จ: " + e.getMessage() + " — ตรวจว่าเสียบ ELM327 ที่รถและเปิดกุญแจ ON (ไฟบนตัว ELM ติด), ลบการจับคู่เก่าแล้วจับคู่ใหม่ PIN 1234/0000") + "}"); return; }
             }
             if (sppUp) { sppUp = false; emit("spp-lost", "{}"); }
         }, "spp-io").start();

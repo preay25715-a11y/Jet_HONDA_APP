@@ -68,21 +68,33 @@
   const ALLG = GRID.concat(OBDG);  // (GRID array is reused as the 'visible' list)
   let gFuel = S.gridFuel || 'all';
   const gLabel = (g) => (window.JetI18N && JetI18N.lang() === 'th' && g.th) ? g.th : (g.en || g.l || g.k);
+  const seen = new Set(), CELL = {};
+  let gAvail = S.gridAvail !== false;
   function buildGrid() {
-    const list = ALLG.filter((g) => gFuel === 'all' || g.f === 'b' || g.f === (gFuel === 'gas' ? 'g' : 'd'));
+    const list = ALLG.filter((g) => (gFuel === 'all' || g.f === 'b' || g.f === (gFuel === 'gas' ? 'g' : 'd')) && (!gAvail || seen.has(g.k)));
     $('#ggrid').innerHTML = list.map((g) => `<div class="card gt"><div class="gh"><span>${gLabel(g)}</span><span>${g.u}</span></div><div class="gv" id="gv${g.k}" style="${g.col ? 'color:' + g.col : ''}">--</div>${g.bar ? `<div class="gbar" id="gb${g.k}">${'<i></i>'.repeat(18)}</div>` : ''}</div>`).join('');
-    $$('#gFilter button').forEach((b) => b.classList.toggle('on', b.dataset.f === gFuel));
+    $$('#gFilter button[data-f]').forEach((b) => b.classList.toggle('on', b.dataset.f === gFuel));
+    const ga = $('#gAvail'); if (ga) ga.classList.toggle('on', gAvail);
     GRID.length = 0; list.forEach((g) => GRID.push(g));
+    for (const k in CELL) delete CELL[k];
+    list.forEach((g) => { CELL[g.k] = { v: $('#gv' + g.k), b: g.bar ? $$('#gb' + g.k + ' i') : null, t: null, n: -1 }; });
+    if (!list.length) $('#ggrid').innerHTML = '<div class="mut" style="padding:20px;grid-column:1/-1">ยังไม่มีค่าเข้ามา — เชื่อมต่อแล้วค่าจะโผล่ที่นี่เอง (กด “เฉพาะค่าที่มี” เพื่อดูทุกช่อง)</div>';
   }
-  $$('#gFilter button').forEach((b) => b.onclick = () => { gFuel = b.dataset.f; S.gridFuel = gFuel; C.saveS(); buildGrid(); renderGrid(); $('.page.show').scrollTop = 0; });
+  $('#gAvail').onclick = () => { gAvail = !gAvail; S.gridAvail = gAvail; C.saveS(); buildGrid(); renderGrid(); };
+  $$('#gFilter button[data-f]').forEach((b) => b.onclick = () => { gFuel = b.dataset.f; S.gridFuel = gFuel; C.saveS(); buildGrid(); renderGrid(); $('.page.show').scrollTop = 0; });
   window.addEventListener('jetlang', () => { buildGrid(); renderGrid(); });
   function renderGrid() {
+    let fresh = false;
+    for (const k in last) if (last[k] != null && !seen.has(k) && typeof last[k] === 'number') { seen.add(k); fresh = true; }
+    if (fresh && gAvail) { buildGrid(); }
     for (const g of GRID) {
-      const v = last[g.k]; const el = $('#gv' + g.k); if (!el) continue;
-      el.textContent = v == null ? '--' : g.k === 'GEAR' ? (v === 0 ? 'N' : String(v)) : (+v).toFixed(g.d);
-      if (g.bar) {
+      const c = CELL[g.k]; if (!c || !c.v) continue;
+      const v = last[g.k];
+      const t = v == null ? '--' : g.k === 'GEAR' ? (v === 0 ? 'N' : String(v)) : (+v).toFixed(g.d);
+      if (t !== c.t) { c.t = t; c.v.textContent = t; }
+      if (c.b) {
         const n = v == null ? 0 : Math.round(Math.max(0, Math.min(1, (v - g.bar[0]) / (g.bar[1] - g.bar[0]))) * 18);
-        $$('#gb' + g.k + ' i').forEach((e, i) => { const c = i >= n ? '' : g.grad ? (i < 9 ? '#2fd18b' : i < 13 ? '#d6e033' : i < 15 ? '#ffb020' : '#ff4d5e') : g.col; e.style.background = c; e.style.boxShadow = c ? '0 0 6px ' + c : ''; });
+        if (n !== c.n) { c.n = n; c.b.forEach((e, i) => { e.style.background = i >= n ? '' : g.grad ? (i < 9 ? '#2fd18b' : i < 13 ? '#d6e033' : i < 15 ? '#ffb020' : '#ff4d5e') : g.col; }); }
       }
     }
   }
@@ -237,7 +249,7 @@
     if (!afr.rec || d[LK()] == null || d.RPM == null || !afr.log) return;
     const p = livePos(afr.info, afr.xs, afr.ys, d);
     if (!p) return;
-    afr.log.add(p.fr, p.fc, d[LK()]); afr.dirty = true;
+    if (isCrp()) afr.log.add(p.fr, p.fc, d.CRP, 0, 5.5); else afr.log.add(p.fr, p.fc, d.AFR); afr.dirty = true;
   }
   function renderAfr() {
     if (!afr.log) afrAxesChanged();

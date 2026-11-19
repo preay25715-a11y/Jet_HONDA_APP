@@ -151,8 +151,8 @@
   T.AfrLog = class {
     constructor(rows, cols) { this.rows = rows; this.cols = cols; this.clear(); }
     clear() { this.c = Array.from({ length: this.rows * this.cols }, () => null); this.total = 0; }
-    add(r, c, afr) {
-      if (r == null || c == null || !(afr > 6 && afr < 25)) return;
+    add(r, c, afr, lo, hi) {   // AFR: 6..25 (default) — CRP volt log passes 0..5.5
+      if (r == null || c == null || !(afr >= (lo == null ? 6.0001 : lo) && afr <= (hi == null ? 24.9999 : hi))) return;
       r = Math.round(r); c = Math.round(c);
       const k = r * this.cols + c; const s = this.c[k] || (this.c[k] = { n: 0, sum: 0, min: 99, max: 0 });
       s.n++; s.sum += afr; s.min = Math.min(s.min, afr); s.max = Math.max(s.max, afr); this.total++;

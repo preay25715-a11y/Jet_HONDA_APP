@@ -154,7 +154,14 @@
       const dev = await JetBt.btPick(mode);
       if (dev.kind === 'gauge') return connect('gauge-only', dev);
       return connect('obd', dev);
-    } catch (e) { if (e.message !== 'ยกเลิก') { log('err', e.message || e); toast(e.message || String(e), 4000); } }
+    } catch (e) {
+      let m = e.message || String(e);
+      if (m === 'ยกเลิก') return;
+      const perm = /^PERM:/.test(m), loc = /^LOC:/.test(m); m = m.replace(/^(PERM|LOC):/, '');
+      log('err', m); toast(m, 6000);
+      if (perm && window.JetNative && JetNative.openAppSettings && await ask(m + '\n\nเปิดหน้าตั้งค่าแอปเลยไหม?', false)) JetNative.openAppSettings();
+      else if (loc) { /* message already says to enable Location */ }
+    }
   }
   async function connect(kind, dev) {
     if (!window.JetLic || !JetLic.ok()) return;
@@ -230,10 +237,11 @@
       g.appendChild(p); SEG.push(p);
     }
   })();
-  let lastN = -1;
+  let lastN = -1, lastOn = -1;
   function rpmArc(p) {
     const n = Math.round(p * NSEG); if (n === lastN) return; lastN = n;
-    SEG.forEach((e, i) => { const on = i < n; e.setAttribute('stroke', on ? e.dataset.c : '#11264a'); e.style.filter = on ? `drop-shadow(0 0 4px ${e.dataset.c})` : ''; });
+    const prev = lastOn; lastOn = n; const a = Math.min(prev, n), b = Math.max(prev, n); if (prev < 0) { SEG.forEach((e, i) => e.setAttribute('stroke', i < n ? e.dataset.c : '#11264a')); return; }
+    for (let i = a; i < b; i++) SEG[i].setAttribute('stroke', i < n ? SEG[i].dataset.c : '#11264a');
   }
   const ARC_LEN = 2 * Math.PI * 118 * 0.75;
   /* ---- every value the app can show (Dash tiles / GRID cells) ---- */
@@ -296,30 +304,35 @@
     if (d.TPS != null) $('#tpsBar').style.width = Math.max(0, Math.min(100, d.TPS)) + '%';
   }
   // merge gauge sensors (AFR wideband / GPS / EOT / O2) and phone GPS into a live sample
+  let sensLoopOn = false;
+  async function sensLoop() {          // gauge sensors polled independently: the K-line/OBD read never waits for them
+    if (sensLoopOn) return; sensLoopOn = true;
+    try { while (st.live && st.gauge && st.gauge.sensors && !st.gauge.noSensors) { try { const s = await st.gauge.sensors(); if (s) st.sens = s; else await P.sleep(30); } catch (e) { await P.sleep(100); } } }
+    finally { sensLoopOn = false; }
+  }
   async function mergeSensors(d) {
-    if (st.gauge && st.gauge.sensors) {
-      const s = await st.gauge.sensors();
-      if (s) { st.sens = s; if (s.afrOk) d.AFR = s.afr; if (s.eotOk) d.EOT = s.eot; if (s.o2Ok) d.O2 = s.o2; if (s.crpOk) d.CRP = s.crp; if (s.gearOk) d.GEAR = s.gear; if (s.obd) Object.assign(d, s.obd); }
-    }
+    const s = st.sens;
+    if (s && st.gauge && Date.now() - s.t < 1500) { if (s.afrOk) d.AFR = s.afr; if (s.eotOk) d.EOT = s.eot; if (s.o2Ok) d.O2 = s.o2; if (s.crpOk) d.CRP = s.crp; if (s.gearOk) d.GEAR = s.gear; if (s.obd) Object.assign(d, s.obd); }
     const g = window.JetGps && JetGps.current();
     if (g) { d.GPS = g.spd; d.gpsSrc = g.src; }
-    if (d.GEAR == null) {
+    if (d.GEAR == null && !S.cvt) {
       const sp = d.SPD != null ? d.SPD : d.GPS, g = P.computeGear(d.RPM, sp, P.parseRatios(S.gearRatios || DEF_RATIOS));
       if (g != null) d.GEAR = g;
     }
     d.t = Date.now();
+    (window.JetDeriveHooks || []).forEach((f) => { try { f(d); } catch (e) { console.error(e); } });
     return d;
   }
   function emitLive(d) { (window.JetHooks || []).forEach((f) => { try { f(d); } catch (e) { console.error(e); } }); }
   async function liveLoop() {
     st.liveRunning = true;
-    let fails = 0;
+    let fails = 0; sensLoop();
     while (st.live && st.ecu && !st.busy) {
       try {
         const d = await st.ecu.readLive();
         if (d) { fails = 0; await mergeSensors(d); showLive(d); emitLive(d); } else if (++fails > 5) { log('err', 'LIVE: กล่องไม่ตอบ'); stopLive(); }
       } catch (e) { stopLive(); }
-      await P.sleep(40);
+      await Promise.resolve();   // no artificial pause: next request goes out as soon as the answer is in
     }
     st.liveRunning = false;
   }

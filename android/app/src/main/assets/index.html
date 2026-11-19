@@ -67,7 +67,7 @@ a{color:var(--ac2)}
 .wide .v{font-family:var(--disp);font-weight:700;font-size:36px;white-space:nowrap}
 .wide .v small{font-size:.5em;color:#9fb5da;font-weight:400;margin-left:3px}
 .track{flex:1;height:7px;border-radius:4px;background:#14284a;overflow:hidden}
-.track i{display:block;height:100%;width:0;background:linear-gradient(90deg,var(--ac),var(--ac2));border-radius:4px;transition:width .15s}
+.track i{display:block;height:100%;width:0;background:linear-gradient(90deg,var(--ac),var(--ac2));border-radius:4px}
 
 /* ---------- controls ---------- */
 .btn{border:1.5px solid var(--line);background:#0f1f3b;border-radius:16px;padding:10px 18px;font-weight:500;font-size:15px;transition:.15s;white-space:nowrap}
@@ -492,7 +492,7 @@ table.mtab{border-collapse:separate;border-spacing:0;font-family:var(--disp);fon
 
     <!-- GRID -->
     <section class="page dashpage" data-name="GRID" data-tab="Grid">
-      <div class="gfilter" id="gFilter"><button data-f="all">ทั้งหมด / ALL</button><button data-f="gas">⛽ เบนซิน</button><button data-f="dsl">🛢 ดีเซล</button><span class="mut gcnt">OBD-II Mode 01</span></div>
+      <div class="gfilter" id="gFilter"><button data-f="all">ทั้งหมด / ALL</button><button data-f="gas">⛽ เบนซิน</button><button data-f="dsl">🛢 ดีเซล</button><button id="gAvail">✔ เฉพาะค่าที่มี</button><span class="mut gcnt">OBD-II Mode 01</span></div>
       <div class="ggrid" id="ggrid"></div></section>
 
     <!-- GRAPH -->
@@ -564,7 +564,7 @@ table.mtab{border-collapse:separate;border-spacing:0;font-family:var(--disp);fon
   <h3 style="margin-top:6px">ภาษา</h3>
   <div class="row langrow"><button class="btn" data-lang="th">ไทย</button><button class="btn" data-lang="en">English</button></div>
   <h3 style="margin-top:16px">⬆ เวอร์ชันและอัปเดต</h3>
-  <div class="gsect"><div class="kv"><span>เวอร์ชันที่ใช้</span><span id="verNow">v1.2.0</span><span>เวอร์ชันล่าสุด</span><span id="verNew">—</span></div>
+  <div class="gsect"><div class="kv"><span>เวอร์ชันที่ใช้</span><span id="verNow">v1.2.1</span><span>เวอร์ชันล่าสุด</span><span id="verNew">—</span></div>
     <label class="f">ที่อยู่โปรเจกต์ GitHub (เช่น ชื่อ/โปรเจกต์ หรือลิงก์)<input id="updRepo" placeholder="owner/repo" autocapitalize="none" spellcheck="false"></label>
     <div class="row"><button class="btn" id="updCheck">🔄 ตรวจสอบอัปเดต</button><button class="btn pri" id="updGet" hidden>⬇ อัปเดตเลย</button></div>
     <div class="mut" id="updMsg"></div></div>
@@ -1482,8 +1482,8 @@ table.mtab{border-collapse:separate;border-spacing:0;font-family:var(--disp);fon
   T.AfrLog = class {
     constructor(rows, cols) { this.rows = rows; this.cols = cols; this.clear(); }
     clear() { this.c = Array.from({ length: this.rows * this.cols }, () => null); this.total = 0; }
-    add(r, c, afr) {
-      if (r == null || c == null || !(afr > 6 && afr < 25)) return;
+    add(r, c, afr, lo, hi) {   // AFR: 6..25 (default) — CRP volt log passes 0..5.5
+      if (r == null || c == null || !(afr >= (lo == null ? 6.0001 : lo) && afr <= (hi == null ? 24.9999 : hi))) return;
       r = Math.round(r); c = Math.round(c);
       const k = r * this.cols + c; const s = this.c[k] || (this.c[k] = { n: 0, sum: 0, min: 99, max: 0 });
       s.n++; s.sum += afr; s.min = Math.min(s.min, afr); s.max = Math.max(s.max, afr); this.total++;
@@ -1681,19 +1681,22 @@ table.mtab{border-collapse:separate;border-spacing:0;font-family:var(--disp);fon
     }
     async readLive() {
       if (this.state !== 'OK') return null;
-      const sup = this.pidList, slowTurn = this.cycle++ % 8 === 0;
-      const want = sup.filter((p) => { const k = PIDS[p][0]; return FAST.includes(k) || slowTurn; });
-      // battery voltage from the adapter itself when PID 42 is not offered
+      // tier 1 (every cycle): RPM / speed / throttle / MAP — one short request = fastest refresh
+      // tier 2 (every 3rd cycle): the other Dash values;  tier 3 (every 12th): everything else
+      const c = this.cycle++, key = (p) => PIDS[p][0];
+      const T1 = ['RPM', 'SPD', 'TPS', 'MAP'];
+      const t1 = this.pidList.filter((p) => T1.includes(key(p))), rest = this.pidList.filter((p) => !T1.includes(key(p)));
+      const want = t1.slice();
+      for (const p of rest) { const k = key(p); if (FAST.includes(k) ? c % 3 === 0 : c % 12 === 0) want.push(p); }
+      if (!want.length) return null;
       const d = Object.assign({}, this.last);
-      // group requests: ELM327 allows up to 6 PIDs per request on CAN
       for (let i = 0; i < want.length; i += MAX_PER_REQ) {
         const g = want.slice(i, i + MAX_PER_REQ);
         let r = await this._read(g);
         if (!Object.keys(r).length && g.length > 1) { r = {}; for (const p of g) Object.assign(r, await this._read([p])); }
         Object.assign(d, r);
       }
-      if (slowTurn && !this.supported.has(0x42)) { const l = await this.query('ATRV', 1500); const m = l && /([0-9.]+)\s*V/i.exec(l.join(' ')); if (m) d.BATT = parseFloat(m[1]); }
-      if (!want.length) return null;
+      if (c % 12 === 0 && !this.supported.has(0x42)) { const l = await this.query('ATRV', 1500); const m = l && /([0-9.]+)\s*V/i.exec(l.join(' ')); if (m) d.BATT = parseFloat(m[1]); }
       this.last = d;
       return Object.assign({}, d);   // OBD keys (P.OBD) feed Dash/Grid directly
     }
@@ -1857,7 +1860,7 @@ table.mtab{border-collapse:separate;border-spacing:0;font-family:var(--disp);fon
   // classic Bluetooth SPP (ELM327 mini and most cheap OBD-II dongles)
   class NativeSpp {
     async open(addr) {
-      const p = waitEvt('spp-open', 45000);
+      const p = waitEvt('spp-open', 150000);
       Bus.h['spp-data'] = (b) => this.onData && this.onData(b64d(b));
       Bus.h['spp-lost'] = () => this.onLost && this.onLost();
       root.JetNative.sppOpen(addr);
@@ -1976,7 +1979,7 @@ table.mtab{border-collapse:separate;border-spacing:0;font-family:var(--disp);fon
       if (this.noSensors) return null;
       const r = await this.request(P.LINK.SENSORS, [], 700);
       if (!r || r[0] !== 0) { this.sensorFails = (this.sensorFails || 0) + 1; if (this.sensorFails > 3) this.noSensors = true; return null; }
-      this.sensorFails = 0; return P.decodeSensors(r.slice(1));
+      this.sensorFails = 0; const o = P.decodeSensors(r.slice(1)); if (o) o.t = Date.now(); return o;
     }
     async txrx(frame, ml, timeout) {
       const r = await this.request(P.LINK.TXRX, [ml, timeout & 0xFF, timeout >> 8, ...frame], timeout + 1200);
@@ -2165,7 +2168,14 @@ table.mtab{border-collapse:separate;border-spacing:0;font-family:var(--disp);fon
       const dev = await JetBt.btPick(mode);
       if (dev.kind === 'gauge') return connect('gauge-only', dev);
       return connect('obd', dev);
-    } catch (e) { if (e.message !== 'ยกเลิก') { log('err', e.message || e); toast(e.message || String(e), 4000); } }
+    } catch (e) {
+      let m = e.message || String(e);
+      if (m === 'ยกเลิก') return;
+      const perm = /^PERM:/.test(m), loc = /^LOC:/.test(m); m = m.replace(/^(PERM|LOC):/, '');
+      log('err', m); toast(m, 6000);
+      if (perm && window.JetNative && JetNative.openAppSettings && await ask(m + '\n\nเปิดหน้าตั้งค่าแอปเลยไหม?', false)) JetNative.openAppSettings();
+      else if (loc) { /* message already says to enable Location */ }
+    }
   }
   async function connect(kind, dev) {
     if (!window.JetLic || !JetLic.ok()) return;
@@ -2241,10 +2251,11 @@ table.mtab{border-collapse:separate;border-spacing:0;font-family:var(--disp);fon
       g.appendChild(p); SEG.push(p);
     }
   })();
-  let lastN = -1;
+  let lastN = -1, lastOn = -1;
   function rpmArc(p) {
     const n = Math.round(p * NSEG); if (n === lastN) return; lastN = n;
-    SEG.forEach((e, i) => { const on = i < n; e.setAttribute('stroke', on ? e.dataset.c : '#11264a'); e.style.filter = on ? `drop-shadow(0 0 4px ${e.dataset.c})` : ''; });
+    const prev = lastOn; lastOn = n; const a = Math.min(prev, n), b = Math.max(prev, n); if (prev < 0) { SEG.forEach((e, i) => e.setAttribute('stroke', i < n ? e.dataset.c : '#11264a')); return; }
+    for (let i = a; i < b; i++) SEG[i].setAttribute('stroke', i < n ? SEG[i].dataset.c : '#11264a');
   }
   const ARC_LEN = 2 * Math.PI * 118 * 0.75;
   /* ---- every value the app can show (Dash tiles / GRID cells) ---- */
@@ -2307,30 +2318,35 @@ table.mtab{border-collapse:separate;border-spacing:0;font-family:var(--disp);fon
     if (d.TPS != null) $('#tpsBar').style.width = Math.max(0, Math.min(100, d.TPS)) + '%';
   }
   // merge gauge sensors (AFR wideband / GPS / EOT / O2) and phone GPS into a live sample
+  let sensLoopOn = false;
+  async function sensLoop() {          // gauge sensors polled independently: the K-line/OBD read never waits for them
+    if (sensLoopOn) return; sensLoopOn = true;
+    try { while (st.live && st.gauge && st.gauge.sensors && !st.gauge.noSensors) { try { const s = await st.gauge.sensors(); if (s) st.sens = s; else await P.sleep(30); } catch (e) { await P.sleep(100); } } }
+    finally { sensLoopOn = false; }
+  }
   async function mergeSensors(d) {
-    if (st.gauge && st.gauge.sensors) {
-      const s = await st.gauge.sensors();
-      if (s) { st.sens = s; if (s.afrOk) d.AFR = s.afr; if (s.eotOk) d.EOT = s.eot; if (s.o2Ok) d.O2 = s.o2; if (s.crpOk) d.CRP = s.crp; if (s.gearOk) d.GEAR = s.gear; if (s.obd) Object.assign(d, s.obd); }
-    }
+    const s = st.sens;
+    if (s && st.gauge && Date.now() - s.t < 1500) { if (s.afrOk) d.AFR = s.afr; if (s.eotOk) d.EOT = s.eot; if (s.o2Ok) d.O2 = s.o2; if (s.crpOk) d.CRP = s.crp; if (s.gearOk) d.GEAR = s.gear; if (s.obd) Object.assign(d, s.obd); }
     const g = window.JetGps && JetGps.current();
     if (g) { d.GPS = g.spd; d.gpsSrc = g.src; }
-    if (d.GEAR == null) {
+    if (d.GEAR == null && !S.cvt) {
       const sp = d.SPD != null ? d.SPD : d.GPS, g = P.computeGear(d.RPM, sp, P.parseRatios(S.gearRatios || DEF_RATIOS));
       if (g != null) d.GEAR = g;
     }
     d.t = Date.now();
+    (window.JetDeriveHooks || []).forEach((f) => { try { f(d); } catch (e) { console.error(e); } });
     return d;
   }
   function emitLive(d) { (window.JetHooks || []).forEach((f) => { try { f(d); } catch (e) { console.error(e); } }); }
   async function liveLoop() {
     st.liveRunning = true;
-    let fails = 0;
+    let fails = 0; sensLoop();
     while (st.live && st.ecu && !st.busy) {
       try {
         const d = await st.ecu.readLive();
         if (d) { fails = 0; await mergeSensors(d); showLive(d); emitLive(d); } else if (++fails > 5) { log('err', 'LIVE: กล่องไม่ตอบ'); stopLive(); }
       } catch (e) { stopLive(); }
-      await P.sleep(40);
+      await Promise.resolve();   // no artificial pause: next request goes out as soon as the answer is in
     }
     st.liveRunning = false;
   }
@@ -2535,6 +2551,11 @@ table.mtab{border-collapse:separate;border-spacing:0;font-family:var(--disp);fon
     ['🚗 OBD-II: ยังไม่เชื่อม', '🚗 OBD-II: not connected'], ['🚗 OBD-II:', '🚗 OBD-II:'], ['ดีเซล', 'Diesel'], ['เบนซิน', 'Petrol'],
     ['เลือกอุปกรณ์ Bluetooth…', 'Choose a Bluetooth device…'], ['เชื่อม OBD-II แล้ว', 'OBD-II connected'], ['ตัดการเชื่อมต่อ OBD แล้ว', 'OBD disconnected'],
     ['OBD หลุดการเชื่อมต่อ', 'OBD connection lost'], ['เชื่อม ELM327 ได้เฉพาะในแอป Android', 'ELM327 works only in the Android app'],
+    ['🏍 รุ่นรถ', '🏍 Vehicle'], ['เลือกรุ่น Honda', 'Choose Honda model'], ['— เลือกรุ่น —', '— choose model —'], ['รถครอบครัว / Cub', 'Family / Cub'], ['สกู๊ตเตอร์ (CVT)', 'Scooters (CVT)'],
+    ['มินิไบค์ / Retro', 'Mini / Retro'], ['สปอร์ต / เนคเก็ต', 'Sport / Naked'], ['ครุยเซอร์ / คลาสสิก', 'Cruiser / Classic'], ['ผจญภัย / ออฟโรด', 'Adventure / Off-road'], ['ทัวร์ริ่ง', 'Touring'],
+    ['กำหนดเอง (รุ่นอื่น)', 'Custom (other model)'], ['จำนวนเกียร์ (0 = ออโต้/CVT)', 'Gears (0 = auto/CVT)'], ['RPM เต็มสเกลหน้าปัด', 'Gauge full-scale RPM'], ['อัตราส่วนเกียร์ (rpm ต่อ km/h)', 'Gear ratios (rpm per km/h)'],
+    ['เรียนรู้เกียร์:', 'Learn gear:'], ['บันทึกเกียร์นี้ (ขับค้างเกียร์ไว้ 2 วิ)', 'Save this gear (hold the gear 2 s while riding)'], ['✔ เฉพาะค่าที่มี', '✔ Only values with data'],
+    ['ยังไม่มีค่าเข้ามา — เชื่อมต่อแล้วค่าจะโผล่ที่นี่เอง (กด “เฉพาะค่าที่มี” เพื่อดูทุกช่อง)', 'No data yet — values appear here once connected (tap “Only values with data” to see every cell)'],
     ['ตั้งค่า', 'SETTINGS'], ['ภาษา', 'Language'], ['ค้นหาบลูทูธ', 'Search Bluetooth'], ['📶 ค้นหาบลูทูธ', '📶 Search Bluetooth'], ['ค่า AFR และจีพีเอส', 'AFR & GPS'],
     ['เป้า AFR (ขับปกติ)', 'Target AFR (cruise)'], ['เป้า AFR (เปิดคันเร่งเต็ม)', 'Target AFR (full throttle)'], ['ถือว่าเปิดเต็มเมื่อคันเร่ง ≥ (%)', 'Full throttle when pedal ≥ (%)'],
     ['แหล่งสัญญาณจีพีเอส', 'GPS source'], ['อัตโนมัติ (เกจก่อน)', 'AUTO (gauge first)'], ['โหมดสาธิต (จำลอง)', 'DEMO (simulated)'], ['ใช้เป็นตัวต่อสาย K-line', 'Used as K-line adapter'],
@@ -2681,21 +2702,33 @@ table.mtab{border-collapse:separate;border-spacing:0;font-family:var(--disp);fon
   const ALLG = GRID.concat(OBDG);  // (GRID array is reused as the 'visible' list)
   let gFuel = S.gridFuel || 'all';
   const gLabel = (g) => (window.JetI18N && JetI18N.lang() === 'th' && g.th) ? g.th : (g.en || g.l || g.k);
+  const seen = new Set(), CELL = {};
+  let gAvail = S.gridAvail !== false;
   function buildGrid() {
-    const list = ALLG.filter((g) => gFuel === 'all' || g.f === 'b' || g.f === (gFuel === 'gas' ? 'g' : 'd'));
+    const list = ALLG.filter((g) => (gFuel === 'all' || g.f === 'b' || g.f === (gFuel === 'gas' ? 'g' : 'd')) && (!gAvail || seen.has(g.k)));
     $('#ggrid').innerHTML = list.map((g) => `<div class="card gt"><div class="gh"><span>${gLabel(g)}</span><span>${g.u}</span></div><div class="gv" id="gv${g.k}" style="${g.col ? 'color:' + g.col : ''}">--</div>${g.bar ? `<div class="gbar" id="gb${g.k}">${'<i></i>'.repeat(18)}</div>` : ''}</div>`).join('');
-    $$('#gFilter button').forEach((b) => b.classList.toggle('on', b.dataset.f === gFuel));
+    $$('#gFilter button[data-f]').forEach((b) => b.classList.toggle('on', b.dataset.f === gFuel));
+    const ga = $('#gAvail'); if (ga) ga.classList.toggle('on', gAvail);
     GRID.length = 0; list.forEach((g) => GRID.push(g));
+    for (const k in CELL) delete CELL[k];
+    list.forEach((g) => { CELL[g.k] = { v: $('#gv' + g.k), b: g.bar ? $$('#gb' + g.k + ' i') : null, t: null, n: -1 }; });
+    if (!list.length) $('#ggrid').innerHTML = '<div class="mut" style="padding:20px;grid-column:1/-1">ยังไม่มีค่าเข้ามา — เชื่อมต่อแล้วค่าจะโผล่ที่นี่เอง (กด “เฉพาะค่าที่มี” เพื่อดูทุกช่อง)</div>';
   }
-  $$('#gFilter button').forEach((b) => b.onclick = () => { gFuel = b.dataset.f; S.gridFuel = gFuel; C.saveS(); buildGrid(); renderGrid(); $('.page.show').scrollTop = 0; });
+  $('#gAvail').onclick = () => { gAvail = !gAvail; S.gridAvail = gAvail; C.saveS(); buildGrid(); renderGrid(); };
+  $$('#gFilter button[data-f]').forEach((b) => b.onclick = () => { gFuel = b.dataset.f; S.gridFuel = gFuel; C.saveS(); buildGrid(); renderGrid(); $('.page.show').scrollTop = 0; });
   window.addEventListener('jetlang', () => { buildGrid(); renderGrid(); });
   function renderGrid() {
+    let fresh = false;
+    for (const k in last) if (last[k] != null && !seen.has(k) && typeof last[k] === 'number') { seen.add(k); fresh = true; }
+    if (fresh && gAvail) { buildGrid(); }
     for (const g of GRID) {
-      const v = last[g.k]; const el = $('#gv' + g.k); if (!el) continue;
-      el.textContent = v == null ? '--' : g.k === 'GEAR' ? (v === 0 ? 'N' : String(v)) : (+v).toFixed(g.d);
-      if (g.bar) {
+      const c = CELL[g.k]; if (!c || !c.v) continue;
+      const v = last[g.k];
+      const t = v == null ? '--' : g.k === 'GEAR' ? (v === 0 ? 'N' : String(v)) : (+v).toFixed(g.d);
+      if (t !== c.t) { c.t = t; c.v.textContent = t; }
+      if (c.b) {
         const n = v == null ? 0 : Math.round(Math.max(0, Math.min(1, (v - g.bar[0]) / (g.bar[1] - g.bar[0]))) * 18);
-        $$('#gb' + g.k + ' i').forEach((e, i) => { const c = i >= n ? '' : g.grad ? (i < 9 ? '#2fd18b' : i < 13 ? '#d6e033' : i < 15 ? '#ffb020' : '#ff4d5e') : g.col; e.style.background = c; e.style.boxShadow = c ? '0 0 6px ' + c : ''; });
+        if (n !== c.n) { c.n = n; c.b.forEach((e, i) => { e.style.background = i >= n ? '' : g.grad ? (i < 9 ? '#2fd18b' : i < 13 ? '#d6e033' : i < 15 ? '#ffb020' : '#ff4d5e') : g.col; }); }
       }
     }
   }
@@ -2850,7 +2883,7 @@ table.mtab{border-collapse:separate;border-spacing:0;font-family:var(--disp);fon
     if (!afr.rec || d[LK()] == null || d.RPM == null || !afr.log) return;
     const p = livePos(afr.info, afr.xs, afr.ys, d);
     if (!p) return;
-    afr.log.add(p.fr, p.fc, d[LK()]); afr.dirty = true;
+    if (isCrp()) afr.log.add(p.fr, p.fc, d.CRP, 0, 5.5); else afr.log.add(p.fr, p.fc, d.AFR); afr.dirty = true;
   }
   function renderAfr() {
     if (!afr.log) afrAxesChanged();
@@ -2997,11 +3030,137 @@ table.mtab{border-collapse:separate;border-spacing:0;font-family:var(--disp);fon
   afrAxesChanged();
 })();
 
+/* =====================================================================
+ * Jet Smart Gauge — vehicle.js
+ * Honda motorcycles sold in Thailand: pick the model in Setup → sets gauge scale,
+ * gear count (CVT hides the gear box), plus gear learning and derived values.
+ * ===================================================================== */
+(function () {
+  'use strict';
+  const C = window.JetCore, P = window.HP;
+  const { st, S, $, $$, toast } = C;
+
+  // [id, group, name, cc, gears (0 = CVT/auto), gauge rpm scale]  — defaults, all editable in Setup
+  const B = (g, rows) => rows.map((r) => ({ id: g[0] + '-' + r[0].toLowerCase().replace(/[^a-z0-9]+/g, ''), group: g[1], name: r[0], cc: r[1], gears: r[2], rpm: r[3] }));
+  const BIKES = [].concat(
+    B(['fam', 'รถครอบครัว / Cub'], [
+      ['Wave 100', 97, 4, 10000], ['Wave 110i', 109, 4, 10000], ['Wave 110 (คาร์บู)', 109, 4, 10000], ['Wave 125i', 125, 4, 10000], ['Wave 125 / 125R / 125S', 125, 4, 10000],
+      ['Dream 110i / Dream Super Cub', 109, 4, 10000], ['Dream 125', 125, 4, 10000], ['Super Cub 110', 109, 4, 10000], ['Super Cub C125 / C125', 125, 4, 10000],
+    ]),
+    B(['sct', 'สกู๊ตเตอร์ (CVT)'], [
+      ['Scoopy-i (110)', 109, 0, 10000], ['Zoomer-X', 109, 0, 10000], ['Moove', 109, 0, 10000], ['Spacy-i', 109, 0, 10000], ['Icon', 109, 0, 10000],
+      ['Click 110i', 109, 0, 10000], ['Click 125i', 125, 0, 10000], ['Click 150i', 149, 0, 10000], ['Click 160 / 160 Sport', 157, 0, 10000],
+      ['Giorno+', 125, 0, 10000], ['Lead 125', 125, 0, 10000], ['PCX 125', 125, 0, 10000], ['PCX 150', 149, 0, 10000], ['PCX 160 / PCX e:HEV', 157, 0, 10000],
+      ['ADV 150', 149, 0, 10000], ['ADV 160', 157, 0, 10000], ['ADV 350', 330, 0, 9000], ['Forza 300', 279, 0, 9000], ['Forza 350', 330, 0, 9000], ['SH 125 / SH 150', 125, 0, 10000], ['SH 350', 330, 0, 9000],
+    ]),
+    B(['mini', 'มินิไบค์ / Retro'], [
+      ['Monkey 125', 125, 5, 10000], ['MSX125 / Grom', 125, 4, 10000], ['Dax 125', 125, 4, 10000], ['CT125 / Hunter Cub', 125, 4, 10000],
+    ]),
+    B(['spt', 'สปอร์ต / เนคเก็ต'], [
+      ['CBR150R', 149, 6, 13000], ['CB150R ExMotion', 149, 6, 13000], ['CB150X', 149, 6, 12000], ['Sonic 150R', 149, 6, 13000], ['CBR250R', 249, 6, 12000], ['CBR250RR', 249, 6, 14000],
+      ['CB300R', 286, 6, 12000], ['CBR300R', 286, 6, 12000], ['CBR500R / E-Clutch', 471, 6, 10000], ['CB500F / CB500 Hornet', 471, 6, 10000],
+      ['CB650F / CB650R', 649, 6, 12000], ['CBR650F / CBR650R', 649, 6, 12000], ['CB750 Hornet', 755, 6, 11000], ['CB1000 Hornet', 999, 6, 12000], ['CB1000R', 998, 6, 12000],
+      ['CBR1000RR / Fireblade', 999, 6, 14000], ['CBR1000RR-R Fireblade SP', 999, 6, 15000],
+    ]),
+    B(['crz', 'ครุยเซอร์ / คลาสสิก'], [
+      ['Rebel 300', 286, 6, 10000], ['Rebel 500', 471, 6, 9000], ['Rebel 1100 / DCT', 1084, 6, 8000], ['GB350 / GB350C', 348, 5, 7000],
+    ]),
+    B(['adv', 'ผจญภัย / ออฟโรด'], [
+      ['CRF150L', 149, 5, 10000], ['CRF250L / Rally', 249, 6, 11000], ['CRF300L / Rally', 286, 6, 10000], ['NX500', 471, 6, 10000],
+      ['XL750 Transalp', 755, 6, 10000], ['CRF1100L Africa Twin', 1084, 6, 9000], ['X-ADV', 745, 6, 8000], ['NC750X', 745, 6, 8000],
+    ]),
+    B(['tour', 'ทัวร์ริ่ง'], [['NT1100', 1084, 6, 8000], ['Gold Wing', 1833, 7, 7000]]),
+    [{ id: 'custom', group: 'อื่นๆ', name: 'กำหนดเอง (รุ่นอื่น)', cc: 0, gears: 6, rpm: 12000 }]
+  );
+  P.BIKES = BIKES;
+  const byId = (id) => BIKES.find((b) => b.id === id);
+
+  // starting ratio guess (rpm per km/h) — refined by "learn gear"; rough shape only
+  const DEFAULT_RATIOS = { 4: '150 95 70 56', 5: '150 95 70 56 47', 6: '140 92 68 54 45 38', 7: '140 92 68 54 45 38 33' };
+
+  function apply(b, keepCustom) {
+    S.bike = b.id;
+    S.rpmMax = b.rpm; S.cvt = b.gears === 0; S.gears = b.gears;
+    if (!keepCustom || !S.gearRatios) S.gearRatios = b.gears ? (DEFAULT_RATIOS[b.gears] || DEFAULT_RATIOS[6]) : '';
+    S.gearLearned = false;
+    C.saveS(); refresh();
+  }
+  function refresh() {
+    const gb = $('.gearbox'); if (gb) gb.style.display = S.cvt ? 'none' : '';
+    const wide = $('.botrow .wide'); if (wide) wide.style.gridColumn = S.cvt ? '1 / -1' : '';
+    const b = byId(S.bike), t = $('#bikeName'); if (t) t.textContent = b ? b.name : '—';
+  }
+
+  /* ---------- Setup block ---------- */
+  (function ui() {
+    const card = $('#mSet .card'), anchor = card.querySelector('h3:nth-of-type(2)');
+    const blk = document.createElement('div');
+    const groups = [...new Set(BIKES.map((b) => b.group))];
+    blk.innerHTML = `<h3 style="margin-top:16px">🏍 รุ่นรถ</h3><div class="gsect">
+      <label class="f">เลือกรุ่น Honda<select id="sBike"><option value="">— เลือกรุ่น —</option>${groups.map((g) => `<optgroup label="${g}">${BIKES.filter((b) => b.group === g).map((b) => `<option value="${b.id}">${b.name}${b.cc ? ' · ' + b.cc + ' cc' : ''}${b.gears ? ' · ' + b.gears + ' สปีด' : ' · CVT'}</option>`).join('')}</optgroup>`).join('')}</select></label>
+      <div class="grid g3">
+        <label class="f">จำนวนเกียร์ (0 = ออโต้/CVT)<input id="sGears" type="number" min="0" max="8"></label>
+        <label class="f">RPM เต็มสเกลหน้าปัด<input id="sRpmMax" type="number" step="500"></label>
+        <label class="f">อัตราส่วนเกียร์ (rpm ต่อ km/h)<input id="sRatios" placeholder="140 92 68 54 45 38" autocapitalize="none"></label>
+      </div>
+      <div class="row" id="gearLearn" style="margin-top:8px;align-items:center"><span class="mut">เรียนรู้เกียร์:</span>
+        <select id="sLg"></select><button class="btn" id="sLgGo">บันทึกเกียร์นี้ (ขับค้างเกียร์ไว้ 2 วิ)</button></div>
+      <div class="mut" id="sLgMsg" style="margin-top:6px;font-size:13px"></div>
+    </div>`;
+    card.insertBefore(blk, anchor);
+    const fill = () => {
+      $('#sBike').value = S.bike || ''; $('#sGears').value = S.gears != null ? S.gears : 6; $('#sRpmMax').value = S.rpmMax || 12000; $('#sRatios').value = S.gearRatios || '';
+      const n = +$('#sGears').value; $('#sLg').innerHTML = Array.from({ length: n }, (_, i) => `<option value="${i + 1}">เกียร์ ${i + 1}</option>`).join('');
+      $('#gearLearn').style.display = n ? '' : 'none';
+    };
+    $('#bSet').addEventListener('click', fill);
+    $('#sBike').onchange = () => { const b = byId($('#sBike').value); if (b) { apply(b, false); fill(); toast('ตั้งค่ารุ่น ' + b.name + ' แล้ว'); } };
+    $('#sGears').onchange = () => { S.gears = Math.max(0, Math.min(8, +$('#sGears').value || 0)); S.cvt = S.gears === 0; if (S.gears && !S.gearRatios) S.gearRatios = DEFAULT_RATIOS[S.gears] || DEFAULT_RATIOS[6]; C.saveS(); refresh(); fill(); };
+    $('#sRpmMax').onchange = () => { S.rpmMax = Math.max(3000, +$('#sRpmMax').value || 12000); C.saveS(); };
+    $('#sRatios').onchange = () => { S.gearRatios = $('#sRatios').value.trim(); S.gearLearned = true; C.saveS(); };
+    // learn: average rpm/speed while a gear is held
+    $('#sLgGo').onclick = async () => {
+      const g = +$('#sLg').value, msg = $('#sLgMsg'); if (!st.last || st.last.RPM == null) { msg.textContent = 'ยังไม่มีค่ารอบเครื่อง — เชื่อมต่อก่อน'; return; }
+      const acc = []; msg.textContent = 'กำลังเก็บค่า… ค้างเกียร์ ' + g + ' และคงความเร็วไว้';
+      const t0 = Date.now();
+      while (Date.now() - t0 < 2000) { const d = st.last, sp = d.SPD != null ? d.SPD : d.GPS; if (d.RPM > 1200 && sp > 8) acc.push(d.RPM / sp); await new Promise((r) => setTimeout(r, 50)); }
+      if (acc.length < 10) { msg.textContent = 'เก็บค่าไม่พอ — ต้องมีความเร็ว > 8 km/h และรอบ > 1200 ขณะกด'; return; }
+      acc.sort((a, b) => a - b); const med = acc[acc.length >> 1];
+      const r = P.parseRatios(S.gearRatios || DEFAULT_RATIOS[S.gears || 6]); while (r.length < (S.gears || 6)) r.push(r[r.length - 1] * 0.85);
+      r[g - 1] = Math.round(med * 10) / 10; S.gearRatios = r.join(' '); S.gearLearned = true; C.saveS(); $('#sRatios').value = S.gearRatios;
+      msg.textContent = 'บันทึกเกียร์ ' + g + ' = ' + med.toFixed(1) + ' rpm/(km/h) แล้ว';
+    };
+    refresh();
+  })();
+
+  /* ---------- derived values (only when the ECU/gauge does not provide them) ---------- */
+  let baro = null, runStart = null, lastT = null, dist = 0;
+  const hook = (d) => {
+    const now = d.t || Date.now();
+    // barometric estimate: MAP with engine stopped / cranking, else sea-level default
+    if (d.MAP != null && d.RPM != null && d.RPM < 100) baro = d.MAP;
+    const B0 = baro || 101;
+    if (d.BARO == null && d.MAP != null) { d.BARO = B0; d.baroEst = 1; }
+    if (d.LOAD == null && d.MAP != null && d.RPM > 0) d.LOAD = Math.max(0, Math.min(100, d.MAP / B0 * 100));
+    if (d.ABSL == null && d.LOAD != null) d.ABSL = d.LOAD;
+    if (d.AFR == null && d.LAMB != null && d.LAMB > 0.5 && d.LAMB < 2 && !(st.fuelType === 'd')) d.AFR = d.LAMB * 14.7;   // car wideband (OBD PID 34) → AFR Log
+    if (d.AFR != null) { if (d.LAMB == null) d.LAMB = d.AFR / 14.7; if (d.EQR == null && d.LAMB > 0) d.EQR = 1 / d.LAMB; }
+    if (d.RPM > 300) { if (runStart == null) runStart = now; d.RUNT = Math.round((now - runStart) / 1000); } else if (runStart != null) d.RUNT = Math.round((now - runStart) / 1000);
+    const sp = d.SPD != null ? d.SPD : d.GPS;
+    if (sp != null && lastT != null && now > lastT && now - lastT < 2000) dist += sp * (now - lastT) / 3.6e6;
+    lastT = now; if (d.DISTC == null) d.DISTC = Math.round(dist * 100) / 100;
+    if (d.TPSR == null && d.TPS != null) d.TPSR = d.TPS;
+    if (d.CMDT == null && d.TPS != null) d.CMDT = d.TPS;
+  };
+  (window.JetDeriveHooks = window.JetDeriveHooks || []).push(hook);
+  window.addEventListener('jetlang', refresh);
+})();
+
 /* Jet Smart Gauge — update.js : version display + "check for update" (GitHub Releases) */
 (function (root) {
   'use strict';
   const C = root.JetCore, $ = (s) => document.querySelector(s);
-  const VER = '1.2.0';
+  const VER = '1.2.1';
   const num = (v) => String(v).replace(/^v/i, '').split('.').map((x) => parseInt(x, 10) || 0);
   const newer = (a, b) => { const x = num(a), y = num(b); for (let i = 0; i < 3; i++) { if ((x[i] || 0) !== (y[i] || 0)) return (x[i] || 0) > (y[i] || 0); } return false; };
   const repoOf = (s) => { s = String(s || '').trim().replace(/^https?:\/\/github\.com\//i, '').replace(/\.git$/i, '').replace(/\/+$/, ''); const m = s.match(/^([\w.-]+)\/([\w.-]+)/); return m ? m[1] + '/' + m[2] : ''; };

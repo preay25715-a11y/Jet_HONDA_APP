@@ -58,7 +58,7 @@ a{color:var(--ac2)}
 .wide .v{font-family:var(--disp);font-weight:700;font-size:36px;white-space:nowrap}
 .wide .v small{font-size:.5em;color:#9fb5da;font-weight:400;margin-left:3px}
 .track{flex:1;height:7px;border-radius:4px;background:#14284a;overflow:hidden}
-.track i{display:block;height:100%;width:0;background:linear-gradient(90deg,var(--ac),var(--ac2));border-radius:4px;transition:width .15s}
+.track i{display:block;height:100%;width:0;background:linear-gradient(90deg,var(--ac),var(--ac2));border-radius:4px}
 
 /* ---------- controls ---------- */
 .btn{border:1.5px solid var(--line);background:#0f1f3b;border-radius:16px;padding:10px 18px;font-weight:500;font-size:15px;transition:.15s;white-space:nowrap}
