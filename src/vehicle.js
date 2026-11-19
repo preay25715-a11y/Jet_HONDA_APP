@@ -88,7 +88,7 @@
     if (!keepCustom || !S.gearRatios) S.gearRatios = b.gears ? (b.gset && b.gset.length === b.gears ? b.gset.map((k) => Math.round(1000 / k * 10) / 10).join(' ') : (DEFAULT_RATIOS[b.gears] || DEFAULT_RATIOS[6])) : '';
     S.tankL = b.tank || 0; S.injFlow = b.inj || 0; S.redline = b.red || 0; S.cyl = b.cyl || 1;
     S.gearLearned = false;
-    C.saveS(); refresh();
+    C.saveS(); refresh(); window.dispatchEvent(new Event('jetvehicle'));
   }
   function refresh() {
     const gb = $('.gearbox'); if (gb) gb.style.display = S.cvt ? 'none' : '';
@@ -124,11 +124,11 @@
     $('#bSet').addEventListener('click', fill);
     $('#sBike').onchange = () => { const b = byId($('#sBike').value); if (b) { apply(b, false); fill(); toast('ตั้งค่ารุ่น ' + b.name + ' แล้ว'); } };
     $('#sGears').onchange = () => { S.gears = Math.max(0, Math.min(8, +$('#sGears').value || 0)); S.cvt = S.gears === 0; if (S.gears && !S.gearRatios) S.gearRatios = DEFAULT_RATIOS[S.gears] || DEFAULT_RATIOS[6]; C.saveS(); refresh(); fill(); };
-    $('#sRpmMax').onchange = () => { S.rpmMax = Math.max(3000, +$('#sRpmMax').value || 12000); C.saveS(); };
+    $('#sRpmMax').onchange = () => { S.rpmMax = Math.max(3000, +$('#sRpmMax').value || 12000); C.saveS(); window.dispatchEvent(new Event('jetvehicle')); };
     $('#sRatios').onchange = () => { S.gearRatios = $('#sRatios').value.trim(); S.gearLearned = true; C.saveS(); };
     $('#sTank').onchange = () => { S.tankL = Math.max(0, +$('#sTank').value || 0); C.saveS(); };
     $('#sInj').onchange = () => { S.injFlow = Math.max(0, +$('#sInj').value || 0); C.saveS(); };
-    $('#sRed').onchange = () => { S.redline = Math.max(0, +$('#sRed').value || 0); C.saveS(); };
+    $('#sRed').onchange = () => { S.redline = Math.max(0, +$('#sRed').value || 0); C.saveS(); window.dispatchEvent(new Event('jetvehicle')); };
     // learn: average rpm/speed while a gear is held
     $('#sLgGo').onclick = async () => {
       const g = +$('#sLg').value, msg = $('#sLgMsg'); if (!st.last || st.last.RPM == null) { msg.textContent = 'ยังไม่มีค่ารอบเครื่อง — เชื่อมต่อก่อน'; return; }

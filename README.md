@@ -181,6 +181,9 @@ android/           แอป Android (MainActivity + JetBridge: USB OTG / BLE / 
 ## v1.3.2
 - Version badge (e.g. `v1.3.3`) placed after "By เปรียวจูนเนอร์" in the header and on the licence screen.
 
+## v1.4.1
+- **Shift light / redline:** the RPM arc turns red exactly from the redline of the selected bike (Setup → "รอบเรดไลน์"), and the RPM number blinks red from 95 % of the redline. Redline 0 = off (arc keeps the old colours).
+
 ## v1.4.0
 - Data brought over from the user's own projects **JetOBD2HONDA** (Smart Gauge HONDA K-line + CAN) and **JetSmartGaugeCAR** (Smart Gauge CAR):
   - **HONDA-KLINE bridge** (ESP32 presenting itself as ELM327): recognised by name in the Bluetooth finder, protocol `H` detected (one PID per request, petrol), custom **PID D1 = injector pulse (ms)** read, Honda **blink-code DTCs** (`12-1`, `21-2` …) decoded from Mode 03/07 and cleared with Mode 04, shown with the Thai descriptions.

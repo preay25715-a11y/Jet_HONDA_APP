@@ -232,12 +232,22 @@
       const pt = (a) => (150 + R * Math.cos(a)).toFixed(2) + ' ' + (150 + R * Math.sin(a)).toFixed(2);
       const p = document.createElementNS(NS, 'path'); p.setAttribute('d', `M ${pt(a0)} A ${R} ${R} 0 0 1 ${pt(a1)}`);
       p.setAttribute('fill', 'none'); p.setAttribute('stroke-width', '17'); p.setAttribute('stroke-linecap', 'butt');
-      const f = i / (NSEG - 1), hue = f < 0.6 ? 140 - (85 * f / 0.6) : 55 - 55 * (f - 0.6) / 0.4;
-      p.dataset.c = `hsl(${Math.round(hue)},92%,${f > 0.6 ? 55 : 52}%)`; p.setAttribute('stroke', '#11264a');
+      p.setAttribute('stroke', '#11264a');
       g.appendChild(p); SEG.push(p);
     }
   })();
-  let lastN = -1, lastOn = -1;
+  let lastN = -1, lastOn = -1, lastHot = false;
+  // colours: the red zone starts at the redline of the chosen bike (Setup); no redline = the old fixed 60 % mark
+  function arcColors() {
+    const rl = S.redline > 0 && S.rpmMax > 0 ? Math.min(1, S.redline / S.rpmMax) : 0.8;
+    SEG.forEach((p, i) => {
+      const f = Math.min(1, (i / (NSEG - 1)) / rl), hue = f < 0.6 ? 140 - (85 * f / 0.6) : 55 - 55 * (f - 0.6) / 0.4;
+      p.dataset.c = `hsl(${Math.round(hue)},92%,${f > 0.6 ? 55 : 52}%)`;
+    });
+    lastN = -1; lastOn = -1;
+  }
+  arcColors();
+  window.addEventListener('jetvehicle', arcColors);
   function rpmArc(p) {
     const n = Math.round(p * NSEG); if (n === lastN) return; lastN = n;
     const prev = lastOn; lastOn = n; const a = Math.min(prev, n), b = Math.max(prev, n); if (prev < 0) { SEG.forEach((e, i) => e.setAttribute('stroke', i < n ? e.dataset.c : '#11264a')); return; }
@@ -300,7 +310,9 @@
     if (d.RPM != null) {
       $('#vRPM').textContent = Math.round(d.RPM).toLocaleString('en-US');
       rpmArc(Math.max(0, Math.min(1, d.RPM / (S.rpmMax || 12000))));
-    }
+      const hot = S.redline > 0 && d.RPM >= S.redline * 0.95;          // shift light: RPM text blinks red near the redline
+      if (hot !== lastHot) { lastHot = hot; $('#vRPM').parentNode.classList.toggle('shift', hot); }
+    } else if (lastHot) { lastHot = false; $('#vRPM').parentNode.classList.remove('shift'); }
     if (d.TPS != null) $('#tpsBar').style.width = Math.max(0, Math.min(100, d.TPS)) + '%';
   }
   // merge gauge sensors (AFR wideband / GPS / EOT / O2) and phone GPS into a live sample

@@ -411,3 +411,6 @@ table.mtab{border-collapse:separate;border-spacing:0;font-family:var(--disp);fon
 
 .ver{display:inline-block;margin-left:7px;padding:2px 7px;border-radius:999px;border:1px solid #2f7cf680;background:#0b1d3a;color:#7fb2ff;font:600 12px/1.2 var(--mono,monospace);letter-spacing:.3px;vertical-align:middle}
 @media(max-width:600px){.logo .ver{font-size:10px;padding:1px 5px;margin-left:5px}}
+
+@keyframes shiftBlink{50%{opacity:.25}}
+.gauge .rpm.shift,.gauge .rpm.shift b{color:#ff3b4a;animation:shiftBlink .28s steps(1) infinite}
