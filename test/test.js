@@ -100,3 +100,16 @@ const { SimTransport } = require('../src/sim.js');
   }
   console.log('ELM327 tests passed');
 })().catch((x) => { console.error(x); process.exit(1); });
+
+// ---- ELM327: lambda PID, older protocols (one PID per request) ----
+(async () => {
+  const { Elm327, FakeElm } = require('../src/elm.js');
+  for (const o of [{ lambda: true }, { lambda: true, noMulti: true }, { lambda: false }]) {
+    const e = new Elm327(new FakeElm(o)); await e.init();
+    assert.strictEqual(e.single, !!o.noMulti);
+    let d; for (let i = 0; i < 14; i++) d = await e.readLive();
+    assert(d.RPM > 600 && d.ECT === 90 && d.SPD === 62 && d.TPS > 10, 'live ' + JSON.stringify(o));
+    if (o.lambda) assert(Math.abs(d.LAMB - 0.98) < 0.05, 'lambda ' + d.LAMB); else assert(d.LAMB === undefined);
+  }
+  console.log('ELM327 v1.3.1 tests passed');
+})().catch((x) => { console.error(x); process.exit(1); });

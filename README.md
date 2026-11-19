@@ -173,3 +173,7 @@ android/           แอป Android (MainActivity + JetBridge: USB OTG / BLE / 
 - Live data: no pause between requests, gauge sensors polled on their own loop, ELM327 polls RPM/SPD/TPS/MAP every cycle and slower values less often, removed the per-segment glow filter and bar transitions (the main cause of lag on phones), Grid only repaints changed cells.
 - Grid: **✔ เฉพาะค่าที่มี** (default) shows only values that actually arrive; derived values (load, lambda, baro, run time, distance) are filled in when the ECU doesn't provide them.
 - Fixed: **CRP Log never recorded** (CRP volt was rejected by the AFR range filter). AFR Log verified.
+
+## v1.3.1 — ELM327 / AFR Log
+- ELM327: wide-band lambda (PID 24/34) → AFR, narrow-band O2 voltage (PID 14); on older ISO/KWP/J1850 cars one PID per request (auto-detected from the protocol, and adaptively if the car answers fewer PIDs than asked).
+- AFR Log works from an ELM327 (RPM × throttle, or engine load when the car has no throttle PID). New orange status line on the AFR page says why it is not recording (not connected, no LIVE, no RPM, no AFR/lambda from the car, REC off).

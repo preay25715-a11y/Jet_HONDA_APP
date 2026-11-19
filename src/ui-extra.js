@@ -169,7 +169,7 @@
   function livePos(info, xs, ys, d) {
     d = d || last;
     if (d.RPM == null) return null;
-    const rpm = d.RPM / info.mul, ld = info.load === 'MAP' ? d.MAP : d.TPS;
+    const rpm = d.RPM / info.mul, ld = info.load === 'MAP' ? d.MAP : (d.TPS != null ? d.TPS : d.LOAD);
     if (ld == null) return null;
     const fr = T.axisPos(ys, info.rpmRows ? rpm : ld), fc = T.axisPos(xs, info.rpmRows ? ld : rpm);
     if (fr == null || fc == null) return null;
@@ -268,6 +268,18 @@
     const K = LK(), live = last[K] != null && Date.now() - (last.t || 0) < 3000;
     $('#aInfo').textContent = `${afr.ys.length}×${afr.xs.length} · แกนจาก "${afr.title}" · บันทึกแล้ว ${afr.log ? afr.log.filled() : 0} ช่อง · ${live ? K + ' สด ' + (+last[K]).toFixed(LD()) : 'ยังไม่มีข้อมูลสด (ต่อเกจ/เปิด DEMO)'}`;
     $('#aRec').classList.toggle('on', afr.rec); $('#aRec').textContent = afr.rec ? '● REC' : '○ REC';
+    const why = afrWhy(), w = $('#aWhy'); w.hidden = !why; w.textContent = why || '';
+  }
+  // explains in plain words why the table is not filling
+  function afrWhy() {
+    const fresh = Date.now() - (last.t || 0) < 3000, obd = st.t && st.t.kind === 'obd';
+    if (!st.ecu && !st.gauge) return '⚠ ยังไม่ได้เชื่อมต่อ — เชื่อม ELM327 หรือเกจ + ECU ก่อน';
+    if (!st.live || !fresh) return '⚠ ยังไม่มีค่าสด — กด ▶ LIVE (หน้า Dash) หรือรอให้เชื่อมต่อเสร็จ';
+    if (last.RPM == null) return '⚠ ไม่ได้รับรอบเครื่อง (RPM)';
+    if (last.TPS == null && last.LOAD == null) return '⚠ ไม่ได้รับตำแหน่งคันเร่ง/โหลดเครื่อง — ไม่มีแกนให้ลงตาราง';
+    if (last[LK()] == null) return isCrp() ? '⚠ ไม่ได้รับค่า CRP volt จากเกจ' : obd ? '⚠ รถคันนี้ไม่ส่งค่า Lambda/AFR ทาง OBD-II (เซ็นเซอร์ O2 แบบ narrowband วัด AFR จริงไม่ได้) — ต้องต่อเกจ AFR/ไวด์แบนด์เพิ่ม' : '⚠ ไม่ได้รับค่า AFR จากเกจ — ตรวจสาย O2/ไวด์แบนด์ และสถานะเกจ';
+    if (!afr.rec) return '⚠ REC ปิดอยู่ — กด ○ REC เพื่อบันทึก';
+    return '';
   }
   const aWrap = $('#atab').parentElement, aCur = Cursor(aWrap, $('#atab'));
   ['pointerdown', 'wheel', 'touchstart'].forEach((ev) => aWrap.addEventListener(ev, () => { afr.userT = Date.now(); }, { passive: true }));
@@ -383,7 +395,7 @@
       else if (curTab === 'Drag') renderDrag();
     });
   });
-  setInterval(() => { if (curTab === 'Drag') renderDrag(); }, 1000);
+  setInterval(() => { if (curTab === 'Drag') renderDrag(); if (curTab === 'AFR') afrInfo(); }, 1000);
   PH.push((tab) => {
     curTab = tab;
     if (tab === 'Grid') renderGrid();

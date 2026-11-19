@@ -17,11 +17,11 @@
     0x04: ['LOAD', 1, (b) => A(b) * 100 / 255], 0x05: ['ECT', 1, (b) => A(b) - 40], 0x06: ['STFT1', 1, (b) => A(b) * 100 / 128 - 100],
     0x07: ['LTFT1', 1, (b) => A(b) * 100 / 128 - 100], 0x08: ['STFT2', 1, (b) => A(b) * 100 / 128 - 100], 0x09: ['LTFT2', 1, (b) => A(b) * 100 / 128 - 100],
     0x0A: ['FP', 1, (b) => A(b) * 3], 0x0B: ['MAP', 1, A], 0x0C: ['RPM', 2, (b) => u16(b) / 4], 0x0D: ['SPD', 1, A], 0x0E: ['IGN', 1, (b) => A(b) / 2 - 64],
-    0x0F: ['IAT', 1, (b) => A(b) - 40], 0x10: ['MAF', 2, (b) => u16(b) / 100], 0x11: ['TPS', 1, (b) => A(b) * 100 / 255],
+    0x14: ['O2', 2, (b) => A(b) / 200], 0x0F: ['IAT', 1, (b) => A(b) - 40], 0x10: ['MAF', 2, (b) => u16(b) / 100], 0x11: ['TPS', 1, (b) => A(b) * 100 / 255],
     0x1F: ['RUNT', 2, u16], 0x21: ['MILD', 2, u16], 0x22: ['FRPR', 2, (b) => u16(b) * 0.079], 0x23: ['FRP', 2, (b) => u16(b) * 10],
     0x2C: ['EGRC', 1, (b) => A(b) * 100 / 255], 0x2D: ['EGRE', 1, (b) => A(b) * 100 / 128 - 100], 0x2E: ['EVAPC', 1, (b) => A(b) * 100 / 255],
     0x2F: ['FUELL', 1, (b) => A(b) * 100 / 255], 0x30: ['WARM', 1, A], 0x31: ['DISTC', 2, u16], 0x32: ['EVAPP', 2, (b) => s16(b) / 4],
-    0x33: ['BARO', 1, A], 0x34: ['LAMB', 4, (b) => u16(b) * 2 / 65536],
+    0x24: ['LAMB', 4, (b) => u16(b) * 2 / 65536], 0x33: ['BARO', 1, A], 0x34: ['LAMB', 4, (b) => u16(b) * 2 / 65536],
     0x3C: ['CAT11', 2, (b) => u16(b) / 10 - 40], 0x3D: ['CAT21', 2, (b) => u16(b) / 10 - 40], 0x3E: ['CAT12', 2, (b) => u16(b) / 10 - 40], 0x3F: ['CAT22', 2, (b) => u16(b) / 10 - 40],
     0x42: ['BATT', 2, (b) => u16(b) / 1000], 0x43: ['ABSL', 2, (b) => u16(b) * 100 / 255], 0x44: ['EQR', 2, (b) => u16(b) * 2 / 65536],
     0x45: ['TPSR', 1, (b) => A(b) * 100 / 255], 0x46: ['AMB', 1, (b) => A(b) - 40], 0x47: ['TPSB', 1, (b) => A(b) * 100 / 255],
@@ -36,7 +36,7 @@
     0x83: ['NOX', 5, (b) => u16(b.slice(1, 3))], 0x85: ['NOX', 9, (b) => u16(b.slice(1, 3))],
   };
   // polled every cycle (fast) vs. every Nth cycle (slow)
-  const FAST = ['RPM', 'SPD', 'TPS', 'MAP', 'ECT', 'IAT', 'LOAD', 'IGN', 'MAF', 'BOOST'];
+  const FAST = ['RPM', 'SPD', 'TPS', 'MAP', 'ECT', 'IAT', 'LOAD', 'IGN', 'MAF', 'BOOST', 'LAMB', 'O2'];
   const MAX_PER_REQ = 6;
 
   class Elm327 {
@@ -44,7 +44,7 @@
       o = o || {};
       this.kind = 'obd'; this.name = o.name || 'ELM327'; this.via = 'bt'; this.s = stream; this.state = 'OFF';
       this.buf = ''; this.waiter = null; this.supported = new Set(); this.cycle = 0; this.last = {}; this.log = o.log || (() => {});
-      this.fuel = 'g'; this.proto = ''; this.ver = ''; this.stats = { tx: 0, rx: 0, retry: 0, bad: 0 };
+      this.fuel = 'g'; this.proto = ''; this.ver = ''; this.single = false; this.shortCnt = 0; this.stats = { tx: 0, rx: 0, retry: 0, bad: 0 };
       stream.onData = (u) => this._rx(u);
       stream.onLost = () => { this.state = 'OFF'; if (this.onLost) this.onLost(); };
     }
@@ -80,6 +80,7 @@
       }
       if (!ok) { this.state = 'NOECU'; throw new Error('ต่อ ELM327 ได้ แต่ไม่เจอ ECU — เปิดสวิตช์กุญแจ (ON) แล้วลองใหม่'); }
       const pr = await this.query('ATDPN', 1500); this.proto = pr ? pr.join('').replace(/^A/, '') : '';
+      this.single = !/^[6-9]/.test(this.proto);    // several PIDs per request only work on CAN; older ISO/KWP/J1850 cars need one PID per request
       await this._scan();
       this.state = 'OK';
       return true;
@@ -118,7 +119,7 @@
       this.log('info', 'OBD-II: รองรับ ' + this.pidList.length + ' ค่า · ' + (this.fuel === 'd' ? 'ดีเซล' : 'เบนซิน') + (this.proto ? ' · โปรโตคอล ' + this.proto : ''));
     }
     async _read(pids) {
-      const out = {};
+      const out = {}, got = new Set(); this._got = got;
       const cmd = '01' + pids.map((p) => p.toString(16).toUpperCase().padStart(2, '0')).join('') ;
       const l = await this.query(cmd, 2500);
       if (!l) return out;
@@ -133,7 +134,7 @@
           if (!e) break;
           const data = by.slice(i + 1, i + 1 + e[1]);
           if (data.length < e[1]) break;
-          const v = e[2](data); if (isFinite(v)) out[e[0]] = v;
+          const v = e[2](data); if (isFinite(v)) { out[e[0]] = v; got.add(pid); }
           i += 1 + e[1];
         }
       }
@@ -144,16 +145,21 @@
       // tier 1 (every cycle): RPM / speed / throttle / MAP — one short request = fastest refresh
       // tier 2 (every 3rd cycle): the other Dash values;  tier 3 (every 12th): everything else
       const c = this.cycle++, key = (p) => PIDS[p][0];
-      const T1 = ['RPM', 'SPD', 'TPS', 'MAP'];
+      const T1 = ['RPM', 'SPD', 'TPS', 'MAP', 'LAMB'];
       const t1 = this.pidList.filter((p) => T1.includes(key(p))), rest = this.pidList.filter((p) => !T1.includes(key(p)));
       const want = t1.slice();
       for (const p of rest) { const k = key(p); if (FAST.includes(k) ? c % 3 === 0 : c % 12 === 0) want.push(p); }
       if (!want.length) return null;
       const d = Object.assign({}, this.last);
-      for (let i = 0; i < want.length; i += MAX_PER_REQ) {
-        const g = want.slice(i, i + MAX_PER_REQ);
+      const per = this.single ? 1 : MAX_PER_REQ;
+      for (let i = 0; i < want.length; i += per) {
+        const g = want.slice(i, i + per);
         let r = await this._read(g);
-        if (!Object.keys(r).length && g.length > 1) { r = {}; for (const p of g) Object.assign(r, await this._read([p])); }
+        if (g.length > 1 && this._got.size < g.length) {
+          // the car answered fewer PIDs than asked: ask the missing ones one by one
+          for (const p of g) if (!this._got.has(p)) Object.assign(r, await this._read([p]));
+          if (++this.shortCnt >= 2) this.single = true;     // twice in a row → stop grouping
+        } else if (g.length > 1) this.shortCnt = 0;
         Object.assign(d, r);
       }
       if (c % 12 === 0 && !this.supported.has(0x42)) { const l = await this.query('ATRV', 1500); const m = l && /([0-9.]+)\s*V/i.exec(l.join(' ')); if (m) d.BATT = parseFloat(m[1]); }
@@ -184,7 +190,7 @@
 
   /* ---------------- scripted ELM327 emulator (tests) ---------------- */
   class FakeElm {
-    constructor(o) { o = o || {}; this.diesel = !!o.diesel; this.t = 0; this.buf = ''; this.dtc = ['P0301', 'P0420']; this.cleared = false; }
+    constructor(o) { o = o || {}; this.diesel = !!o.diesel; this.noMulti = !!o.noMulti; this.lambda = o.lambda !== false; this.t = 0; this.buf = ''; this.dtc = ['P0301', 'P0420']; this.cleared = false; }
     write(bytes) {
       for (const b of bytes) this.buf += String.fromCharCode(b);
       let i; while ((i = this.buf.indexOf('\r')) >= 0) { const c = this.buf.slice(0, i).trim().toUpperCase(); this.buf = this.buf.slice(i + 1); setTimeout(() => this._on(c), 1); }
@@ -194,19 +200,19 @@
     _val(pid) {
       const t = this.t += 0.1, rpm = 1500 + 800 * Math.sin(t), h = (n) => n.toString(16).toUpperCase().padStart(2, '0');
       const M = { 0x04: [60], 0x05: [40 + 90], 0x0B: [50], 0x0C: [(rpm * 4) >> 8, (rpm * 4) & 255], 0x0D: [62], 0x0E: [128 + 20], 0x0F: [40 + 33], 0x11: [30], 0x42: [0x36, 0xB0], 0x5C: [40 + 95], 0x51: [this.diesel ? 4 : 1], 0x33: [100], 0x2F: [128],
-        0x70: [3, 0x03, 0xE8, 0, 0, 0, 0, 0, 0], 0x23: [0x0B, 0xB8] };
+        0x70: [3, 0x03, 0xE8, 0, 0, 0, 0, 0, 0], 0x23: [0x0B, 0xB8], 0x34: [0x7D, 0xB8, 0x80, 0x00] };
       return M[pid] ? M[pid].map(h).join('') : null;
     }
     _on(c) {
       if (c === 'ATZ') return this._say('\rELM327 v1.5');
-      if (/^AT/.test(c)) return this._say(c === 'ATRV' ? '12.6V' : c === 'ATDPN' ? 'A6' : 'OK');
+      if (/^AT/.test(c)) return this._say(c === 'ATRV' ? '12.6V' : c === 'ATDPN' ? (this.noMulti ? 'A5' : 'A6') : 'OK');
       if (c === '03') return this._say(this.cleared ? '43 00' : '43 02 03 01 04 20');
       if (c === '07') return this._say('47 00');
       if (c === '04') { this.cleared = true; return this._say('44'); }
       if (/^01[0-9A-F]{2}/.test(c)) {
-        const pids = c.slice(2).match(/../g).map((x) => parseInt(x, 16)); let out = '41';
+        let pids = c.slice(2).match(/../g).map((x) => parseInt(x, 16)); if (this.noMulti && pids.length > 1) pids = pids.slice(0, 1); let out = '41';
         for (const p of pids) {
-          if (p % 0x20 === 0) { const base = p; const sup = this.diesel ? [0x04, 0x05, 0x0B, 0x0C, 0x0D, 0x0F, 0x11, 0x23, 0x42, 0x51, 0x5C, 0x70] : [0x04, 0x05, 0x0B, 0x0C, 0x0D, 0x0E, 0x0F, 0x11, 0x2F, 0x33, 0x42, 0x51, 0x5C]; let m = 0; for (const s of sup) if (s > base && s <= base + 32) m |= 1 << (31 - (s - base - 1)); if (sup.some((s) => s > base + 32)) m |= 1; out += (p).toString(16).padStart(2, '0').toUpperCase() + [m >>> 24, (m >>> 16) & 255, (m >>> 8) & 255, m & 255].map((x) => x.toString(16).padStart(2, '0')).join('').toUpperCase(); continue; }
+          if (p % 0x20 === 0) { const base = p; const sup = this.diesel ? [0x04, 0x05, 0x0B, 0x0C, 0x0D, 0x0F, 0x11, 0x23, 0x42, 0x51, 0x5C, 0x70] : [0x04, 0x05, 0x0B, 0x0C, 0x0D, 0x0E, 0x0F, 0x11, 0x2F, 0x33, 0x42, 0x51, 0x5C].concat(this.lambda ? [0x34] : []); let m = 0; for (const s of sup) if (s > base && s <= base + 32) m |= 1 << (31 - (s - base - 1)); if (sup.some((s) => s > base + 32)) m |= 1; out += (p).toString(16).padStart(2, '0').toUpperCase() + [m >>> 24, (m >>> 16) & 255, (m >>> 8) & 255, m & 255].map((x) => x.toString(16).padStart(2, '0')).join('').toUpperCase(); continue; }
           const v = this._val(p); if (v == null) continue; out += p.toString(16).toUpperCase().padStart(2, '0') + v;
         }
         return this._say(out.length > 2 ? out.replace(/(..)/g, '$1 ').trim() : 'NO DATA');

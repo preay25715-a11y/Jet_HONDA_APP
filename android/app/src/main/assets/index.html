@@ -415,6 +415,8 @@ table.mtab{border-collapse:separate;border-spacing:0;font-family:var(--disp);fon
 .licid{flex:1;font-family:var(--disp);font-weight:700;font-size:clamp(18px,5vh,28px);letter-spacing:3px;border:1.5px solid var(--ac);border-radius:12px;padding:clamp(4px,1.2vh,9px);background:#0a1a36;color:#fff;user-select:all}
 #licKey{width:100%;box-sizing:border-box;border-radius:12px;border:1.5px solid var(--line);background:#0a1a36;color:#fff;padding:8px;font:12px ui-monospace,monospace;resize:none}
 .licmsg{min-height:1.2em;font-size:clamp(11px,2.7vh,14px);color:#9fb5da}.licmsg.bad{color:#ff6b7a}
+
+.awhy{margin:6px 10px 0;padding:8px 10px;border-radius:8px;background:#3a2a10;color:#ffcc66;font-size:13px;line-height:1.35}
 </style>
 </head>
 <body>
@@ -506,6 +508,7 @@ table.mtab{border-collapse:separate;border-spacing:0;font-family:var(--disp);fon
     <section class="page tunepage" data-name="AFR LOG" data-tab="AFR">
       <div class="ttool"><b class="atitle" id="aTitle">AFR LOG · เบนซิน</b><span id="aInfo" class="mut ainfo"></span><span class="sp1"></span>
         <button class="tb" id="aFuel">⛽ เบนซิน</button><button class="tb" id="aRec">● REC</button><button class="tb red" id="aClr">ล้าง</button></div>
+      <div id="aWhy" class="awhy" hidden></div>
       <div class="twrap"><table class="mtab afr" id="atab"></table></div>
       <div class="ascale"><i class="abar"></i><span>11.5 รวย · 14.7 · 16.5 บาง</span><span class="sp1"></span><span class="mut">ช่องมืด = ยังไม่มีข้อมูล · กรอบขาว = ตำแหน่งเครื่องตอนนี้ · แตะช่อง = ดูรายละเอียด</span></div>
     </section>
@@ -564,7 +567,7 @@ table.mtab{border-collapse:separate;border-spacing:0;font-family:var(--disp);fon
   <h3 style="margin-top:6px">ภาษา</h3>
   <div class="row langrow"><button class="btn" data-lang="th">ไทย</button><button class="btn" data-lang="en">English</button></div>
   <h3 style="margin-top:16px">⬆ เวอร์ชันและอัปเดต</h3>
-  <div class="gsect"><div class="kv"><span>เวอร์ชันที่ใช้</span><span id="verNow">v1.2.1</span><span>เวอร์ชันล่าสุด</span><span id="verNew">—</span></div>
+  <div class="gsect"><div class="kv"><span>เวอร์ชันที่ใช้</span><span id="verNow">v1.3.1</span><span>เวอร์ชันล่าสุด</span><span id="verNew">—</span></div>
     <label class="f">ที่อยู่โปรเจกต์ GitHub (เช่น ชื่อ/โปรเจกต์ หรือลิงก์)<input id="updRepo" placeholder="owner/repo" autocapitalize="none" spellcheck="false"></label>
     <div class="row"><button class="btn" id="updCheck">🔄 ตรวจสอบอัปเดต</button><button class="btn pri" id="updGet" hidden>⬇ อัปเดตเลย</button></div>
     <div class="mut" id="updMsg"></div></div>
@@ -1557,11 +1560,11 @@ table.mtab{border-collapse:separate;border-spacing:0;font-family:var(--disp);fon
     0x04: ['LOAD', 1, (b) => A(b) * 100 / 255], 0x05: ['ECT', 1, (b) => A(b) - 40], 0x06: ['STFT1', 1, (b) => A(b) * 100 / 128 - 100],
     0x07: ['LTFT1', 1, (b) => A(b) * 100 / 128 - 100], 0x08: ['STFT2', 1, (b) => A(b) * 100 / 128 - 100], 0x09: ['LTFT2', 1, (b) => A(b) * 100 / 128 - 100],
     0x0A: ['FP', 1, (b) => A(b) * 3], 0x0B: ['MAP', 1, A], 0x0C: ['RPM', 2, (b) => u16(b) / 4], 0x0D: ['SPD', 1, A], 0x0E: ['IGN', 1, (b) => A(b) / 2 - 64],
-    0x0F: ['IAT', 1, (b) => A(b) - 40], 0x10: ['MAF', 2, (b) => u16(b) / 100], 0x11: ['TPS', 1, (b) => A(b) * 100 / 255],
+    0x14: ['O2', 2, (b) => A(b) / 200], 0x0F: ['IAT', 1, (b) => A(b) - 40], 0x10: ['MAF', 2, (b) => u16(b) / 100], 0x11: ['TPS', 1, (b) => A(b) * 100 / 255],
     0x1F: ['RUNT', 2, u16], 0x21: ['MILD', 2, u16], 0x22: ['FRPR', 2, (b) => u16(b) * 0.079], 0x23: ['FRP', 2, (b) => u16(b) * 10],
     0x2C: ['EGRC', 1, (b) => A(b) * 100 / 255], 0x2D: ['EGRE', 1, (b) => A(b) * 100 / 128 - 100], 0x2E: ['EVAPC', 1, (b) => A(b) * 100 / 255],
     0x2F: ['FUELL', 1, (b) => A(b) * 100 / 255], 0x30: ['WARM', 1, A], 0x31: ['DISTC', 2, u16], 0x32: ['EVAPP', 2, (b) => s16(b) / 4],
-    0x33: ['BARO', 1, A], 0x34: ['LAMB', 4, (b) => u16(b) * 2 / 65536],
+    0x24: ['LAMB', 4, (b) => u16(b) * 2 / 65536], 0x33: ['BARO', 1, A], 0x34: ['LAMB', 4, (b) => u16(b) * 2 / 65536],
     0x3C: ['CAT11', 2, (b) => u16(b) / 10 - 40], 0x3D: ['CAT21', 2, (b) => u16(b) / 10 - 40], 0x3E: ['CAT12', 2, (b) => u16(b) / 10 - 40], 0x3F: ['CAT22', 2, (b) => u16(b) / 10 - 40],
     0x42: ['BATT', 2, (b) => u16(b) / 1000], 0x43: ['ABSL', 2, (b) => u16(b) * 100 / 255], 0x44: ['EQR', 2, (b) => u16(b) * 2 / 65536],
     0x45: ['TPSR', 1, (b) => A(b) * 100 / 255], 0x46: ['AMB', 1, (b) => A(b) - 40], 0x47: ['TPSB', 1, (b) => A(b) * 100 / 255],
@@ -1576,7 +1579,7 @@ table.mtab{border-collapse:separate;border-spacing:0;font-family:var(--disp);fon
     0x83: ['NOX', 5, (b) => u16(b.slice(1, 3))], 0x85: ['NOX', 9, (b) => u16(b.slice(1, 3))],
   };
   // polled every cycle (fast) vs. every Nth cycle (slow)
-  const FAST = ['RPM', 'SPD', 'TPS', 'MAP', 'ECT', 'IAT', 'LOAD', 'IGN', 'MAF', 'BOOST'];
+  const FAST = ['RPM', 'SPD', 'TPS', 'MAP', 'ECT', 'IAT', 'LOAD', 'IGN', 'MAF', 'BOOST', 'LAMB', 'O2'];
   const MAX_PER_REQ = 6;
 
   class Elm327 {
@@ -1584,7 +1587,7 @@ table.mtab{border-collapse:separate;border-spacing:0;font-family:var(--disp);fon
       o = o || {};
       this.kind = 'obd'; this.name = o.name || 'ELM327'; this.via = 'bt'; this.s = stream; this.state = 'OFF';
       this.buf = ''; this.waiter = null; this.supported = new Set(); this.cycle = 0; this.last = {}; this.log = o.log || (() => {});
-      this.fuel = 'g'; this.proto = ''; this.ver = ''; this.stats = { tx: 0, rx: 0, retry: 0, bad: 0 };
+      this.fuel = 'g'; this.proto = ''; this.ver = ''; this.single = false; this.shortCnt = 0; this.stats = { tx: 0, rx: 0, retry: 0, bad: 0 };
       stream.onData = (u) => this._rx(u);
       stream.onLost = () => { this.state = 'OFF'; if (this.onLost) this.onLost(); };
     }
@@ -1620,6 +1623,7 @@ table.mtab{border-collapse:separate;border-spacing:0;font-family:var(--disp);fon
       }
       if (!ok) { this.state = 'NOECU'; throw new Error('ต่อ ELM327 ได้ แต่ไม่เจอ ECU — เปิดสวิตช์กุญแจ (ON) แล้วลองใหม่'); }
       const pr = await this.query('ATDPN', 1500); this.proto = pr ? pr.join('').replace(/^A/, '') : '';
+      this.single = !/^[6-9]/.test(this.proto);    // several PIDs per request only work on CAN; older ISO/KWP/J1850 cars need one PID per request
       await this._scan();
       this.state = 'OK';
       return true;
@@ -1658,7 +1662,7 @@ table.mtab{border-collapse:separate;border-spacing:0;font-family:var(--disp);fon
       this.log('info', 'OBD-II: รองรับ ' + this.pidList.length + ' ค่า · ' + (this.fuel === 'd' ? 'ดีเซล' : 'เบนซิน') + (this.proto ? ' · โปรโตคอล ' + this.proto : ''));
     }
     async _read(pids) {
-      const out = {};
+      const out = {}, got = new Set(); this._got = got;
       const cmd = '01' + pids.map((p) => p.toString(16).toUpperCase().padStart(2, '0')).join('') ;
       const l = await this.query(cmd, 2500);
       if (!l) return out;
@@ -1673,7 +1677,7 @@ table.mtab{border-collapse:separate;border-spacing:0;font-family:var(--disp);fon
           if (!e) break;
           const data = by.slice(i + 1, i + 1 + e[1]);
           if (data.length < e[1]) break;
-          const v = e[2](data); if (isFinite(v)) out[e[0]] = v;
+          const v = e[2](data); if (isFinite(v)) { out[e[0]] = v; got.add(pid); }
           i += 1 + e[1];
         }
       }
@@ -1684,16 +1688,21 @@ table.mtab{border-collapse:separate;border-spacing:0;font-family:var(--disp);fon
       // tier 1 (every cycle): RPM / speed / throttle / MAP — one short request = fastest refresh
       // tier 2 (every 3rd cycle): the other Dash values;  tier 3 (every 12th): everything else
       const c = this.cycle++, key = (p) => PIDS[p][0];
-      const T1 = ['RPM', 'SPD', 'TPS', 'MAP'];
+      const T1 = ['RPM', 'SPD', 'TPS', 'MAP', 'LAMB'];
       const t1 = this.pidList.filter((p) => T1.includes(key(p))), rest = this.pidList.filter((p) => !T1.includes(key(p)));
       const want = t1.slice();
       for (const p of rest) { const k = key(p); if (FAST.includes(k) ? c % 3 === 0 : c % 12 === 0) want.push(p); }
       if (!want.length) return null;
       const d = Object.assign({}, this.last);
-      for (let i = 0; i < want.length; i += MAX_PER_REQ) {
-        const g = want.slice(i, i + MAX_PER_REQ);
+      const per = this.single ? 1 : MAX_PER_REQ;
+      for (let i = 0; i < want.length; i += per) {
+        const g = want.slice(i, i + per);
         let r = await this._read(g);
-        if (!Object.keys(r).length && g.length > 1) { r = {}; for (const p of g) Object.assign(r, await this._read([p])); }
+        if (g.length > 1 && this._got.size < g.length) {
+          // the car answered fewer PIDs than asked: ask the missing ones one by one
+          for (const p of g) if (!this._got.has(p)) Object.assign(r, await this._read([p]));
+          if (++this.shortCnt >= 2) this.single = true;     // twice in a row → stop grouping
+        } else if (g.length > 1) this.shortCnt = 0;
         Object.assign(d, r);
       }
       if (c % 12 === 0 && !this.supported.has(0x42)) { const l = await this.query('ATRV', 1500); const m = l && /([0-9.]+)\s*V/i.exec(l.join(' ')); if (m) d.BATT = parseFloat(m[1]); }
@@ -1724,7 +1733,7 @@ table.mtab{border-collapse:separate;border-spacing:0;font-family:var(--disp);fon
 
   /* ---------------- scripted ELM327 emulator (tests) ---------------- */
   class FakeElm {
-    constructor(o) { o = o || {}; this.diesel = !!o.diesel; this.t = 0; this.buf = ''; this.dtc = ['P0301', 'P0420']; this.cleared = false; }
+    constructor(o) { o = o || {}; this.diesel = !!o.diesel; this.noMulti = !!o.noMulti; this.lambda = o.lambda !== false; this.t = 0; this.buf = ''; this.dtc = ['P0301', 'P0420']; this.cleared = false; }
     write(bytes) {
       for (const b of bytes) this.buf += String.fromCharCode(b);
       let i; while ((i = this.buf.indexOf('\r')) >= 0) { const c = this.buf.slice(0, i).trim().toUpperCase(); this.buf = this.buf.slice(i + 1); setTimeout(() => this._on(c), 1); }
@@ -1734,19 +1743,19 @@ table.mtab{border-collapse:separate;border-spacing:0;font-family:var(--disp);fon
     _val(pid) {
       const t = this.t += 0.1, rpm = 1500 + 800 * Math.sin(t), h = (n) => n.toString(16).toUpperCase().padStart(2, '0');
       const M = { 0x04: [60], 0x05: [40 + 90], 0x0B: [50], 0x0C: [(rpm * 4) >> 8, (rpm * 4) & 255], 0x0D: [62], 0x0E: [128 + 20], 0x0F: [40 + 33], 0x11: [30], 0x42: [0x36, 0xB0], 0x5C: [40 + 95], 0x51: [this.diesel ? 4 : 1], 0x33: [100], 0x2F: [128],
-        0x70: [3, 0x03, 0xE8, 0, 0, 0, 0, 0, 0], 0x23: [0x0B, 0xB8] };
+        0x70: [3, 0x03, 0xE8, 0, 0, 0, 0, 0, 0], 0x23: [0x0B, 0xB8], 0x34: [0x7D, 0xB8, 0x80, 0x00] };
       return M[pid] ? M[pid].map(h).join('') : null;
     }
     _on(c) {
       if (c === 'ATZ') return this._say('\rELM327 v1.5');
-      if (/^AT/.test(c)) return this._say(c === 'ATRV' ? '12.6V' : c === 'ATDPN' ? 'A6' : 'OK');
+      if (/^AT/.test(c)) return this._say(c === 'ATRV' ? '12.6V' : c === 'ATDPN' ? (this.noMulti ? 'A5' : 'A6') : 'OK');
       if (c === '03') return this._say(this.cleared ? '43 00' : '43 02 03 01 04 20');
       if (c === '07') return this._say('47 00');
       if (c === '04') { this.cleared = true; return this._say('44'); }
       if (/^01[0-9A-F]{2}/.test(c)) {
-        const pids = c.slice(2).match(/../g).map((x) => parseInt(x, 16)); let out = '41';
+        let pids = c.slice(2).match(/../g).map((x) => parseInt(x, 16)); if (this.noMulti && pids.length > 1) pids = pids.slice(0, 1); let out = '41';
         for (const p of pids) {
-          if (p % 0x20 === 0) { const base = p; const sup = this.diesel ? [0x04, 0x05, 0x0B, 0x0C, 0x0D, 0x0F, 0x11, 0x23, 0x42, 0x51, 0x5C, 0x70] : [0x04, 0x05, 0x0B, 0x0C, 0x0D, 0x0E, 0x0F, 0x11, 0x2F, 0x33, 0x42, 0x51, 0x5C]; let m = 0; for (const s of sup) if (s > base && s <= base + 32) m |= 1 << (31 - (s - base - 1)); if (sup.some((s) => s > base + 32)) m |= 1; out += (p).toString(16).padStart(2, '0').toUpperCase() + [m >>> 24, (m >>> 16) & 255, (m >>> 8) & 255, m & 255].map((x) => x.toString(16).padStart(2, '0')).join('').toUpperCase(); continue; }
+          if (p % 0x20 === 0) { const base = p; const sup = this.diesel ? [0x04, 0x05, 0x0B, 0x0C, 0x0D, 0x0F, 0x11, 0x23, 0x42, 0x51, 0x5C, 0x70] : [0x04, 0x05, 0x0B, 0x0C, 0x0D, 0x0E, 0x0F, 0x11, 0x2F, 0x33, 0x42, 0x51, 0x5C].concat(this.lambda ? [0x34] : []); let m = 0; for (const s of sup) if (s > base && s <= base + 32) m |= 1 << (31 - (s - base - 1)); if (sup.some((s) => s > base + 32)) m |= 1; out += (p).toString(16).padStart(2, '0').toUpperCase() + [m >>> 24, (m >>> 16) & 255, (m >>> 8) & 255, m & 255].map((x) => x.toString(16).padStart(2, '0')).join('').toUpperCase(); continue; }
           const v = this._val(p); if (v == null) continue; out += p.toString(16).toUpperCase().padStart(2, '0') + v;
         }
         return this._say(out.length > 2 ? out.replace(/(..)/g, '$1 ').trim() : 'NO DATA');
@@ -2803,7 +2812,7 @@ table.mtab{border-collapse:separate;border-spacing:0;font-family:var(--disp);fon
   function livePos(info, xs, ys, d) {
     d = d || last;
     if (d.RPM == null) return null;
-    const rpm = d.RPM / info.mul, ld = info.load === 'MAP' ? d.MAP : d.TPS;
+    const rpm = d.RPM / info.mul, ld = info.load === 'MAP' ? d.MAP : (d.TPS != null ? d.TPS : d.LOAD);
     if (ld == null) return null;
     const fr = T.axisPos(ys, info.rpmRows ? rpm : ld), fc = T.axisPos(xs, info.rpmRows ? ld : rpm);
     if (fr == null || fc == null) return null;
@@ -2902,6 +2911,18 @@ table.mtab{border-collapse:separate;border-spacing:0;font-family:var(--disp);fon
     const K = LK(), live = last[K] != null && Date.now() - (last.t || 0) < 3000;
     $('#aInfo').textContent = `${afr.ys.length}×${afr.xs.length} · แกนจาก "${afr.title}" · บันทึกแล้ว ${afr.log ? afr.log.filled() : 0} ช่อง · ${live ? K + ' สด ' + (+last[K]).toFixed(LD()) : 'ยังไม่มีข้อมูลสด (ต่อเกจ/เปิด DEMO)'}`;
     $('#aRec').classList.toggle('on', afr.rec); $('#aRec').textContent = afr.rec ? '● REC' : '○ REC';
+    const why = afrWhy(), w = $('#aWhy'); w.hidden = !why; w.textContent = why || '';
+  }
+  // explains in plain words why the table is not filling
+  function afrWhy() {
+    const fresh = Date.now() - (last.t || 0) < 3000, obd = st.t && st.t.kind === 'obd';
+    if (!st.ecu && !st.gauge) return '⚠ ยังไม่ได้เชื่อมต่อ — เชื่อม ELM327 หรือเกจ + ECU ก่อน';
+    if (!st.live || !fresh) return '⚠ ยังไม่มีค่าสด — กด ▶ LIVE (หน้า Dash) หรือรอให้เชื่อมต่อเสร็จ';
+    if (last.RPM == null) return '⚠ ไม่ได้รับรอบเครื่อง (RPM)';
+    if (last.TPS == null && last.LOAD == null) return '⚠ ไม่ได้รับตำแหน่งคันเร่ง/โหลดเครื่อง — ไม่มีแกนให้ลงตาราง';
+    if (last[LK()] == null) return isCrp() ? '⚠ ไม่ได้รับค่า CRP volt จากเกจ' : obd ? '⚠ รถคันนี้ไม่ส่งค่า Lambda/AFR ทาง OBD-II (เซ็นเซอร์ O2 แบบ narrowband วัด AFR จริงไม่ได้) — ต้องต่อเกจ AFR/ไวด์แบนด์เพิ่ม' : '⚠ ไม่ได้รับค่า AFR จากเกจ — ตรวจสาย O2/ไวด์แบนด์ และสถานะเกจ';
+    if (!afr.rec) return '⚠ REC ปิดอยู่ — กด ○ REC เพื่อบันทึก';
+    return '';
   }
   const aWrap = $('#atab').parentElement, aCur = Cursor(aWrap, $('#atab'));
   ['pointerdown', 'wheel', 'touchstart'].forEach((ev) => aWrap.addEventListener(ev, () => { afr.userT = Date.now(); }, { passive: true }));
@@ -3017,7 +3038,7 @@ table.mtab{border-collapse:separate;border-spacing:0;font-family:var(--disp);fon
       else if (curTab === 'Drag') renderDrag();
     });
   });
-  setInterval(() => { if (curTab === 'Drag') renderDrag(); }, 1000);
+  setInterval(() => { if (curTab === 'Drag') renderDrag(); if (curTab === 'AFR') afrInfo(); }, 1000);
   PH.push((tab) => {
     curTab = tab;
     if (tab === 'Grid') renderGrid();
@@ -3143,7 +3164,7 @@ table.mtab{border-collapse:separate;border-spacing:0;font-family:var(--disp);fon
     if (d.BARO == null && d.MAP != null) { d.BARO = B0; d.baroEst = 1; }
     if (d.LOAD == null && d.MAP != null && d.RPM > 0) d.LOAD = Math.max(0, Math.min(100, d.MAP / B0 * 100));
     if (d.ABSL == null && d.LOAD != null) d.ABSL = d.LOAD;
-    if (d.AFR == null && d.LAMB != null && d.LAMB > 0.5 && d.LAMB < 2 && !(st.fuelType === 'd')) d.AFR = d.LAMB * 14.7;   // car wideband (OBD PID 34) → AFR Log
+    if (d.AFR == null && d.LAMB != null && d.LAMB > 0.5 && d.LAMB < 2 && !(st.t && st.t.fuel === 'd')) d.AFR = d.LAMB * 14.7;   // car wideband (OBD PID 34) → AFR Log
     if (d.AFR != null) { if (d.LAMB == null) d.LAMB = d.AFR / 14.7; if (d.EQR == null && d.LAMB > 0) d.EQR = 1 / d.LAMB; }
     if (d.RPM > 300) { if (runStart == null) runStart = now; d.RUNT = Math.round((now - runStart) / 1000); } else if (runStart != null) d.RUNT = Math.round((now - runStart) / 1000);
     const sp = d.SPD != null ? d.SPD : d.GPS;
@@ -3160,7 +3181,7 @@ table.mtab{border-collapse:separate;border-spacing:0;font-family:var(--disp);fon
 (function (root) {
   'use strict';
   const C = root.JetCore, $ = (s) => document.querySelector(s);
-  const VER = '1.2.1';
+  const VER = '1.3.1';
   const num = (v) => String(v).replace(/^v/i, '').split('.').map((x) => parseInt(x, 10) || 0);
   const newer = (a, b) => { const x = num(a), y = num(b); for (let i = 0; i < 3; i++) { if ((x[i] || 0) !== (y[i] || 0)) return (x[i] || 0) > (y[i] || 0); } return false; };
   const repoOf = (s) => { s = String(s || '').trim().replace(/^https?:\/\/github\.com\//i, '').replace(/\.git$/i, '').replace(/\/+$/, ''); const m = s.match(/^([\w.-]+)\/([\w.-]+)/); return m ? m[1] + '/' + m[2] : ''; };

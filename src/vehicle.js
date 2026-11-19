@@ -111,7 +111,7 @@
     if (d.BARO == null && d.MAP != null) { d.BARO = B0; d.baroEst = 1; }
     if (d.LOAD == null && d.MAP != null && d.RPM > 0) d.LOAD = Math.max(0, Math.min(100, d.MAP / B0 * 100));
     if (d.ABSL == null && d.LOAD != null) d.ABSL = d.LOAD;
-    if (d.AFR == null && d.LAMB != null && d.LAMB > 0.5 && d.LAMB < 2 && !(st.fuelType === 'd')) d.AFR = d.LAMB * 14.7;   // car wideband (OBD PID 34) → AFR Log
+    if (d.AFR == null && d.LAMB != null && d.LAMB > 0.5 && d.LAMB < 2 && !(st.t && st.t.fuel === 'd')) d.AFR = d.LAMB * 14.7;   // car wideband (OBD PID 34) → AFR Log
     if (d.AFR != null) { if (d.LAMB == null) d.LAMB = d.AFR / 14.7; if (d.EQR == null && d.LAMB > 0) d.EQR = 1 / d.LAMB; }
     if (d.RPM > 300) { if (runStart == null) runStart = now; d.RUNT = Math.round((now - runStart) / 1000); } else if (runStart != null) d.RUNT = Math.round((now - runStart) / 1000);
     const sp = d.SPD != null ? d.SPD : d.GPS;

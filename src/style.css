@@ -406,3 +406,5 @@ table.mtab{border-collapse:separate;border-spacing:0;font-family:var(--disp);fon
 .licid{flex:1;font-family:var(--disp);font-weight:700;font-size:clamp(18px,5vh,28px);letter-spacing:3px;border:1.5px solid var(--ac);border-radius:12px;padding:clamp(4px,1.2vh,9px);background:#0a1a36;color:#fff;user-select:all}
 #licKey{width:100%;box-sizing:border-box;border-radius:12px;border:1.5px solid var(--line);background:#0a1a36;color:#fff;padding:8px;font:12px ui-monospace,monospace;resize:none}
 .licmsg{min-height:1.2em;font-size:clamp(11px,2.7vh,14px);color:#9fb5da}.licmsg.bad{color:#ff6b7a}
+
+.awhy{margin:6px 10px 0;padding:8px 10px;border-radius:8px;background:#3a2a10;color:#ffcc66;font-size:13px;line-height:1.35}
