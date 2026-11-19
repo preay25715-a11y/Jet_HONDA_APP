@@ -177,3 +177,6 @@ android/           แอป Android (MainActivity + JetBridge: USB OTG / BLE / 
 ## v1.3.1 — ELM327 / AFR Log
 - ELM327: wide-band lambda (PID 24/34) → AFR, narrow-band O2 voltage (PID 14); on older ISO/KWP/J1850 cars one PID per request (auto-detected from the protocol, and adaptively if the car answers fewer PIDs than asked).
 - AFR Log works from an ELM327 (RPM × throttle, or engine load when the car has no throttle PID). New orange status line on the AFR page says why it is not recording (not connected, no LIVE, no RPM, no AFR/lambda from the car, REC off).
+
+## v1.3.2
+- Version badge (e.g. `v1.3.2`) next to the program name in the header and on the licence screen.
