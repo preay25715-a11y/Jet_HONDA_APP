@@ -46,7 +46,7 @@
       o = o || {};
       this.kind = 'obd'; this.name = o.name || 'ELM327'; this.via = 'bt'; this.s = stream; this.state = 'OFF';
       this.buf = ''; this.waiter = null; this.supported = new Set(); this.cycle = 0; this.last = {}; this.log = o.log || (() => {});
-      this.fuel = 'g'; this.proto = ''; this.ver = ''; this.single = false; this.honda = false; this.shortCnt = 0; this.fuelType = 1; this.hybrid = false; this.stoich = 14.7; this.ident = {}; this.extraFast = new Set(); this.atrvOk = false; this.stats = { tx: 0, rx: 0, retry: 0, bad: 0 };
+      this.fuel = 'g'; this.proto = ''; this.ver = ''; this.single = false; this.honda = false; this.shortCnt = 0; this.fuelType = 1; this.hybrid = false; this.stoich = 14.7; this.ident = {}; this.extraFast = new Set(); this.atrvOk = false; this.useCnt = false; this.tuned = false; this.miss = 0; this.rtt = 80; this.rp = 0; this.ringKey = ''; this.ring = []; this.clone = !!o.clone; this.liveTO = 1500; this.hz = 0; this.tPrev = 0; this.stats = { tx: 0, rx: 0, retry: 0, bad: 0 };
       stream.onData = (u) => this._rx(u);
       stream.onLost = () => { this.state = 'OFF'; if (this.onLost) this.onLost(); };
     }
@@ -69,6 +69,7 @@
     async init() {
       this.state = 'INIT';
       let r = await this.query('ATZ', 4000);
+      if (!r) { await sleep(300); r = await this.query('ATZ', 5000); }                    // clones (KONNWEI KW90x …) can miss the first reset
       if (!r) { r = await this.query('ATI', 3000); if (!r) throw new Error('ELM327 ไม่ตอบ — ตรวจว่าเสียบที่รถและจับคู่ Bluetooth แล้ว (PIN 1234 / 0000)'); }
       this.ver = (r.find((l) => /ELM|OBD|v\d/i.test(l)) || '').replace(/[^\x20-\x7e]/g, '');
       for (const c of ['ATE0', 'ATL0', 'ATS0', 'ATH0', 'ATAT1', 'ATST32']) await this.query(c, 1500);
@@ -86,16 +87,28 @@
       this.single = !/^[6-9]/.test(this.proto);    // several PIDs per request only work on CAN; older ISO/KWP/J1850 cars need one PID per request
       await this._scan();
       try { await this.readIdent(); } catch (e) { /* identification is optional */ }
+      try { await this._tune(); } catch (e) { /* timing tweaks are optional */ }
       this.state = 'OK';
       return true;
+    }
+    /** ELM327 prints long CAN answers as a byte-count line plus numbered lines ("00B" / "0: 41 0C .." / "1: .."): join them into one hex string per message */
+    _join(lines) {
+      const out = []; let cur = null, want = 0;
+      const flush = () => { if (cur) out.push(want ? cur.slice(0, want * 2) : cur); cur = null; want = 0; };
+      for (const ln of lines || []) {
+        const t = String(ln).trim().toUpperCase(), m = /^([0-9A-F]):\s*(.*)$/.exec(t);
+        if (m) { if (cur == null) cur = ''; cur += m[2].replace(/[^0-9A-F]/g, ''); continue; }
+        flush();
+        if (/^[0-9A-F]{3}$/.test(t)) { cur = ''; want = parseInt(t, 16); continue; }          // the byte-count line of a multi-frame answer
+        if (t && /^[0-9A-F\s]+$/.test(t)) out.push(t.replace(/\s/g, ''));
+      }
+      flush(); return out;
     }
     _hexBytes(lines, mode, pid) {
       // join all lines; with ATH0/ATS0 each ECU's reply is "41 0C 1A F8". use the first one that matches
       const head = (mode + 0x40).toString(16).toUpperCase().padStart(2, '0') + (pid == null ? '' : pid.toString(16).toUpperCase().padStart(2, '0'));
       const out = [];
-      for (const l of lines) {
-        const h = l.replace(/[^0-9A-Fa-f]/g, '').toUpperCase();
-        if (!/^[0-9A-F]+$/.test(h)) continue;
+      for (const h of this._join(lines)) {
         const i = h.indexOf(head);
         if (i < 0) continue;
         const bytes = h.slice(i + head.length).match(/../g) || [];
@@ -106,6 +119,9 @@
     async _scan() {
       this.supported = new Set();
       let base = 0;
+      // response-count digit ("01001"): the adapter stops waiting as soon as the car has answered — only used when this adapter proves it understands it
+      this.useCnt = false;
+      if (!this.honda) { const l = await this.query('01001', 3000); this.useCnt = !!(l && this._join(l).some((h) => /^4100/.test(h))); }
       for (let k = 0; k < 8; k++) {
         const pid = k * 0x20;
         const l = await this.query('01' + pid.toString(16).toUpperCase().padStart(2, '0'), 3000);
@@ -132,14 +148,16 @@
       this.pidList = Array.from(this.supported).filter((p) => PIDS[p]).sort((a, b) => a - b);
       this.log('info', 'OBD-II: รองรับ ' + this.pidList.length + ' ค่า · ' + (this.fuel === 'd' ? 'ดีเซล' : 'เบนซิน') + (this.proto ? ' · โปรโตคอล ' + this.proto : ''));
     }
-    async _read(pids) {
+    async _read(pids, retry) {
       const out = {}, got = new Set(); this._got = got;
-      const cmd = '01' + pids.map((p) => p.toString(16).toUpperCase().padStart(2, '0')).join('') ;
-      const l = await this.query(cmd, 2500);
+      const cmd = '01' + pids.map((p) => p.toString(16).toUpperCase().padStart(2, '0')).join('') + (this.useCnt ? '1' : '');   // trailing "1" = stop after one answer (no waiting for the ST timeout)
+      const t0 = Date.now();
+      const l = await this.query(cmd, this.liveTO);
       if (!l) return out;
-      // multiple PIDs in one answer: "41 0C xx xx 0D yy" (single-ECU) — walk the byte stream
-      for (const ln of l) {
-        const h = ln.replace(/[^0-9A-Fa-f]/g, '');
+      if (this.useCnt && !retry && l.some((x) => x === '?')) { this.useCnt = false; return this._read(pids, true); }   // this adapter does not know the digit: go back to plain requests
+      this.rtt = this.rtt * 0.8 + (Date.now() - t0) * 0.2;
+      // several PIDs in one answer: "41 0C xx xx 0D yy" (single-ECU) — walk the byte stream; long CAN answers arrive as several numbered lines
+      for (const h of this._join(l)) {
         if (!/^41/i.test(h)) continue;
         const by = (h.slice(2).match(/../g) || []).map((x) => parseInt(x, 16));
         let i = 0;
@@ -154,18 +172,52 @@
       }
       return out;
     }
+    /** build the rotating list: values the Dash shows (fast) come up 3x as often as the rest */
+    _mkRing(skip) {
+      const key = (p) => PIDS[p][0], k = this.pidList.join(',') + '|' + Array.from(this.extraFast).join(',') + '|' + skip.join(',');
+      if (k === this.ringKey) return; this.ringKey = k; this.rp = 0;
+      const F = [], S = [];
+      for (const p of this.pidList) { if (skip.includes(p)) continue; (FAST.includes(key(p)) || this.extraFast.has(key(p)) ? F : S).push(p); }
+      const items = [];
+      F.forEach((p, j) => { for (let c = 0; c < 3; c++) items.push([(c * F.length + j + 0.5) / (3 * F.length), p]); });
+      S.forEach((p, i) => items.push([(i + 0.5) / S.length, p]));
+      this.ring = items.sort((a, b) => a[0] - b[0]).map((x) => x[1]);
+    }
     async readLive() {
       if (this.state !== 'OK') return null;
-      // tier 1 (every cycle): RPM / speed / throttle / MAP — one short request = fastest refresh
-      // tier 2 (every 3rd cycle): the other Dash values;  tier 3 (every 12th): everything else
+      // every cycle: RPM (+ a few core values). The remaining slots rotate through all other supported values, so a cycle always takes about the same time
+      // (the old "everything every 12th cycle" burst froze the display for a moment) — the number of requests per cycle follows the adapter's measured speed
+      const nowT = Date.now(); if (this.tPrev && nowT - this.tPrev < 2000) this.hz = this.hz ? this.hz * 0.8 + 200 / Math.max(1, nowT - this.tPrev) : 1000 / Math.max(1, nowT - this.tPrev); this.tPrev = nowT;   // measured refresh rate (cycles/s) for the info box
       const c = this.cycle++, key = (p) => PIDS[p][0];
-      const T1 = this.single ? ['RPM', 'TPS', 'SPD', 'LAMB'] : ['RPM', 'SPD', 'TPS', 'MAP', 'LAMB'];   // one PID per request = each costs a round trip
-      const t1 = this.pidList.filter((p) => T1.includes(key(p))), rest = this.pidList.filter((p) => !T1.includes(key(p)));
-      const want = t1.slice();
-      for (const p of rest) { const k = key(p); if (FAST.includes(k) || this.extraFast.has(k) ? c % 3 === 0 : c % 12 === 0) want.push(p); }
+      const has = (k) => this.pidList.find((p) => key(p) === k);
+      const rpm = has('RPM'), afrP = has('LAMB') || has('EQR');
+      const per = this.single ? 1 : MAX_PER_REQ;
+      const reqs = this.single ? Math.max(3, Math.min(5, Math.round(300 / Math.max(20, this.rtt)))) : Math.max(1, Math.min(3, Math.round(150 / Math.max(20, this.rtt))));
+      const slots = reqs * per, want = [], add = (p) => { if (p != null && !want.includes(p)) want.push(p); };
+      let ringN = 0;
+      add(rpm);
+      if (this.single) {
+        // one value per request: RPM + AFR every cycle, the next slots cycle through TPS → SPD → two rotating values (MAP, temperatures, …)
+        add(afrP);
+        const extra = Math.max(0, slots - want.length), L = ['TPS', 'SPD'].map(has).filter((p) => p != null); L.push('*', '*');
+        if (extra >= L.length) { for (const x of L) if (x !== '*') add(x); ringN = extra - (L.length - 2); }
+        else for (let k = 0; k < extra; k++) { const x = L[(c * extra + k) % L.length]; if (x === '*') ringN++; else add(x); }
+        this._mkRing([rpm, afrP]);
+      } else {
+        // several values per request (CAN): the core values ride along in every request, the free slots rotate through the rest
+        const core = ['SPD', 'TPS', 'MAP', afrP == null ? '' : key(afrP)].map(has).filter((p) => p != null);
+        const keep = Math.max(0, Math.min(core.length, slots - (rpm != null ? 1 : 0) - 2));
+        for (const p of core.slice(0, keep)) add(p);
+        ringN = slots - want.length;
+        this._mkRing([rpm].concat(core));
+      }
+      for (let g = 0; ringN > 0 && this.ring.length && g < this.ring.length * 2; g++) {
+        const p = this.ring[this.rp % this.ring.length]; this.rp = (this.rp + 1) % this.ring.length;
+        if (!want.includes(p)) { want.push(p); ringN--; }
+      }
       if (!want.length) return null;
       const d = Object.assign({}, this.last);
-      const per = this.single ? 1 : MAX_PER_REQ;
+      let any = 0;
       for (let i = 0; i < want.length; i += per) {
         const g = want.slice(i, i + per);
         let r = await this._read(g);
@@ -174,12 +226,26 @@
           for (const p of g) if (!this._got.has(p)) Object.assign(r, await this._read([p]));
           if (++this.shortCnt >= 2) this.single = true;     // twice in a row → stop grouping
         } else if (g.length > 1) this.shortCnt = 0;
+        any += Object.keys(r).length;
         Object.assign(d, r);
       }
+      if (this.tuned && !any && ++this.miss >= 3) { this.miss = 0; await this._untune(); }      // faster timing made the car stop answering: go back to the safe values
+      else if (any) this.miss = 0;
       if (c % 6 === 0 && !this.supported.has(0x42) && this.atrvOk) { const l = await this.query('ATRV', 1500); const m = l && /([0-9.]+)\s*V/i.exec(l.join(' ')); if (m) d.BATT = parseFloat(m[1]); }
       this.last = d;
       return Object.assign({}, d);   // OBD keys (P.OBD) feed Dash/Grid directly
     }
+    /** faster adapter timing (ELM327 "adaptive timing 2" + shorter ST on CAN) — verified with a real request, reverted when the adapter or car does not like it */
+    async _tune() {
+      if (this.honda) return;
+      const ok = (l) => l && l.some((x) => /^OK/i.test(x));
+      const probe = async () => { const l = await this.query('010C' + (this.useCnt ? '1' : ''), 1500); return !!(l && this._join(l).some((h) => /^410C/.test(h))); };
+      if (!ok(await this.query('ATAT2', 1500))) { await this.query('ATAT1', 1500); return; }
+      if (/^[6-9]/.test(this.proto)) await this.query('ATST19', 1500);                    // CAN answers in tens of ms: 100 ms ceiling is plenty
+      if (await probe() && await probe()) { this.tuned = true; this.log('info', 'ปรับจังหวะ ELM แล้ว (AT2' + (this.useCnt ? ' + นับคำตอบ' : '') + ')'); }
+      else await this._untune();
+    }
+    async _untune() { this.tuned = false; await this.query('ATAT1', 1500); await this.query('ATST32', 1500); this.log('warn', 'ELM: กลับไปใช้จังหวะมาตรฐาน'); }
     /** VIN / calibration id (Mode 09) — works for CAN (multi-frame "0:" lines) and for ISO/KWP (one "49 02 0n" line per part) */
     _ascii(lines, pid, vin) {
       let out = '';
@@ -234,12 +300,19 @@
     // o: { diesel, honda, noMulti, lambda(false = no PID 24/34), eqr(true = has commanded lambda 44), vin, kwp(VIN as ISO lines), cal }
     constructor(o) {
       o = o || {}; this.diesel = !!o.diesel; this.noMulti = !!o.noMulti || !!o.honda; this.hondaBridge = !!o.honda; this.lambda = o.lambda !== false; this.eqr = !!o.eqr;
-      this.vin = o.vin || ''; this.kwp = !!o.kwp; this.cal = o.cal || ''; this.t = 0; this.buf = ''; this.dtc = ['P0301', 'P0420']; this.cleared = false;
+      this.vin = o.vin || ''; this.kwp = !!o.kwp; this.cal = o.cal || ''; this.latency = o.latency || 0; this.wait = o.wait == null ? 0 : o.wait; this.digit = o.digit !== false; this.at2 = o.atat2 !== false; this.zFail = o.zFail || 0; this.plainMulti = !!o.plainMulti; this.nreq = 0; this.pidCount = {}; this.t = 0; this.buf = ''; this.dtc = ['P0301', 'P0420']; this.cleared = false;
     }
     write(bytes) {
       for (const b of bytes) this.buf += String.fromCharCode(b);
-      let i; while ((i = this.buf.indexOf('\r')) >= 0) { const c = this.buf.slice(0, i).trim().toUpperCase(); this.buf = this.buf.slice(i + 1); setTimeout(() => this._on(c), 1); }
+      let i; while ((i = this.buf.indexOf('\r')) >= 0) { const c = this.buf.slice(0, i).trim().toUpperCase(); this.buf = this.buf.slice(i + 1); this._cmd(c); }
       return Promise.resolve(true);
+    }
+    _cmd(c) {
+      if (c === 'ATZ' && this.zFail > 0) { this.zFail--; return; }                    // clone that misses the first reset
+      // timing model: bus round trip + (without the response-count digit) the ELM keeps waiting for more answers
+      let cnt = false; if (/^01([0-9A-F]{2})+[0-9A-F]$/.test(c) || /^0[19]([0-9A-F]{2})+[0-9A-F]$/.test(c)) { if (!this.digit) return setTimeout(() => this._say('?'), 1); c = c.slice(0, -1); cnt = true; }
+      this.nreq++;
+      setTimeout(() => this._on(c), Math.max(1, this.latency + (/^0[1-9]/.test(c) && !cnt ? this.wait : 0)));
     }
     _say(t) { if (this.onData) this.onData(Uint8Array.from(Array.from(t + '\r\r>', (c) => c.charCodeAt(0)))); }
     _sup() {
@@ -263,6 +336,7 @@
     }
     _on(c) {
       if (c === 'ATZ') return this._say('\rELM327 v1.5');
+      if (c === 'ATAT2' && !this.at2) return this._say('?');
       if (/^AT/.test(c)) return this._say(c === 'ATRV' ? '12.6V' : c === 'ATDPN' ? (this.hondaBridge ? 'AH' : this.noMulti ? 'A5' : 'A6') : 'OK');
       if (c === '03') return this._say(this.cleared ? '43 00 00 00 00 00 00' : this.hondaBridge ? '43 0C 01 15 02 00 00' : '43 02 03 01 04 20');
       if (c === '07') return this._say('47 00');
@@ -271,6 +345,7 @@
       if (c === '0904') return this._say(this.cal ? this._vinLines(this.cal, '04') : 'NO DATA');
       if (/^01[0-9A-F]{2}/.test(c)) {
         let pids = c.slice(2).match(/../g).map((x) => parseInt(x, 16)); if (this.noMulti && pids.length > 1) pids = pids.slice(0, 1); let out = '41';
+        for (const p of pids) this.pidCount[p] = (this.pidCount[p] || 0) + 1;
         for (const p of pids) {
           if (p % 0x20 === 0) {
             const base = p, sup = this._sup(); let m = 0; for (const s of sup) if (s > base && s <= base + 32) m |= 1 << (31 - (s - base - 1));
@@ -279,7 +354,14 @@
           }
           const v = this._val(p); if (v == null) continue; out += p.toString(16).toUpperCase().padStart(2, '0') + v;
         }
-        return this._say(out.length > 2 ? out.replace(/(..)/g, '$1 ').trim() : 'NO DATA');
+        if (out.length <= 2) return this._say('NO DATA');
+        const by = out.match(/../g);
+        if (!this.noMulti && !this.plainMulti && by.length > 7) {                         // real ELM327 (CAN): length line + "0:" "1:" … lines
+          const o = [by.length.toString(16).toUpperCase().padStart(3, '0')]; o.push('0: ' + by.slice(0, 6).join(' '));
+          for (let i = 6, n = 1; i < by.length; i += 7, n++) o.push((n % 16).toString(16).toUpperCase() + ': ' + by.slice(i, i + 7).join(' '));
+          return this._say(o.join('\r'));
+        }
+        return this._say(by.join(' '));
       }
       this._say('?');
     }

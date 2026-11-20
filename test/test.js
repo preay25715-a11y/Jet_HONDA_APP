@@ -147,3 +147,39 @@ const { SimTransport } = require('../src/sim.js');
   const kd = dd.channelKeys(); assert(kd.has('BOOST') && kd.has('FRP') && kd.has('EGT1') && !kd.has('IGN'), 'diesel keys ' + [...kd]);
   console.log('v1.5 elm tests passed (VIN can/kwp, petrol EQR-only, diesel keys)');
 })().catch((x) => { console.error(x); process.exit(1); });
+
+// ---- v1.5.1: multi-frame CAN answers, response-count digit, clone adapters (KONNWEI KW90x), rotating queue ----
+(async () => {
+  const { Elm327, FakeElm } = require('../src/elm.js');
+  // 1) _join: byte-count line + numbered lines become ONE message (long CAN answers); single lines pass through
+  const j = new Elm327(new FakeElm({}));
+  // 0x00B = 11 bytes announced: 6 in frame 0 + 5 of the 7 in frame 1 (the rest is padding and must be dropped)
+  assert.deepStrictEqual(j._join(['00B', '0: 41 0C 1A F8 0D 3E', '1: 11 40 05 7B 00 AA AA']), ['410C1AF80D3E1140057B00'], 'multi-frame join');
+  assert.deepStrictEqual(j._join(['41 0C 1A F8']), ['410C1AF8']); assert.deepStrictEqual(j._join(['SEARCHING...', 'NO DATA', '?']), []);
+  // 2) CAN adapter with the response-count digit: all values come back (multi-frame), several PIDs per request, ≤ 3 requests per cycle, RPM every cycle
+  { const f = new FakeElm({ latency: 1 }), e = new Elm327(f); await e.init();
+    assert.strictEqual(e.useCnt, true, 'count digit accepted'); assert.strictEqual(e.tuned, true, 'AT2 accepted'); assert.strictEqual(e.single, false);
+    f.pidCount = {}; const n0 = f.nreq; let d; for (let i = 0; i < 40; i++) d = await e.readLive();
+    assert.strictEqual(e.single, false, 'long CAN answers must not push the driver into one-PID mode');
+    assert(d.RPM > 600 && d.ECT === 90 && d.SPD === 62 && d.TPS > 10 && d.BATT > 13, 'live ' + JSON.stringify(d));
+    assert((f.nreq - n0) / 40 <= 3.2, 'requests per cycle ' + (f.nreq - n0) / 40); assert.strictEqual(f.pidCount[0x0C], 40, 'RPM read every cycle'); }
+  // 3) cheap clone (KONNWEI-style ELM v1.5): misses the first ATZ, rejects ATAT2 and the count digit — everything still works
+  { const f = new FakeElm({ digit: false, atat2: false, zFail: 1, eqr: true }), e = new Elm327(f); await e.init();
+    assert.strictEqual(e.useCnt, false); assert.strictEqual(e.tuned, false); assert.strictEqual(e.single, false);
+    let d; for (let i = 0; i < 30; i++) d = await e.readLive();
+    assert(d.RPM > 600 && Math.abs(d.LAMB - 0.98) < 0.05, 'clone: AFR lambda ' + d.LAMB); assert(d.EQR > 0.9 && d.EQR < 1.1, 'clone: EQR'); }
+  // 4) adapter that stops understanding the digit in the middle of a session: driver drops it and carries on
+  { const f = new FakeElm({}), e = new Elm327(f); await e.init(); assert.strictEqual(e.useCnt, true);
+    f.digit = false; let d; for (let i = 0; i < 4; i++) d = await e.readLive();
+    assert.strictEqual(e.useCnt, false, 'digit dropped'); assert(d.RPM > 600 && d.ECT === 90, 'still reading after fallback'); }
+  // 5) one value per request (ISO/KWP cars): ≤ 5 requests per cycle, RPM + AFR every cycle, every other value still comes round
+  { const f = new FakeElm({ noMulti: true, eqr: true, lambda: false }), e = new Elm327(f); await e.init(); assert.strictEqual(e.single, true);
+    f.pidCount = {}; const n0 = f.nreq, N = 60; for (let i = 0; i < N; i++) await e.readLive();
+    assert((f.nreq - n0) / N <= 5.1, 'single-PID requests per cycle ' + (f.nreq - n0) / N);
+    assert.strictEqual(f.pidCount[0x0C], N, 'RPM every cycle'); assert.strictEqual(f.pidCount[0x44], N, 'AFR (PID 44) every cycle');
+    for (const p of e.pidList) assert(f.pidCount[p] >= 1, 'PID ' + p.toString(16) + ' never read'); }
+  // 6) HONDA-KLINE bridge (own firmware): no count digit, no timing changes
+  { const f = new FakeElm({ honda: true, digit: false }), e = new Elm327(f); await e.init();
+    assert.strictEqual(e.useCnt, false); assert.strictEqual(e.tuned, false); let d; for (let i = 0; i < 12; i++) d = await e.readLive(); assert(d.RPM > 600 && Math.abs(d.INJ - 6) < 0.01); }
+  console.log('v1.5.1 elm tests passed (multi-frame, count digit, clone adapter, fallback, rotating queue)');
+})().catch((x) => { console.error(x); process.exit(1); });

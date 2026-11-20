@@ -394,6 +394,8 @@ public class JetBridge {
             @Override
             public void onConnectionStateChange(BluetoothGatt g, int status, int state) {
                 if (state == BluetoothProfile.STATE_CONNECTED) {
+                    // shortest connection interval: BLE adapters answer a live request in tens of ms instead of ~100 ms+
+                    try { g.requestConnectionPriority(BluetoothGatt.CONNECTION_PRIORITY_HIGH); } catch (Throwable ignore) { }
                     g.requestMtu(247);
                     // some OBD dongles never answer the MTU request: start service discovery anyway
                     ui.postDelayed(() -> { if (!discStarted[0]) { discStarted[0] = true; g.discoverServices(); } }, 2000);
