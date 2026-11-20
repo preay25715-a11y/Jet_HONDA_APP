@@ -181,6 +181,9 @@ android/           แอป Android (MainActivity + JetBridge: USB OTG / BLE / 
 ## v1.3.2
 - Version badge (e.g. `v1.3.3`) placed after "By เปรียวจูนเนอร์" in the header and on the licence screen.
 
+## v1.5.2 — update field
+- The update field (Settings → อัปเดต) is pre-filled with `preay25715-a11y/Jet_HONDA_APP`. Whatever an older version had stored there (empty or mistyped) is replaced once on first launch; after that it can be edited. An empty field, or a pasted GitHub link, falls back to / is normalised to `owner/repo`. The once-a-day quiet update check therefore works out of the box.
+
 ## v1.5.1 — faster live data, KONNWEI adapters
 - **Bug fixed — long CAN answers:** an ELM327 prints an answer longer than 7 bytes as a byte-count line plus numbered lines (`00B` / `0: …` / `1: …`). The driver dropped those lines, concluded the car "answered too few PIDs" and fell back to one PID per request (5–8x slower) on CAN cars. They are now joined into one message.
 - **Response-count digit:** requests carry a trailing `1` (`010C0D111`), so the adapter returns as soon as the car has answered instead of waiting for its timeout. It is probed at connect time and dropped automatically (also in the middle of a session) if the adapter answers `?`. Not used with the HONDA-KLINE bridge.

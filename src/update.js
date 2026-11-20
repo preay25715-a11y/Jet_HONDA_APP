@@ -6,10 +6,12 @@
   const num = (v) => String(v).replace(/^v/i, '').split('.').map((x) => parseInt(x, 10) || 0);
   const newer = (a, b) => { const x = num(a), y = num(b); for (let i = 0; i < 3; i++) { if ((x[i] || 0) !== (y[i] || 0)) return (x[i] || 0) > (y[i] || 0); } return false; };
   const repoOf = (s) => { s = String(s || '').trim().replace(/^https?:\/\/github\.com\//i, '').replace(/\.git$/i, '').replace(/\/+$/, ''); const m = s.match(/^([\w.-]+)\/([\w.-]+)/); return m ? m[1] + '/' + m[2] : ''; };
+  const DEF_REPO = 'preay25715-a11y/Jet_HONDA_APP';             // where the Jet Smart Gauge releases live (workflow build-apk.yml)
+  const curRepo = () => repoOf(C.S.updRepo) || DEF_REPO;          // an empty / unusable field falls back to it
   let dl = '';
   const msg = (t) => { $('#updMsg').textContent = t; };
   async function check(silent) {
-    const repo = repoOf(C.S.updRepo);
+    const repo = curRepo();
     if (!repo) { if (!silent) msg('ใส่ที่อยู่โปรเจกต์ GitHub ก่อน (เช่น ชื่อ/โปรเจกต์)'); return; }
     try {
       if (!silent) msg('กำลังตรวจสอบ…');
@@ -24,9 +26,13 @@
       else { $('#updGet').hidden = true; msg('ใช้เวอร์ชันล่าสุดอยู่แล้ว ✓'); }
     } catch (e) { if (!silent) msg('ตรวจสอบไม่สำเร็จ: ' + (e.message || e) + ' (ต้องมีอินเทอร์เน็ต)'); }
   }
-  $('#updRepo').value = C.S.updRepo || '';
-  $('#updRepo').onchange = () => { C.S.updRepo = $('#updRepo').value.trim(); C.saveS(); };
-  $('#updCheck').onclick = () => { C.S.updRepo = $('#updRepo').value.trim(); C.saveS(); check(false); };
+  // v1.5.2: the update field is pre-filled with the project; whatever an older version had stored (empty / mistyped) is replaced once, then it can be edited freely
+  if ((C.S.updRepoV || 0) < 152) { C.S.updRepo = DEF_REPO; C.S.updRepoV = 152; C.saveS(); }
+  $('#updRepo').placeholder = DEF_REPO;
+  $('#updRepo').value = repoOf(C.S.updRepo) || DEF_REPO;
+  const saveRepo = () => { C.S.updRepo = repoOf($('#updRepo').value) || DEF_REPO; $('#updRepo').value = C.S.updRepo; C.saveS(); };
+  $('#updRepo').onchange = saveRepo;
+  $('#updCheck').onclick = () => { saveRepo(); check(false); };
   const inApp = () => !!(root.JetNative && JetNative.installApk);
   $('#updGet').onclick = () => {
     if (!dl) return;
@@ -42,6 +48,6 @@
     else { msg('อัปเดตไม่สำเร็จ: ' + (d.m || '') + ' — ลองกดอีกครั้ง'); $('#updGet').disabled = false; }
   };
   // quiet check at most once a day, only after the licence is OK
-  setTimeout(() => { if (root.JetLic && JetLic.ok() && repoOf(C.S.updRepo) && Date.now() - (C.S.updLast || 0) > 86400000) check(true); }, 6000);
+  setTimeout(() => { if (root.JetLic && JetLic.ok() && curRepo() && Date.now() - (C.S.updLast || 0) > 86400000) check(true); }, 6000);
   root.JET_VERSION = VER;
 })(window);
