@@ -113,13 +113,7 @@
 
   /* ---------------- Smart Gauge section (in SETTING) ---------------- */
   function renderGauge() {
-    const g = st.gauge, s = st.sens, fresh = s && Date.now() - s.t < 3000, ok = (b) => (b ? '<span class="okc">✓</span>' : '<span class="mut">✗</span>');
-    const via = !g ? '—' : g.via === 'usb' ? 'สาย USB' : 'Bluetooth';
-    $('#gInfo').innerHTML = [
-      ['สถานะ', g ? '<span class="okc">เชื่อมแล้ว</span>' : '<span class="badc">ยังไม่เชื่อม</span>'], ['ชื่อ', g ? esc(g.name || '') : '—'],
-      ['ช่องทาง', via], ['เฟิร์มแวร์', g ? esc(g.fw || '—') : '—'],
-      ['ใช้เป็นตัวต่อสาย K-line', g && st.t === g ? '<span class="okc">ใช่</span>' : 'ไม่'], ['เซ็นเซอร์', g ? (fresh ? `ไวด์แบนด์ ${ok(s.afrOk)} จีพีเอส ${ok(s.gpsOk)}${s.gpsOk ? ' (' + s.sats + ')' : ''} อุณหภูมิน้ำมันเครื่อง ${ok(s.eotOk)} ออกซิเจน ${ok(s.o2Ok)}` : g.noSensors ? 'เฟิร์มแวร์ไม่รองรับ' : 'รอข้อมูล…') : '—'],
-    ].map(([k, v]) => `<span>${k}</span><span>${v}</span>`).join('');
+    const g = st.gauge;
     const o = st.t && st.t.kind === 'obd' ? st.t : null;
     $('#obdInfo').innerHTML = o ? '🚗 OBD-II: <span class="okc">เชื่อมแล้ว</span> · ' + esc(o.name) + ' · ' + (o.pidList ? o.pidList.length : 0) + ' ค่า · ' + esc(st.veh && st.veh.text ? st.veh.text : o.honda ? 'HONDA PGM-FI (มอเตอร์ไซค์)' : o.fuel === 'd' ? 'ดีเซล' : 'เบนซิน') + (o.ident && o.ident.vin ? '<br><small>VIN ' + esc(o.ident.vin) + (o.ident.cal ? ' · ECU ' + esc(o.ident.cal) : '') + '</small>' : '') : '🚗 OBD-II: ยังไม่เชื่อม';
     $('#gOff').disabled = !g && !o;

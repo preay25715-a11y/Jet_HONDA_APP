@@ -4,6 +4,7 @@ import android.Manifest;
 import android.app.Activity;
 import android.content.ClipData;
 import android.content.Intent;
+import android.content.pm.ActivityInfo;
 import android.content.pm.PackageManager;
 import android.graphics.Color;
 import android.net.Uri;
@@ -168,6 +169,14 @@ public class MainActivity extends Activity {
         bridge.closeAll();
         web.destroy();
         super.onDestroy();
+    }
+
+    /** screen rotation chosen in Setup: "land" / "port" pin the orientation, anything else follows the sensor (all four directions) */
+    void setOrient(String mode) {
+        final int o = "land".equals(mode) ? ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE
+                : "port".equals(mode) ? ActivityInfo.SCREEN_ORIENTATION_SENSOR_PORTRAIT
+                : ActivityInfo.SCREEN_ORIENTATION_FULL_SENSOR;
+        runOnUiThread(() -> setRequestedOrientation(o));
     }
 
     void keepScreen(boolean on) {

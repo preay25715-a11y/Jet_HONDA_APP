@@ -66,7 +66,7 @@
     ['ยังไม่มีค่าเข้ามา — เชื่อมต่อแล้วค่าจะโผล่ที่นี่เอง (กด “เฉพาะค่าที่มี” เพื่อดูทุกช่อง)', 'No data yet — values appear here once connected (tap “Only values with data” to see every cell)'],
     ['ตั้งค่า', 'SETTINGS'], ['ภาษา', 'Language'], ['ค้นหาบลูทูธ', 'Search Bluetooth'], ['📶 ค้นหาบลูทูธ', '📶 Search Bluetooth'], ['ค่า AFR และจีพีเอส', 'AFR & GPS'],
     ['เป้า AFR (ขับปกติ)', 'Target AFR (cruise)'], ['เป้า AFR (เปิดคันเร่งเต็ม)', 'Target AFR (full throttle)'], ['ถือว่าเปิดเต็มเมื่อคันเร่ง ≥ (%)', 'Full throttle when pedal ≥ (%)'],
-    ['แหล่งสัญญาณจีพีเอส', 'GPS source'], ['อัตโนมัติ (เกจก่อน)', 'AUTO (gauge first)'], ['โหมดสาธิต (จำลอง)', 'DEMO (simulated)'], ['ใช้เป็นตัวต่อสาย K-line', 'Used as K-line adapter'],
+    ['แหล่งสัญญาณจีพีเอส', 'GPS source'], ['อัตโนมัติ (เกจก่อน)', 'AUTO (gauge first)'], ['โหมดสาธิต (จำลอง)', 'DEMO (simulated)'], ['ใช้เป็นตัวต่อสาย K-line', 'Used as K-line adapter'], ['การหมุนจอ', 'Screen rotation'], ['อัตโนมัติ (ตามที่ถือมือถือ)', 'Auto (follows how you hold the phone)'], ['แนวนอน', 'Landscape'], ['แนวตั้ง', 'Portrait'],
     ['ไวด์แบนด์', 'Wideband'], ['จีพีเอส', 'GPS'], ['อุณหภูมิน้ำมันเครื่อง', 'Oil temp'], ['ออกซิเจน', 'O2'],
     ['ต้องมี License ก่อนใช้งาน — ส่ง “รหัสเครื่อง” ให้ เปรียวจูนเนอร์ เพื่อขอ License', 'A licence is required — send the “Device ID” to เปรียวจูนเนอร์ to get your licence'],
     ['วาง License ที่ได้รับที่นี่', 'Paste your licence here'], ['คัดลอกแล้ว ✓', 'Copied ✓'], ['คัดลอก', 'Copy'], ['วาง', 'Paste'], ['เปิดใช้งาน', 'Activate'],

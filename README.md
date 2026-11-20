@@ -181,6 +181,11 @@ android/           แอป Android (MainActivity + JetBridge: USB OTG / BLE / 
 ## v1.3.2
 - Version badge (e.g. `v1.3.3`) placed after "By เปรียวจูนเนอร์" in the header and on the licence screen.
 
+## v1.5.4 — portrait + landscape, AFR log axes follow the engine
+- **Screen rotation:** the Android app is no longer locked to landscape (`fullSensor`: follows how the phone is held, all four directions). Setup → "การหมุนจอ" can pin it to landscape or portrait instead (applied immediately, remembered). In portrait the Dash scrolls vertically and all seven tabs (including Setup) stay on screen; layouts were checked at 360×740, 390×844, 768×1024 and landscape 844×390, 915×412, 1024×768 with no horizontal overflow. Not yet tried on a real phone.
+- **AFR log axes:** the RPM rows now run from idle (about 7 % of the top, at least 600 rpm) to the redline of the chosen vehicle (90 % of the dial when no redline is set), closer together at low rpm, and the throttle columns run 0–100 %. They follow Setup / vehicle detection; each axis set keeps its own log. **Note:** the table from earlier versions (fixed 840–9,800 rpm × 0–72) is no longer shown — its data stays stored but is not migrated.
+- **Removed:** the Smart Gauge status box in Setup (status / name / channel / firmware / K-line / sensors) and the orange explanation bar on the AFR log page. The O2-estimate caveat remains on the Dash label ("AFR (O2 ประมาณ)") and in this README.
+
 ## v1.5.3 — link stability, AFR from the O2 sensor, clone-tolerant start-up
 - **Info box:** the ⚡ diagnostics line was removed from Settings → OBD-II.
 - **AFR from the O2 sensor:** when the car has no wideband lambda (PID 24/34), AFR is estimated from the narrowband O2 voltage (PID 14, 0–1.275 V) with a voltage → AFR table (0.1 V→17.0 · 0.2→15.5 · 0.45→14.7 · 0.8→13.5 · 0.9→12.0, scaled by the stoichiometric ratio of the fuel) and averaged over ~0.8 s because the sensor flips fast. The Dash tile says "AFR (O2 ประมาณ)" and the AFR help text explains it. **Honest limit:** a narrowband sensor is only accurate close to 14.7 — treat the number as a rich/lean indicator, not a measurement. Not offered for diesel. Source selector in Setup: auto / wideband (24·34) / O2 (14) / commanded (44).

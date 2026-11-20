@@ -190,6 +190,9 @@ public class JetBridge {
     @JavascriptInterface
     public void keepScreen(boolean on) { act.keepScreen(on); }
 
+    @JavascriptInterface
+    public void setOrientation(String mode) { act.setOrient(mode); }
+
     /* ======================= USB serial ======================= */
 
     UsbSerialProber prober() {

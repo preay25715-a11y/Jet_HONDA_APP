@@ -226,22 +226,30 @@
   const fmtAx = (v) => (Math.abs(v) >= 100 ? Math.round(v) : +(+v).toFixed(1));
 
   /* ================= AFR LOG ================= */
-  const DEF_Y = [840, 1100, 1200, 1300, 1400, 1500, 1600, 1800, 2000, 2250, 2500, 2750, 3000, 3250, 3500, 4000, 4500, 5000, 5500, 6000, 6500, 7000, 7500, 7750, 8000, 8500, 9000, 9500, 9800];
-  const DEF_X = [0, 0.4, 0.8, 1.2, 1.9, 2.5, 3.0, 3.5, 4.0, 4.9, 5.9, 7.9, 9.9, 11.9, 13.9, 15.9, 18.6, 20.9, 26.4, 31.8, 39.5, 44.7, 50.0, 59.3, 72.0];
-  const afr = { xs: DEF_X, ys: DEF_Y, title: 'ค่าเริ่มต้น', sig: '', log: null, dirty: false, rec: S.afrRec !== false, mode: S.logMode === 'crp' ? 'crp' : 'afr' };
+  // The axes follow the engine: rows = RPM from idle up to the redline (closer together at low rpm, where idle / cruise tuning happens),
+  // columns = throttle 0–100 %. Redline and dial full-scale come from the chosen vehicle (Setup); without a redline 90 % of the dial is used.
+  function engineAxes() {
+    const top = Math.max(3000, Math.ceil((S.redline > 0 ? S.redline : (S.rpmMax || 12000) * 0.9) / 500) * 500);
+    const lo = Math.max(600, Math.round(top * 0.07 / 100) * 100), step = top > 8000 ? 100 : 50, N = 26, ys = [];
+    for (let i = 0; i < N; i++) { const v = Math.round((lo + (top - lo) * Math.pow(i / (N - 1), 1.35)) / step) * step; if (!ys.length || v > ys[ys.length - 1]) ys.push(v); }
+    return { ys, xs: [0, 1, 2, 3, 4, 5, 6, 8, 10, 12, 15, 18, 21, 25, 30, 35, 40, 50, 60, 70, 80, 90, 100] };
+  }
+  const AX0 = engineAxes();
+  const afr = { xs: AX0.xs, ys: AX0.ys, title: 'ตามรอบเครื่อง', sig: '', log: null, dirty: false, rec: S.afrRec !== false, mode: S.logMode === 'crp' ? 'crp' : 'afr' };
   const isCrp = () => afr.mode === 'crp', LK = () => (isCrp() ? 'CRP' : 'AFR'), LD = () => (isCrp() ? 2 : 1);
   window.JetAfr = afr;
   const afrColor = (v) => { if (isCrp()) return `hsl(${Math.round(240 - 240 * Math.max(0, Math.min(1, v / 5)))},72%,46%)`;
      const stops = [[10.5, [210, 40, 60]], [11.5, [225, 70, 55]], [12.8, [215, 150, 40]], [14.0, [70, 190, 110]], [14.7, [40, 175, 120]], [15.6, [40, 130, 200]], [16.5, [70, 90, 220]], [18, [110, 70, 210]]];
     if (v <= stops[0][0]) return `rgb(${stops[0][1]})`; for (let i = 1; i < stops.length; i++) if (v <= stops[i][0]) { const [a, ca] = stops[i - 1], [b, cb] = stops[i], k = (v - a) / (b - a); return `rgb(${ca.map((x, j) => Math.round(x + (cb[j] - x) * k))})`; } return `rgb(${stops[stops.length - 1][1]})`; };
   function afrAxesChanged(force) {
-    const xs = DEF_X, ys = DEF_Y, sig = afr.mode + ':' + ys.length + 'x' + xs.length + ':' + ys[0] + '-' + ys[ys.length - 1] + ':' + xs[0] + '-' + xs[xs.length - 1];
+    const ax = engineAxes(), xs = ax.xs, ys = ax.ys, ttl = 'รอบเครื่อง ' + fmtRpm(ys[0]) + '–' + fmtRpm(ys[ys.length - 1]) + ' × TPS 0–100%', sig = afr.mode + ':' + ys.length + 'x' + xs.length + ':' + ys[0] + '-' + ys[ys.length - 1] + ':' + xs[0] + '-' + xs[xs.length - 1];
     afr.info = axisInfo(null, xs, ys);
-    if (sig === afr.sig && afr.log) { afr.title = 'ค่าเริ่มต้น (RPM × TPS)'; if (force && curTab === 'AFR') renderAfr(); return; }
-    afrSave(); afr.xs = xs; afr.ys = ys; afr.sig = sig; afr.title = 'ค่าเริ่มต้น (RPM × TPS)';
+    if (sig === afr.sig && afr.log) { afr.title = ttl; if (force && curTab === 'AFR') renderAfr(); return; }
+    afrSave(); afr.xs = xs; afr.ys = ys; afr.sig = sig; afr.title = ttl;
     const o = LSget('jht.' + (isCrp() ? 'crp.' : 'afr.') + sig, null); afr.log = o ? T.AfrLog.from(o) : new T.AfrLog(ys.length, xs.length);
     if (curTab === 'AFR') renderAfr();
   }
+  window.addEventListener('jetvehicle', () => afrAxesChanged(true));         // another vehicle / redline / dial range → axes follow (each axis set keeps its own log)
   function afrSave() { if (afr.log && afr.dirty) { LSset('jht.' + (afr.sig.indexOf('crp:') === 0 ? 'crp.' : 'afr.') + afr.sig, afr.log.toJSON()); afr.dirty = false; } }
   setInterval(afrSave, 5000);
   window.addEventListener('pagehide', afrSave);
@@ -268,21 +276,6 @@
     const K = LK(), live = last[K] != null && Date.now() - (last.t || 0) < 3000;
     $('#aInfo').textContent = `${afr.ys.length}×${afr.xs.length} · แกนจาก "${afr.title}" · บันทึกแล้ว ${afr.log ? afr.log.filled() : 0} ช่อง · ${live ? K + ' สด ' + (+last[K]).toFixed(LD()) : 'ยังไม่มีข้อมูลสด (ต่อเกจ/เปิด DEMO)'}`;
     $('#aRec').classList.toggle('on', afr.rec); $('#aRec').textContent = afr.rec ? '● REC' : '○ REC';
-    const why = afrWhy(), w = $('#aWhy'); w.hidden = !why; w.textContent = why || '';
-  }
-  // explains in plain words why the table is not filling
-  function afrWhy() {
-    const fresh = Date.now() - (last.t || 0) < 3000, obd = st.t && st.t.kind === 'obd';
-    if (!st.ecu && !st.gauge) return '⚠ ยังไม่ได้เชื่อมต่อ — เชื่อม ELM327 หรือเกจ + ECU ก่อน';
-    if (!st.live || !fresh) return '⚠ ยังไม่มีค่าสด — กด ▶ LIVE (หน้า Dash) หรือรอให้เชื่อมต่อเสร็จ';
-    if (last.RPM == null) return '⚠ ไม่ได้รับรอบเครื่อง (RPM)';
-    if (last.TPS == null && last.LOAD == null) return '⚠ ไม่ได้รับตำแหน่งคันเร่ง/โหลดเครื่อง — ไม่มีแกนให้ลงตาราง';
-    if (last[LK()] == null) return isCrp() ? '⚠ ไม่ได้รับค่า CRP volt จากเกจ' : obd ? '⚠ รถคันนี้ไม่ส่งทั้ง Lambda (PID 24/34), เซ็นเซอร์ O2 (PID 14) และค่าที่ ECU สั่ง (PID 44) ทาง OBD-II — ต้องต่อเกจ AFR/ไวด์แบนด์เพิ่ม' : '⚠ ไม่ได้รับค่า AFR จากเกจ — ตรวจสาย O2/ไวด์แบนด์ และสถานะเกจ';
-    if (!afr.rec) return '⚠ REC ปิดอยู่ — กด ○ REC เพื่อบันทึก';
-    if (!isCrp() && last.afrSrc === 'o2') return 'ℹ AFR นี้ประมาณจากแรงดันเซ็นเซอร์ O2 แบบ narrowband (PID 14) — แม่นเฉพาะใกล้ 14.7 ใช้ดูรวย/บางเท่านั้น ไม่ใช่ค่าวัดจริง (ต้องการค่าจริงให้ใช้ไวด์แบนด์)';
-    if (!isCrp() && last.afrSrc === 'cmd') return 'ℹ AFR นี้คือค่าที่ ECU "สั่ง" (PID 44) ไม่ใช่ค่าวัดจริงจากเซ็นเซอร์ — รถคันนี้ไม่ส่ง Lambda จริงทาง OBD-II';
-    if (!isCrp() && obd && st.t.fuel === 'd') return 'ℹ ดีเซลวิ่งบางเสมอ (AFR สูงกว่าเบนซินมาก) — ใช้ดูแนวโน้ม/ขีดจำกัดควันจากค่า λ';
-    return '';
   }
   const aWrap = $('#atab').parentElement, aCur = Cursor(aWrap, $('#atab'));
   ['pointerdown', 'wheel', 'touchstart'].forEach((ev) => aWrap.addEventListener(ev, () => { afr.userT = Date.now(); }, { passive: true }));
@@ -374,9 +367,14 @@
       <label class="f">เป้า AFR (ขับปกติ)<input id="sAfrC" type="number" step="0.1"></label>
       <label class="f">เป้า AFR (เปิดคันเร่งเต็ม)<input id="sAfrW" type="number" step="0.1"></label>
       <label class="f">ถือว่าเปิดเต็มเมื่อคันเร่ง ≥ (%)<input id="sAfrT" type="number"></label>
-      <label class="f">แหล่งสัญญาณจีพีเอส<select id="sGps"><option value="auto">อัตโนมัติ (เกจก่อน)</option><option value="gauge">เกจเท่านั้น</option><option value="phone">มือถือเท่านั้น</option></select></label></div>`;
+      <label class="f">แหล่งสัญญาณจีพีเอส<select id="sGps"><option value="auto">อัตโนมัติ (เกจก่อน)</option><option value="gauge">เกจเท่านั้น</option><option value="phone">มือถือเท่านั้น</option></select></label>
+      <label class="f">การหมุนจอ<select id="sOrient"><option value="auto">อัตโนมัติ (ตามที่ถือมือถือ)</option><option value="land">แนวนอน</option><option value="port">แนวตั้ง</option></select></label></div>`;
     card.insertBefore(blk, anchor);
-    $('#bSet').addEventListener('click', () => { $('#sAfrC').value = S.afrCruise || 14.2; $('#sAfrW').value = S.afrWot || 12.8; $('#sAfrT').value = S.afrWotTps || 50; $('#sGps').value = gps.src; });
+    $('#bSet').addEventListener('click', () => { $('#sAfrC').value = S.afrCruise || 14.2; $('#sAfrW').value = S.afrWot || 12.8; $('#sAfrT').value = S.afrWotTps || 50; $('#sGps').value = gps.src; $('#sOrient').value = S.orient || 'auto'; });
+    // screen rotation (Android app): auto follows how the phone is held, or pin it to landscape / portrait
+    const applyOrient = () => { try { if (window.JetNative && window.JetNative.setOrientation) window.JetNative.setOrientation(S.orient || 'auto'); } catch (e) { /* older shell: the manifest default applies */ } };
+    $('#sOrient').onchange = () => { S.orient = $('#sOrient').value; C.saveS(); applyOrient(); };
+    applyOrient();
     $('#sSave').addEventListener('click', () => {
       Object.assign(S, { afrCruise: +$('#sAfrC').value || 14.2, afrWot: +$('#sAfrW').value || 12.8, afrWotTps: +$('#sAfrT').value || 50, gpsSrc: $('#sGps').value });
       gps.src = S.gpsSrc; if (gps.src === 'gauge') gps.stopPhone(); C.saveS();
