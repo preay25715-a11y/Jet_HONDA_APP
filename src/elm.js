@@ -310,23 +310,54 @@
       return k;
     }
     watch(keys) { this.extraFast = new Set(keys || []); }
+    /** timing for the code services: reading / clearing codes can keep the ECU busy far longer than a live value, so the short live timeouts are lifted meanwhile (ST FF ≈ 1 s) and restored afterwards */
+    _stDefault() { return /^[3-5]/.test(this.proto) ? 'ATST64' : 'ATST32'; }
+    async _slow(fn) {
+      if (this.honda) return fn();
+      await this.query('ATAT1', 1500); await this.query('ATSTFF', 1500);
+      try { return await fn(); }
+      finally {
+        if (this.tuned) { await this.query('ATAT2', 1500); await this.query(/^[6-9]/.test(this.proto) ? 'ATST19' : this._stDefault(), 1500); }
+        else await this.query(this._stDefault(), 1500);
+      }
+    }
     async readDTC() {
+      const can = /^[6-9]/.test(this.proto) && !this.honda;
       const dec = (by) => { const o = []; for (let i = 0; i + 1 < by.length; i += 2) { const a = by[i], b = by[i + 1]; if (!a && !b) continue; if (this.honda) { o.push(a + '-' + b); continue; } o.push('PCBU'[a >> 6] + ((a >> 4) & 3) + (a & 15).toString(16).toUpperCase() + (b >> 4).toString(16).toUpperCase() + (b & 15).toString(16).toUpperCase()); } return o; };
+      this.dtcRaw = {};
       const get = async (cmd, mode) => {
-        const l = await this.query(cmd, 5000); if (!l) return [];
+        const l = await this.query(cmd, 5000); this.dtcRaw[cmd] = (l || []).join(' | ');
+        if (!l) return [];
+        // multi-frame answers (byte-count line + "0:" "1:" lines) are joined first; a line with stray characters is still read the old way
+        let msgs = this._join(l).filter((h) => h.startsWith(mode));
+        if (!msgs.length) msgs = l.map((ln) => ln.replace(/[^0-9A-Fa-f]/g, '').toUpperCase()).filter((h) => h.startsWith(mode));
         const codes = [];
-        for (const ln of l) {
-          const h = ln.replace(/[^0-9A-Fa-f]/g, '').toUpperCase(); if (!h.startsWith(mode)) continue;
+        for (const h of msgs) {
           let by = (h.slice(2).match(/../g) || []).map((x) => parseInt(x, 16));
-          if (by.length % 2) by = by.slice(1);               // CAN: leading count byte
+          if (can) by = by.slice(1, 1 + 2 * by[0]);          // CAN (ISO 15765-4): the byte after the mode is the number of codes; padding behind the codes is ignored
+          else if (by.length % 2) by = by.slice(1);            // other protocols: codes in pairs (a stray leading count byte is dropped)
           codes.push(...dec(by));
         }
         return Array.from(new Set(codes));
       };
-      const cur = await get('03', '43'), pend = await get('07', '47');
-      return { current: cur, past: pend };
+      return this._slow(async () => { const cur = await get('03', '43'), pend = await get('07', '47'); return { current: cur, past: pend }; });
     }
-    async clearDTC() { const l = await this.query('04', 5000); return !!(l && l.some((x) => /44/.test(x))); }
+    /** clear codes (service 04). true = the ECU confirmed; this.clearInfo = { ok, raw, why } says what it answered when it did not */
+    async clearDTC() {
+      const l = await this._slow(() => this.query('04', 5000));
+      const raw = (l || []).join(' | '), hx = (l || []).map((x) => x.replace(/\s/g, '').toUpperCase());
+      const neg = hx.map((x) => /^7F04([0-9A-F]{2})/.exec(x)).find(Boolean);
+      let ok = hx.some((x) => /^44/.test(x)), why = '';
+      if (!ok) {
+        if (!l) why = 'อะแดปเตอร์ไม่ตอบคำสั่งลบ — ตรวจการเชื่อมต่อแล้วลองใหม่';
+        else if (neg) why = { 0x22: 'ECU ไม่ยอมลบตอนนี้ — ดับเครื่อง (เปิดกุญแจ ON แต่ไม่สตาร์ท) แล้วลบใหม่', 0x11: 'ECU นี้ไม่รองรับคำสั่งลบโค้ดมาตรฐาน', 0x12: 'ECU นี้ไม่รองรับคำสั่งลบโค้ดมาตรฐาน', 0x33: 'ECU ต้องปลดล็อกก่อนจึงลบได้', 0x78: 'ECU ยังทำคำสั่งลบไม่เสร็จ — รอสักครู่แล้วอ่านโค้ดอีกครั้ง' }[parseInt(neg[1], 16)] || 'ECU ปฏิเสธคำสั่งลบ (รหัส ' + neg[1] + ')';
+        else if (hx.some((x) => /NODATA/.test(x))) why = 'ECU ไม่ตอบคำสั่งลบ — เปิดกุญแจ ON แล้วลองใหม่';
+        else if (hx.some((x) => /UNABLE|BUSERROR|CANERROR|BUSBUSY/.test(x))) why = 'ติดต่อ ECU ไม่ได้ขณะลบ — ตรวจสวิตช์กุญแจและการเชื่อมต่อ';
+        else why = 'ECU ตอบไม่ตรงรูปแบบที่คาด (' + (raw || '—') + ')';
+      }
+      this.clearInfo = { ok, raw, why };
+      return ok;
+    }
     async detect() { return this.state; }
     async flashCount() { return null; }
     async close() { this.state = 'OFF'; try { await this.s.close(); } catch (e) {} }
@@ -337,7 +368,7 @@
     // o: { diesel, honda, noMulti, lambda(false = no PID 24/34), eqr(true = has commanded lambda 44), vin, kwp(VIN as ISO lines), cal }
     constructor(o) {
       o = o || {}; this.diesel = !!o.diesel; this.noMulti = !!o.noMulti || !!o.honda; this.hondaBridge = !!o.honda; this.lambda = o.lambda !== false; this.eqr = !!o.eqr;
-      this.vin = o.vin || ''; this.kwp = !!o.kwp; this.cal = o.cal || ''; this.latency = o.latency || 0; this.wait = o.wait == null ? 0 : o.wait; this.digit = o.digit !== false; this.at2 = o.atat2 !== false; this.zFail = o.zFail || 0; this.deaf = new Set(o.deaf || []); this.junk = new Set(o.junk || []); this.partial = o.partial || 0; this.sent = []; this.o2V = o.o2V == null ? null : o.o2V; this.needSp = o.needSp == null ? null : String(o.needSp); this.sp = '0'; this.plainMulti = !!o.plainMulti; this.nreq = 0; this.pidCount = {}; this.t = 0; this.buf = ''; this.dtc = ['P0301', 'P0420']; this.cleared = false;
+      this.vin = o.vin || ''; this.kwp = !!o.kwp; this.cal = o.cal || ''; this.latency = o.latency || 0; this.wait = o.wait == null ? 0 : o.wait; this.digit = o.digit !== false; this.at2 = o.atat2 !== false; this.zFail = o.zFail || 0; this.dtcMode = o.dtc || ''; this.clear04 = o.clear04 || ''; this.deaf = new Set(o.deaf || []); this.junk = new Set(o.junk || []); this.partial = o.partial || 0; this.sent = []; this.o2V = o.o2V == null ? null : o.o2V; this.needSp = o.needSp == null ? null : String(o.needSp); this.sp = '0'; this.plainMulti = !!o.plainMulti; this.nreq = 0; this.pidCount = {}; this.t = 0; this.buf = ''; this.dtc = ['P0301', 'P0420']; this.cleared = false;
     }
     write(bytes) {
       for (const b of bytes) this.buf += String.fromCharCode(b);
@@ -378,9 +409,14 @@
       if (/^ATSP[0-9A-C]$/.test(c)) { this.sp = c.slice(4); return this._say('OK'); }
       if (c === '0100' && this.needSp !== null && this.sp !== this.needSp) return this._say('SEARCHING...\rUNABLE TO CONNECT');       // the car only answers on one specific protocol
       if (/^AT/.test(c)) return this._say(c === 'ATRV' ? '12.6V' : c === 'ATDPN' ? (this.needSp !== null && this.sp === this.needSp ? this.needSp : this.hondaBridge ? 'AH' : this.noMulti ? 'A5' : 'A6') : 'OK');
-      if (c === '03') return this._say(this.cleared ? '43 00 00 00 00 00 00' : this.hondaBridge ? '43 0C 01 15 02 00 00' : '43 02 03 01 04 20');
+      if (c === '03') {
+        if (this.cleared && this.dtcMode !== 'sticky') return this._say('43 00 00 00 00 00 00');
+        if (this.dtcMode === 'pad' || this.dtcMode === 'sticky') return this._say('43 01 01 18 00 00 00');                 // one code, frame padded to 7 data bytes
+        if (this.dtcMode === 'many') return this._say('00A\r0: 43 04 01 18 03 01\r1: 04 20 05 00');                          // four codes, multi-frame
+        return this._say(this.hondaBridge ? '43 0C 01 15 02 00 00' : '43 02 03 01 04 20');
+      }
       if (c === '07') return this._say('47 00');
-      if (c === '04') { this.cleared = true; return this._say('44'); }
+      if (c === '04') { if (this.clear04) return this._say(this.clear04); this.cleared = true; return this._say('44'); }
       if (c === '0902') return this._say(this.vin ? this._vinLines(this.vin, '02') : 'NO DATA');
       if (c === '0904') return this._say(this.cal ? this._vinLines(this.cal, '04') : 'NO DATA');
       if (/^01[0-9A-F]{2}/.test(c)) {

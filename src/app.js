@@ -415,8 +415,22 @@
   $('#bLive').onclick = () => { if (!st.ecu) return toast('ยังไม่ได้เชื่อมต่อ'); st.live ? stopLive() : startLive(); };
   /* ---------------- DTC ---------------- */
   const dtcHtml = (l) => l.length ? l.map((k) => `<div class="dtc"><b>${k}</b><span>${esc(P.dtcText(k))}</span></div>`).join('') : '<div class="okc">ไม่มีโค้ด ✔</div>';
-  $('#bDtc').onclick = () => op('อ่านโค้ด DTC', async () => { const r = await st.ecu.readDTC(); $('#dtcCur').innerHTML = dtcHtml(r.current); $('#dtcPast').innerHTML = dtcHtml(r.past); });
-  $('#bDtcClr').onclick = async () => { if (await ask('ลบโค้ดทั้งหมดในกล่อง?', true)) op('ลบโค้ด', async () => { toast((await st.ecu.clearDTC()) ? 'ลบโค้ดแล้ว' : 'ลบไม่สำเร็จ'); const r = await st.ecu.readDTC(); $('#dtcCur').innerHTML = dtcHtml(r.current); $('#dtcPast').innerHTML = dtcHtml(r.past); }); };
+  const showDtc = (r) => { $('#dtcCur').innerHTML = dtcHtml(r.current); $('#dtcPast').innerHTML = dtcHtml(r.past); };
+  const logDtcRaw = () => { const d = st.ecu && st.ecu.dtcRaw; if (d) log('info', 'DTC ที่ ECU ตอบ: ' + Object.keys(d).map((k) => k + ' → ' + (d[k] || '(ว่าง)')).join(' · ')); };      // raw answers in the log: what to send when a code looks wrong
+  $('#bDtc').onclick = () => op('อ่านโค้ด DTC', async () => { const r = await st.ecu.readDTC(); showDtc(r); logDtcRaw(); });
+  $('#bDtcClr').onclick = async () => {
+    if (!(await ask('ลบโค้ดทั้งหมดในกล่อง?', true))) return;
+    op('ลบโค้ด', async () => {
+      const ok = await st.ecu.clearDTC(), info = st.ecu.clearInfo || null;
+      if (info) log(ok ? 'info' : 'err', 'ลบโค้ด: ECU ตอบ ' + (info.raw || '(ไม่มีคำตอบ)'));
+      await P.sleep(800);                                                    // the ECU needs a moment before it reports the new state
+      const r = await st.ecu.readDTC(); showDtc(r); logDtcRaw();
+      const left = Array.from(new Set(r.current.concat(r.past)));
+      if (!ok) toast((info && info.why) || 'ลบไม่สำเร็จ', 6000);
+      else if (left.length) toast('ECU รับคำสั่งลบแล้ว แต่ยังเห็นโค้ด ' + left.join(', ') + ' — อาจเป็นเพราะปัญหายังอยู่ (ECU ตั้งโค้ดกลับทันที) แก้เซ็นเซอร์/สายไฟแล้วลบอีกครั้ง', 8000);
+      else toast('ลบโค้ดแล้ว ✔');
+    });
+  };
 
   /* ---------------- file library (IndexedDB) ---------------- */
   const DB = {

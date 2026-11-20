@@ -262,3 +262,28 @@ const { SimTransport } = require('../src/sim.js');
   { const f = new FakeElm({}), e = new Elm327(f); await e.init(); f.mute(true); const t0 = Date.now(); const p = e.query('0100', 5000); setTimeout(() => f.lose('ขาด'), 50); await p; assert(Date.now() - t0 < 1000, 'ended in ' + (Date.now() - t0) + ' ms'); }
   console.log('v1.5.3 tests passed (remembered protocol, ATST64, deaf PIDs skipped, combined→single, junk answers dropped, instant link-loss)');
 })().catch((x) => { console.error(x); process.exit(1); });
+
+// ---- v1.5.6: reading / clearing trouble codes ----
+(async () => {
+  const { Elm327, FakeElm } = require('../src/elm.js');
+  const mk = async (o) => { const f = new FakeElm(o), e = new Elm327(f); await e.init(); return { f, e }; };
+  // 1) CAN answer padded to 7 data bytes ("43 01 01 18 00 00 00") used to read as P0101 + P1800; the count byte decides now
+  { const { e } = await mk({ dtc: 'pad' }); const d = await e.readDTC(); assert.deepStrictEqual(d.current, ['P0118'], 'padded frame: ' + d.current); }
+  // 2) several codes arrive as a multi-frame answer (byte-count line + "0:" "1:" lines) — they used to be dropped
+  { const { e } = await mk({ dtc: 'many' }); const d = await e.readDTC(); assert.deepStrictEqual(d.current, ['P0118', 'P0301', 'P0420', 'P0500'], 'multi-frame: ' + d.current); }
+  // 3) plain single frame as before; raw answers are kept for the log
+  { const { e } = await mk({}); const d = await e.readDTC(); assert.deepStrictEqual(d.current, ['P0301', 'P0420']); assert(/43 02 03 01 04 20/.test(e.dtcRaw['03']), 'raw kept: ' + JSON.stringify(e.dtcRaw)); }
+  // 4) clearing works with long timing and the quick timing comes back afterwards
+  { const { f, e } = await mk({}); f.sent.length = 0; assert.strictEqual(await e.clearDTC(), true); assert.strictEqual(e.clearInfo.ok, true);
+    const i4 = f.sent.indexOf('04'), iFF = f.sent.indexOf('ATSTFF'); assert(iFF >= 0 && iFF < i4, 'long timeout set before the clear command');
+    assert.strictEqual(f.sent[f.sent.length - 1], e.tuned ? 'ATST19' : 'ATST32', 'timing restored: ' + f.sent.slice(-3)); assert.deepStrictEqual((await e.readDTC()).current, []); }
+  // 5) the reason is given when the ECU says no
+  { const { e } = await mk({ clear04: '7F 04 22' }); assert.strictEqual(await e.clearDTC(), false); assert(/ดับเครื่อง/.test(e.clearInfo.why), e.clearInfo.why); }
+  { const { e } = await mk({ clear04: 'NO DATA' }); assert.strictEqual(await e.clearDTC(), false); assert(/ไม่ตอบ/.test(e.clearInfo.why), e.clearInfo.why); }
+  { const { e } = await mk({ clear04: '7F 04 11' }); assert.strictEqual(await e.clearDTC(), false); assert(/ไม่รองรับ/.test(e.clearInfo.why), e.clearInfo.why); }
+  // 6) a fault that is still there: the ECU confirms the clear, the code is back at the next read (the app tells the user so)
+  { const { e } = await mk({ dtc: 'sticky' }); assert.strictEqual(await e.clearDTC(), true); assert.deepStrictEqual((await e.readDTC()).current, ['P0118']); }
+  // 7) K-line cars keep their own default timing after a code operation
+  { const f = new FakeElm({ needSp: 3, noMulti: true, eqr: true }), e = new Elm327(f); await e.init(); f.sent.length = 0; await e.readDTC(); assert.strictEqual(f.sent[f.sent.length - 1], 'ATST64', 'K-line ST restored: ' + f.sent.slice(-3)); }
+  console.log('v1.5.6 tests passed (DTC: padded / multi-frame / count byte, clear with long timeout, reasons, sticky fault)');
+})().catch((x) => { console.error(x); process.exit(1); });

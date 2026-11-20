@@ -181,6 +181,12 @@ android/           แอป Android (MainActivity + JetBridge: USB OTG / BLE / 
 ## v1.3.2
 - Version badge (e.g. `v1.3.3`) placed after "By เปรียวจูนเนอร์" in the header and on the licence screen.
 
+## v1.5.6 — clearing trouble codes (DTC)
+- **Clear (service 04):** the ELM327 is given a long reply window (ST FF ≈ 1 s, adaptive timing off) for reading and clearing codes and returns to the quick live timing afterwards — clearing can keep the ECU busy longer than the short live timeouts allowed (v1.5.1 tuning). After the clear the app waits ~0.8 s and re-reads the codes.
+- **Honest result:** instead of a bare "ลบไม่สำเร็จ" the app says what happened — ECU refused (negative response 22: switch the engine off, key ON), not supported, no answer, adapter silent — or, when the ECU confirmed the clear but the code is back at the next read, that the fault is probably still present (e.g. P0118 with an unplugged / shorted coolant sensor is re-set at once). The raw ELM answers go to the log ("ลบโค้ด: ECU ตอบ …", "DTC ที่ ECU ตอบ …").
+- **Reading codes (03/07):** on CAN the count byte after the mode decides how many codes there are (frames padded with zeros no longer produce phantom codes such as P1800 next to the real one), and multi-frame answers (several codes) are joined instead of dropped.
+- Tests: padded frame, multi-frame with four codes, clear with timing set/restored, refusal reasons (22 / 11 / no data), sticky fault, K-line timing; UI check with the simulator. **Not verified on a real ECU** — if a code still will not clear, please send the two log lines mentioned above.
+
 ## v1.5.5 — fixed update source, one Bluetooth button
 - **Update source locked:** the "ที่อยู่โปรเจกต์ GitHub" field in Setup is read-only and always `preay25715-a11y/Jet_HONDA_APP`; whatever an older version stored there is overwritten. The update check and the daily quiet check always use it.
 - **Setup → Bluetooth:** the separate "เชื่อม OBD-II (ELM327)" button was removed. OBD-II adapters (ELM327, KONNWEI, HONDA-KLINE bridge) are connected from "ค้นหาบลูทูธ" (same picker as before, lists every kind of device) or from the status chip at the top.
