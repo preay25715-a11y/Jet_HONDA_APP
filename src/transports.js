@@ -84,7 +84,7 @@
     async open(addr) {
       const p = waitEvt('ble-open', 90000);
       Bus.h['ble-data'] = (b) => this.onData && this.onData(b64d(b));
-      Bus.h['ble-lost'] = () => this.onLost && this.onLost();
+      Bus.h['ble-lost'] = (d) => this.onLost && this.onLost(d && d.why);
       if (addr) root.JetNative.bleOpen(addr); else root.JetNative.bleConnect();
       const r = await p;
       if (!r || !r.ok) throw new Error(r ? r.err : 'เชื่อมต่อ Bluetooth ไม่สำเร็จ');
@@ -99,7 +99,7 @@
     async open(addr) {
       const p = waitEvt('spp-open', 150000);
       Bus.h['spp-data'] = (b) => this.onData && this.onData(b64d(b));
-      Bus.h['spp-lost'] = () => this.onLost && this.onLost();
+      Bus.h['spp-lost'] = (d) => this.onLost && this.onLost(d && d.why);
       root.JetNative.sppOpen(addr);
       const r = await p;
       if (!r || !r.ok) { Bus.h['spp-data'] = Bus.h['spp-lost'] = null; throw new Error(r ? r.err : 'เชื่อมต่อ Bluetooth ไม่สำเร็จ (หมดเวลา)'); }

@@ -208,6 +208,7 @@
       <label class="f">เลือกรุ่นรถ<select id="sBike"><option value="">— เลือกรุ่น —</option>${groups.map((g) => `<optgroup label="${g}">${BIKES.filter((b) => b.group === g).map((b) => `<option value="${b.id}">${b.name}${b.cc ? ' · ' + b.cc + ' cc' : ''}${b.gears ? ' · ' + b.gears + ' สปีด' : ' · CVT'}</option>`).join('')}</optgroup>`).join('')}</select></label>
       <div class="mut" id="sVeh" style="margin:6px 0;font-size:13px"></div>
       <div class="row" style="margin:4px 0 8px"><button class="btn" id="sTilesAuto">↺ ช่องหน้าหลัก: ให้แอปเลือกอัตโนมัติ</button></div>
+      <label class="f">แหล่งค่า AFR (OBD-II)<select id="sAfrSrc"><option value="auto">อัตโนมัติ (Lambda → O2 → ECU สั่ง)</option><option value="wb">Lambda ไวด์แบนด์ (PID 24/34)</option><option value="o2">เซ็นเซอร์ O2 (ค่าประมาณ)</option><option value="cmd">ค่าที่ ECU สั่ง (PID 44)</option></select></label>
       <div class="grid g3">
         <label class="f">จำนวนเกียร์ (0 = ออโต้/CVT)<input id="sGears" type="number" min="0" max="8"></label>
         <label class="f">RPM เต็มสเกลหน้าปัด<input id="sRpmMax" type="number" step="500"></label>
@@ -222,12 +223,13 @@
     </div>`;
     card.insertBefore(blk, anchor);
     const fill = () => {
-      $('#sBike').value = S.bike || ''; $('#sGears').value = S.gears != null ? S.gears : 6; $('#sRpmMax').value = S.rpmMax || 12000; $('#sRatios').value = S.gearRatios || ''; $('#sTank').value = S.tankL || ''; $('#sInj').value = S.injFlow || ''; $('#sRed').value = S.redline || '';
+      $('#sAfrSrc').value = S.afrSrc || 'auto'; $('#sBike').value = S.bike || ''; $('#sGears').value = S.gears != null ? S.gears : 6; $('#sRpmMax').value = S.rpmMax || 12000; $('#sRatios').value = S.gearRatios || ''; $('#sTank').value = S.tankL || ''; $('#sInj').value = S.injFlow || ''; $('#sRed').value = S.redline || '';
       const n = +$('#sGears').value; $('#sLg').innerHTML = Array.from({ length: n }, (_, i) => `<option value="${i + 1}">เกียร์ ${i + 1}</option>`).join('');
       $('#gearLearn').style.display = n ? '' : 'none';
     };
     $('#bSet').addEventListener('click', fill);
     $('#sBike').onchange = () => { const b = byId($('#sBike').value); if (b) { S.bikeUser = true; apply(b, false); fill(); toast('ตั้งค่ารุ่น ' + b.name + ' แล้ว'); } };
+    $('#sAfrSrc').onchange = () => { S.afrSrc = $('#sAfrSrc').value; C.saveS(); if (st.t && st.t.kind === 'obd') st.t.afrPref = S.afrSrc; toast('แหล่งค่า AFR: ' + $('#sAfrSrc').selectedOptions[0].textContent); };
     $('#sTilesAuto').onclick = () => { C.resetTiles(); toast('ช่องหน้าหลักกลับเป็นอัตโนมัติแล้ว'); };
     $('#sGears').onchange = () => { S.gears = Math.max(0, Math.min(8, +$('#sGears').value || 0)); S.cvt = S.gears === 0; if (S.gears && !S.gearRatios) S.gearRatios = DEFAULT_RATIOS[S.gears] || DEFAULT_RATIOS[6]; C.saveS(); refresh(); fill(); };
     $('#sRpmMax').onchange = () => { S.rpmMax = Math.max(3000, +$('#sRpmMax').value || 12000); C.saveS(); window.dispatchEvent(new Event('jetvehicle')); };
@@ -287,7 +289,7 @@
   };
 
   /* ---------- derived values (only when the ECU/gauge does not provide them) ---------- */
-  let baro = null, runStart = null, lastT = null, dist = 0;
+  let baro = null, runStart = null, lastT = null, dist = 0, o2f = null, o2t = 0;
   const hook = (d) => {
     const now = d.t || Date.now();
     // barometric estimate: MAP with engine stopped / cranking, else sea-level default
@@ -298,9 +300,18 @@
     if (d.ABSL == null && d.LOAD != null) d.ABSL = d.LOAD;
     // AFR over OBD-II: measured lambda (PID 24/34 wideband) x stoichiometric ratio; if the car has none, the ECU's commanded lambda (PID 44) as a target value
     const obd = st.t && st.t.kind === 'obd', stoich = (obd && st.t.stoich) || 14.7, dsl = obd && st.t.fuel === 'd';
+    // sources, best first (Setup can force one): wb = measured wideband lambda · o2 = narrowband O2 voltage (PID 14, smoothed, an ESTIMATE) · cmd = lambda the ECU commands (PID 44)
+    let o2a = null;
+    if (obd && !dsl && d.O2 != null && d.O2 >= 0 && d.O2 <= 1.3) {
+      const dt = Math.min(2000, Math.max(30, now - (o2t || now))); o2t = now;
+      o2f = o2f == null ? d.O2 : o2f + (d.O2 - o2f) * (1 - Math.exp(-dt / 800));           // the sensor flips 0.1 ↔ 0.9 V with every fuel-trim correction: ~0.8 s average
+      o2a = P.o2ToAfr(o2f, stoich);
+    } else { o2f = null; o2t = 0; }
     if (d.AFR == null) {
-      if (d.LAMB != null && d.LAMB > 0.4 && d.LAMB < (dsl ? 12 : 3)) { d.AFR = d.LAMB * stoich; d.afrSrc = 'wb'; }
-      else if (obd && d.EQR != null && d.EQR > 0.4 && d.EQR < 3) { d.AFR = d.EQR * stoich; d.afrSrc = 'cmd'; d.LAMB = d.EQR; }
+      const okE = obd && d.EQR != null && d.EQR > 0.4 && d.EQR < 3, pref = S.afrSrc || 'auto';
+      const cand = { wb: d.LAMB != null && d.LAMB > 0.4 && d.LAMB < (dsl ? 12 : 3) ? d.LAMB * stoich : null, o2: o2a, cmd: okE ? d.EQR * stoich : null };
+      for (const k of (pref !== 'auto' ? [pref, 'wb', 'o2', 'cmd'] : ['wb', 'o2', 'cmd'])) if (cand[k] != null) { d.AFR = cand[k]; d.afrSrc = k; break; }
+      if (d.afrSrc === 'cmd') d.LAMB = d.EQR;
     } else if (!d.afrSrc) d.afrSrc = 'gauge';
     if (d.AFR != null) { if (d.LAMB == null) d.LAMB = d.AFR / stoich; if (d.EQR == null && d.LAMB > 0) d.EQR = d.LAMB; }
     if (d.RPM > 300) { if (runStart == null) runStart = now; d.RUNT = Math.round((now - runStart) / 1000); } else if (runStart != null) d.RUNT = Math.round((now - runStart) / 1000);

@@ -11,6 +11,16 @@
   const P = {};
 
   /* ---------- checksums ---------- */
+  /** narrowband O2 sensor (OBD PID 14): voltage -> AFR *estimate*. The sensor is a rich/lean switch, only really accurate near 14.7 (0.45 V);
+   *  points from the usual narrowband response curve: 0.1 V ~17.0 · 0.2 V ~15.5 · 0.45 V ~14.7 · 0.8 V ~13.5 · 0.9 V ~12.0 (petrol). Other fuels scale with their stoichiometric ratio. */
+  const O2_AFR = [[0.1, 17.0], [0.2, 15.5], [0.45, 14.7], [0.8, 13.5], [0.9, 12.0]];
+  P.o2ToAfr = (v, stoich) => {
+    if (!isFinite(v)) return null;
+    let a;
+    if (v <= O2_AFR[0][0]) a = O2_AFR[0][1]; else if (v >= O2_AFR[4][0]) a = O2_AFR[4][1];
+    else for (let i = 1; i < O2_AFR.length; i++) if (v <= O2_AFR[i][0]) { const p = O2_AFR[i - 1], q = O2_AFR[i]; a = p[1] + (v - p[0]) / (q[0] - p[0]) * (q[1] - p[1]); break; }
+    return a * (stoich || 14.7) / 14.7;
+  };
   P.sum = (a) => { let s = 0; for (let i = 0; i < a.length; i++) s += a[i]; return s; };
   // checksum8bitHonda: two's complement of byte sum -> whole frame sums to 0
   P.ckHonda = (a) => ((P.sum(a) ^ 0xFF) + 1) & 0xFF;

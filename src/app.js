@@ -121,7 +121,7 @@
       ['ใช้เป็นตัวต่อสาย K-line', g && st.t === g ? '<span class="okc">ใช่</span>' : 'ไม่'], ['เซ็นเซอร์', g ? (fresh ? `ไวด์แบนด์ ${ok(s.afrOk)} จีพีเอส ${ok(s.gpsOk)}${s.gpsOk ? ' (' + s.sats + ')' : ''} อุณหภูมิน้ำมันเครื่อง ${ok(s.eotOk)} ออกซิเจน ${ok(s.o2Ok)}` : g.noSensors ? 'เฟิร์มแวร์ไม่รองรับ' : 'รอข้อมูล…') : '—'],
     ].map(([k, v]) => `<span>${k}</span><span>${v}</span>`).join('');
     const o = st.t && st.t.kind === 'obd' ? st.t : null;
-    $('#obdInfo').innerHTML = o ? '🚗 OBD-II: <span class="okc">เชื่อมแล้ว</span> · ' + esc(o.name) + ' · ' + (o.pidList ? o.pidList.length : 0) + ' ค่า · ' + esc(st.veh && st.veh.text ? st.veh.text : o.honda ? 'HONDA PGM-FI (มอเตอร์ไซค์)' : o.fuel === 'd' ? 'ดีเซล' : 'เบนซิน') + (o.ident && o.ident.vin ? '<br><small>VIN ' + esc(o.ident.vin) + (o.ident.cal ? ' · ECU ' + esc(o.ident.cal) : '') + '</small>' : '') + '<br><small>⚡ ' + (o.hz ? 'อ่านสด ~' + o.hz.toFixed(1) + ' รอบ/วิ' : 'รอค่าสด') + ' · ' + (o.single ? 'ถามทีละค่า' : 'หลายค่า/คำสั่ง') + ' · นับคำตอบ ' + (o.useCnt ? '✓' : '–') + ' · AT2 ' + (o.tuned ? '✓' : '–') + (o.ver ? ' · ' + esc(o.ver) : '') + '</small>' : '🚗 OBD-II: ยังไม่เชื่อม';
+    $('#obdInfo').innerHTML = o ? '🚗 OBD-II: <span class="okc">เชื่อมแล้ว</span> · ' + esc(o.name) + ' · ' + (o.pidList ? o.pidList.length : 0) + ' ค่า · ' + esc(st.veh && st.veh.text ? st.veh.text : o.honda ? 'HONDA PGM-FI (มอเตอร์ไซค์)' : o.fuel === 'd' ? 'ดีเซล' : 'เบนซิน') + (o.ident && o.ident.vin ? '<br><small>VIN ' + esc(o.ident.vin) + (o.ident.cal ? ' · ECU ' + esc(o.ident.cal) : '') + '</small>' : '') : '🚗 OBD-II: ยังไม่เชื่อม';
     $('#gOff').disabled = !g && !o;
   }
   $('#bSet').addEventListener('click', renderGauge);
@@ -130,14 +130,14 @@
   $('#gBle').onclick = () => gConnect();
   if ($('#gObd')) $('#gObd').onclick = async () => { await connectBt('obd'); renderGauge(); };
   $('#gOff').onclick = async () => {
-    if (st.t && st.t.kind === 'obd') { await disconnect(); pills(); renderGauge(); toast('ตัดการเชื่อมต่อ OBD แล้ว'); return; }
+    if (st.t && st.t.kind === 'obd') { rcStop = true; await disconnect(); pills(); renderGauge(); toast('ตัดการเชื่อมต่อ OBD แล้ว'); return; }
     if (!st.gauge) return;
     if (st.gauge === st.t) await disconnect(); else { try { await st.gauge.close(); } catch (e) {} st.gauge = null; st.sens = null; }
     pills(); renderGauge(); toast('ตัดการเชื่อมต่อเกจแล้ว');
   };
   if ($('#bDemo')) $('#bDemo').onclick = () => (st.t && st.t.kind === 'demo') ? disconnect() : connect('demo');
   $$('#mConnect .opt').forEach((o) => o.onclick = () => { modal('#mConnect', false); o.dataset.c === 'obd' ? connectBt('obd') : connect(o.dataset.c); });
-  $('#bDisc').onclick = () => { modal('#mConnect', false); disconnect(); };
+  $('#bDisc').onclick = () => { rcStop = true; modal('#mConnect', false); disconnect(); };
 
   async function disconnect() {
     stopLive();
@@ -148,6 +148,7 @@
   // find any Bluetooth device (paired + classic + BLE) and connect it by type: Smart Gauge / OBD-II (ELM327 etc.)
   async function connectBt(mode) {
     if (!window.JetLic || !JetLic.ok()) return;
+    rcStop = true;                                    // a manual connect replaces any automatic reconnect
     if (!window.JetBt) { return connect(mode === 'obd' ? 'obd' : 'gauge-only'); }
     try {
       toast('เลือกอุปกรณ์ Bluetooth…');
@@ -163,6 +164,26 @@
       else if (loc) { /* message already says to enable Location */ }
     }
   }
+  // ---- OBD link loss: say why, reconnect by itself, go gentler on an adapter that keeps dropping ----
+  let rcBusy = false, rcStop = false;
+  const DROP_WIN = 6 * 3600 * 1000;
+  const dropsOf = (addr) => ((S.obdDrops || {})[addr] || []).filter((t) => Date.now() - t < DROP_WIN);
+  const dropLevel = (addr) => Math.min(2, dropsOf(addr).length);               // 0 normal · 1 no count digit / AT2 · 2 one value per request + pauses (expires after 6 h without drops)
+  const noteDrop = (addr) => { S.obdDrops = S.obdDrops || {}; S.obdDrops[addr] = dropsOf(addr).concat(Date.now()).slice(-5); saveS(); };
+  async function reconnectObd(dev) {
+    if (rcBusy) return; rcBusy = true; rcStop = false;
+    const waits = [1500, 3000, 5000, 8000, 12000];
+    try {
+      for (let i = 0; i < waits.length && !rcStop; i++) {
+        toast('OBD หลุด — กำลังต่อใหม่ ' + (i + 1) + '/' + waits.length, 3000); log('info', 'ต่อ OBD ใหม่ครั้งที่ ' + (i + 1) + '/' + waits.length);
+        await P.sleep(waits[i]);
+        if (rcStop || st.t) return;                       // the user disconnected on purpose / connected something else meanwhile
+        await connect('obd', dev);
+        if (st.t && st.t.kind === 'obd') return;          // connected again (LIVE restarts by itself)
+      }
+      if (!rcStop) { log('err', 'ต่อ OBD ใหม่ไม่สำเร็จ'); toast('ต่อ OBD ใหม่ไม่สำเร็จ — กดเชื่อมต่อเอง', 5000); }
+    } finally { rcBusy = false; }
+  }
   async function connect(kind, dev) {
     if (!window.JetLic || !JetLic.ok()) return;
     try {
@@ -172,10 +193,17 @@
         await disconnect();
         toast('กำลังเชื่อม ' + (dev.name || 'OBD-II') + '…', 3000);
         const stream = await JetBt.openObdStream(dev);
-        const t = new Elm327(stream, { name: 'OBD ' + (dev.name || stream.name || 'ELM327'), log });
+        const lvl = dev.addr ? dropLevel(dev.addr) : 0;
+        if (lvl) log('info', 'อแดปเตอร์นี้เคยหลุดภายใน 6 ชม. — ใช้โหมดปลอดภัย ระดับ ' + lvl + ' (ช้าลงเล็กน้อยเพื่อไม่ให้หลุดอีก)');
+        const lastProto = dev.addr && !lvl ? ((S.obdProto || {})[dev.addr] || '') : '';
+        const t = new Elm327(stream, { name: 'OBD ' + (dev.name || stream.name || 'ELM327'), log, safe: lvl, lastProto });
         try { await t.init(); } catch (e) { try { await stream.close(); } catch (x) {} throw e; }
-        t.onLost = () => { log('err', 'OBD หลุดการเชื่อมต่อ'); toast('OBD หลุดการเชื่อมต่อ'); stopLive(); st.t = null; st.ecu = null; st.autoTiles = null; pills(); renderTiles(); };
-        st.t = t; st.ecu = t; pills(); onObdReady(t);
+        if (dev.addr && /^[3-8]$/.test(t.proto) && (S.obdProto || {})[dev.addr] !== t.proto) { S.obdProto = S.obdProto || {}; S.obdProto[dev.addr] = t.proto; saveS(); }      // remembered per adapter for a quick start next time
+        t.onLost = (why) => {
+          log('err', 'OBD หลุดการเชื่อมต่อ' + (why ? ' — ' + why : '')); stopLive(); st.t = null; st.ecu = null; st.autoTiles = null; pills(); renderTiles();
+          if (dev.addr && !rcStop) { noteDrop(dev.addr); reconnectObd(dev); } else toast('OBD หลุดการเชื่อมต่อ');
+        };
+        st.t = t; st.ecu = t; rcStop = false; pills(); onObdReady(t);
         log('info', 'เชื่อม ' + t.name + (t.ver ? ' · ' + t.ver : '')); toast('เชื่อม OBD-II แล้ว' + (st.veh && st.veh.text ? ' · ' + st.veh.text : '')); startLive();
         return;
       }
@@ -315,7 +343,8 @@
     try { P.vehOnObd(t); } catch (e) { log('err', 'ระบุรุ่นรถไม่สำเร็จ: ' + e.message); }
     const keys = t.channelKeys(), pf = t.honda ? 'b' : t.fuel === 'd' ? 'd' : 'g';
     st.autoTiles = autoTiles(keys, pf);
-    t.watch(st.autoTiles.concat(['LAMB', 'EQR', 'STFT1', 'LTFT1']));
+    t.afrPref = S.afrSrc || 'auto';
+    t.watch(st.autoTiles.concat(['LAMB', 'EQR', 'O2', 'STFT1', 'LTFT1']));
     log('info', 'ช่องหน้าหลักอัตโนมัติ (' + (pf === 'd' ? 'ดีเซล' : pf === 'b' ? 'มอเตอร์ไซค์ Honda' : 'เบนซิน') + '): ' + st.autoTiles.join(', '));
     renderTiles();
   }
@@ -329,7 +358,7 @@
     if (v != null) el.textContent = m === 'spd' ? Math.round(v) : (+v).toFixed(dec);
     else el.textContent = m === 'spd' ? '0' : '--';
     el.style.color = m !== 'afr' || v == null ? '' : v < 11.5 ? '#ff6b7a' : v > 15.5 ? '#ffb020' : '#7dffb8';
-    $('#vUnit').textContent = m === 'afr' && d.afrSrc === 'cmd' ? 'AFR (ECU สั่ง) ⇄' : unit;
+    $('#vUnit').textContent = m === 'afr' && d.afrSrc === 'cmd' ? 'AFR (ECU สั่ง) ⇄' : m === 'afr' && d.afrSrc === 'o2' ? 'AFR (O2 ประมาณ) ⇄' : unit;
     const g = d.GEAR; $('#vGear').textContent = g == null ? '–' : g === 0 ? 'N' : g;
   }
   $('.gauge').addEventListener('click', () => {
@@ -369,13 +398,20 @@
     return d;
   }
   function emitLive(d) { (window.JetHooks || []).forEach((f) => { try { f(d); } catch (e) { console.error(e); } }); }
+  // no fresh data for a while: is it the adapter (link frozen → reconnect) or the car (key off / ECU asleep → stop)?
+  async function liveStalled() {
+    const t = st.t; let alive = true;
+    try { alive = !(t && t.alive) || await t.alive(); } catch (e) { alive = false; }
+    if (!alive && t && t.kind === 'obd' && t.onLost) { try { await t.s.close(); } catch (e) {} t.state = 'OFF'; t.onLost('อแดปเตอร์หยุดตอบ (ลิงก์ยังอยู่แต่ไม่มีคำตอบเกิน ' + Math.round((t.deadMs || 8000) / 1000) + ' วินาที)'); return; }
+    log('err', 'LIVE: กล่องไม่ตอบ' + (t && t.kind === 'obd' ? ' — อแดปเตอร์ยังตอบ แต่รถไม่ส่งค่า (เปิดกุญแจ ON อยู่หรือไม่?)' : '')); stopLive();
+  }
   async function liveLoop() {
     st.liveRunning = true;
     let fails = 0; sensLoop();
     while (st.live && st.ecu && !st.busy) {
       try {
         const d = await st.ecu.readLive();
-        if (d) { fails = 0; await mergeSensors(d); showLive(d); emitLive(d); } else if (++fails > 5) { log('err', 'LIVE: กล่องไม่ตอบ'); stopLive(); }
+        if (d) { fails = 0; await mergeSensors(d); showLive(d); emitLive(d); } else if (++fails > 3) { await liveStalled(); break; }
       } catch (e) { stopLive(); }
       await Promise.resolve();   // no artificial pause: next request goes out as soon as the answer is in
     }

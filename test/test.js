@@ -183,3 +183,82 @@ const { SimTransport } = require('../src/sim.js');
     assert.strictEqual(e.useCnt, false); assert.strictEqual(e.tuned, false); let d; for (let i = 0; i < 12; i++) d = await e.readLive(); assert(d.RPM > 600 && Math.abs(d.INJ - 6) < 0.01); }
   console.log('v1.5.1 elm tests passed (multi-frame, count digit, clone adapter, fallback, rotating queue)');
 })().catch((x) => { console.error(x); process.exit(1); });
+
+// ---- v1.5.3: init tolerant of cheap clones (blue ELM327 MINI, KONNWEI KW90x): protocol ladder, readable errors ----
+(async () => {
+  const { Elm327, FakeElm } = require('../src/elm.js');
+  // car that only answers on ISO 9141-2 (protocol 3): the adapter's automatic search gives up, the ladder finds it
+  { const logs = [], f = new FakeElm({ needSp: 3, noMulti: true, eqr: true }), e = new Elm327(f, { log: (k, m) => logs.push(m) }); await e.init();
+    assert.strictEqual(e.proto, '3', 'proto ' + e.proto); assert.strictEqual(e.single, true);
+    assert(logs.some((m) => /ลองโปรโตคอล 3/.test(m)), 'ladder progress is logged'); let d; for (let i = 0; i < 12; i++) d = await e.readLive(); assert(d.RPM > 600, 'reads after ladder');
+    assert(logs.some((m) => /อแดปเตอร์ ELM327 v1.5 · โปรโตคอล 3/.test(m)), 'handshake summary logged: ' + logs.join(' / ')); }
+  // nothing answers on any protocol: the error carries what the adapter really said
+  { const f = new FakeElm({ needSp: 'Z' }), e = new Elm327(f); let msg = '';
+    try { await e.init(); } catch (x) { msg = x.message; }
+    assert(/ไม่เจอ ECU/.test(msg) && /UNABLE TO CONNECT/.test(msg), 'error text: ' + msg); assert.strictEqual(e.state, 'NOECU'); }
+  // normal car: no ladder, init does not get slow (gaps between AT commands are short)
+  { const logs = [], t0 = Date.now(), e = new Elm327(new FakeElm({}), { log: (k, m) => logs.push(m) }); await e.init();
+    assert(!logs.some((m) => /ลองโปรโตคอล/.test(m)), 'no ladder on a normal car'); assert(Date.now() - t0 < 2500, 'init time ' + (Date.now() - t0)); }
+  console.log('v1.5.3 elm tests passed (protocol ladder, readable error, no slowdown)');
+})().catch((x) => { console.error(x); process.exit(1); });
+
+// ---- v1.5.3: AFR from the narrowband O2 sensor, gentle modes for fragile adapters, silent-adapter detection ----
+(async () => {
+  const P = require('../src/proto.js'), { Elm327, FakeElm } = require('../src/elm.js');
+  const near = (a, b, m) => assert(Math.abs(a - b) < 0.01, m + ': ' + a + ' vs ' + b);
+  // 1) voltage → AFR table (petrol) and the fuel scaling; out of range clamps; garbage is rejected
+  near(P.o2ToAfr(0.1), 17.0, '0.1 V'); near(P.o2ToAfr(0.2), 15.5, '0.2 V'); near(P.o2ToAfr(0.45), 14.7, '0.45 V'); near(P.o2ToAfr(0.8), 13.5, '0.8 V'); near(P.o2ToAfr(0.9), 12.0, '0.9 V');
+  near(P.o2ToAfr(0.625), 14.1, 'interpolated (0.625 V)'); near(P.o2ToAfr(0.0), 17.0, 'clamp lean'); near(P.o2ToAfr(1.2), 12.0, 'clamp rich'); near(P.o2ToAfr(0.45, 9.0), 14.7 * 9.0 / 14.7, 'ethanol scaling');
+  assert.strictEqual(P.o2ToAfr(NaN), null);
+  // 2) a car with only a narrowband sensor offers AFR; diesel does not; PID 14 is read every cycle for it
+  { const f = new FakeElm({ o2V: 0.8, lambda: false }), e = new Elm327(f); await e.init();
+    assert(e.channelKeys().has('AFR') && e.channelKeys().has('O2') && !e.channelKeys().has('EQR'), 'AFR offered from O2');
+    f.pidCount = {}; let d; for (let i = 0; i < 20; i++) d = await e.readLive(); near(d.O2, 0.8, 'O2 volts'); assert.strictEqual(f.pidCount[0x14], 20, 'O2 read every cycle'); }
+  { const f = new FakeElm({ o2V: 0.8, lambda: false, diesel: true }), e = new Elm327(f); await e.init(); assert(!e.channelKeys().has('AFR'), 'diesel: no AFR from a narrowband sensor'); }
+  // 3) one value per request: the chosen source gets the every-cycle slot (auto → O2 when there is no wideband, forced "cmd" → PID 44)
+  for (const [pref, pid] of [['auto', 0x14], ['cmd', 0x44], ['o2', 0x14]]) {
+    const f = new FakeElm({ noMulti: true, o2V: 0.45, lambda: false, eqr: true }), e = new Elm327(f, {}); e.afrPref = pref; await e.init(); e.afrPref = pref; f.pidCount = {};
+    for (let i = 0; i < 24; i++) await e.readLive(); assert.strictEqual(f.pidCount[pid], 24, 'pref ' + pref + ' reads PID ' + pid.toString(16) + ' every cycle'); }
+  // 4) gentle modes after link drops: 1 = no count digit / AT2, 2 = one value per request, pauses between requests
+  { const f = new FakeElm({}), e = new Elm327(f, { safe: 1 }); await e.init(); assert.strictEqual(e.useCnt, false); assert.strictEqual(e.tuned, false); assert.strictEqual(e.single, false); }
+  { const f = new FakeElm({}), e = new Elm327(f, { safe: 2 }); await e.init(); assert.strictEqual(e.single, true); assert(e.gap >= 45, 'pause between requests');
+    let d; for (let i = 0; i < 12; i++) d = await e.readLive(); assert(d.RPM > 600 && d.ECT === 90, 'gentlest mode still reads'); }
+  // 5) adapter that stops answering (link up, nobody home): no old numbers passed off as live, alive() tells adapter from car
+  { const f = new FakeElm({}), e = new Elm327(f, { deadMs: 400 }); await e.init(); e.liveTO = 100; assert(await e.readLive(), 'live before');
+    f.mute(true); let d = 1, n = 0; const t0 = Date.now(); while (d && n++ < 60) d = await e.readLive();
+    assert.strictEqual(d, null, 'null once nothing fresh arrives'); assert(Date.now() - t0 < 3000, 'detected within ' + (Date.now() - t0) + ' ms');
+    assert.strictEqual(await e.alive(), false, 'muted adapter is not alive'); f.mute(false); assert.strictEqual(await e.alive(), true); assert(await e.readLive(), 'recovers when it answers again'); }
+  // 6) the reason a link ended is handed on
+  { const f = new FakeElm({}), e = new Elm327(f); await e.init(); let why = null; e.onLost = (w) => { why = w; }; f.lose('อแดปเตอร์ปิดการเชื่อมต่อเอง'); assert.strictEqual(why, 'อแดปเตอร์ปิดการเชื่อมต่อเอง'); assert.strictEqual(e.state, 'OFF'); }
+  console.log('v1.5.3 tests passed (O2 → AFR, source choice, gentle modes, silent adapter, loss reason)');
+})().catch((x) => { console.error(x); process.exit(1); });
+
+// ---- v1.5.3 (from the JetSmartGaugeCAR ideas): remembered protocol, PIDs that never answer sit out, combined requests give way, "not available" answers are dropped ----
+(async () => {
+  const { Elm327, FakeElm } = require('../src/elm.js');
+  // 1) remembered protocol: connects straight away, no search ladder; a wrong memory falls back to the normal search
+  { const logs = [], f = new FakeElm({ needSp: 3, noMulti: true, eqr: true }), e = new Elm327(f, { lastProto: '3', log: (k, m) => logs.push(m) }); await e.init();
+    assert.strictEqual(e.proto, '3'); assert(!logs.some((m) => /ลองโปรโตคอล/.test(m) || /จำไว้/.test(m)), 'no search needed: ' + logs.join(' / ')); assert(!f.sent.includes('ATSP0'), 'automatic search not started'); }
+  { const logs = [], f = new FakeElm({ needSp: 3, noMulti: true, eqr: true }), e = new Elm327(f, { lastProto: '6', log: (k, m) => logs.push(m) }); await e.init();
+    assert.strictEqual(e.proto, '3'); assert(logs.some((m) => /จำไว้ \(6\)/.test(m)), 'stale memory is reported'); let d; for (let i = 0; i < 12; i++) d = await e.readLive(); assert(d.RPM > 600); }
+  // 2) slow K-line ECUs get the longer wait (ATST64); CAN keeps the short one
+  { const f = new FakeElm({ needSp: 3, noMulti: true, eqr: true }), e = new Elm327(f); await e.init(); assert(f.sent.includes('ATST64'), 'K-line: ATST64'); assert.strictEqual(e.liveTO, 1500); }
+  { const f = new FakeElm({}), e = new Elm327(f); await e.init(); assert(!f.sent.includes('ATST64')); assert.strictEqual(e.liveTO, 800, 'CAN: short wait'); }
+  // 3) a PID the car never answers (MAP here) stops costing a slot every cycle; everything else keeps coming; the PID is retried now and then
+  { const f = new FakeElm({ deaf: [0x0B] }), e = new Elm327(f); await e.init(); f.pidCount = {}; let d; const N = 90; for (let i = 0; i < N; i++) d = await e.readLive();
+    assert(f.pidCount[0x0B] <= 12, 'deaf PID asked ' + f.pidCount[0x0B] + ' of ' + N + ' cycles'); assert(f.pidCount[0x0B] >= 2, 'but still retried now and then');
+    assert(d.RPM > 600 && d.ECT === 90 && d.SPD === 62, 'other values unaffected'); assert.strictEqual(d.MAP, undefined, 'no MAP value invented');
+    f.deaf.clear(); for (let i = 0; i < 80; i++) d = await e.readLive(); assert.strictEqual(d.MAP, 50, 'recovers when the car answers again'); }
+  // 4) a car that answers only part of every combined request: after 6 short answers it goes to one value per request and every value comes back
+  { const f = new FakeElm({ partial: 2 }), e = new Elm327(f); await e.init(); let d; for (let i = 0; i < 40; i++) d = await e.readLive();
+    assert.strictEqual(e.single, true, 'switched to single requests'); for (let i = 0; i < 60; i++) d = await e.readLive();
+    assert(d.RPM > 600 && d.ECT === 90 && d.SPD === 62 && d.MAP === 50, 'all values read in single mode: ' + JSON.stringify(d)); }
+  // 5) "not available" answers (all ones) never reach the screen as numbers
+  { const f = new FakeElm({ junk: [0x0C], eqr: true }), e = new Elm327(f); await e.init(); let d; for (let i = 0; i < 12; i++) d = await e.readLive();
+    assert.strictEqual(d.RPM, undefined, 'FFFF rpm dropped: ' + d.RPM); assert.strictEqual(d.SPD, 62); }
+  { const f = new FakeElm({ junk: [0x44], eqr: true, lambda: false }), e = new Elm327(f); await e.init(); let d; for (let i = 0; i < 12; i++) d = await e.readLive();
+    assert.strictEqual(d.EQR, undefined, 'lambda 1.99997 dropped: ' + d.EQR); }
+  // 6) a pending request ends at once when the link is lost (no waiting for the timeout)
+  { const f = new FakeElm({}), e = new Elm327(f); await e.init(); f.mute(true); const t0 = Date.now(); const p = e.query('0100', 5000); setTimeout(() => f.lose('ขาด'), 50); await p; assert(Date.now() - t0 < 1000, 'ended in ' + (Date.now() - t0) + ' ms'); }
+  console.log('v1.5.3 tests passed (remembered protocol, ATST64, deaf PIDs skipped, combined→single, junk answers dropped, instant link-loss)');
+})().catch((x) => { console.error(x); process.exit(1); });

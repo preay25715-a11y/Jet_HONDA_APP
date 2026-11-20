@@ -400,7 +400,7 @@ public class JetBridge {
                     // some OBD dongles never answer the MTU request: start service discovery anyway
                     ui.postDelayed(() -> { if (!discStarted[0]) { discStarted[0] = true; g.discoverServices(); } }, 2000);
                 } else if (state == BluetoothProfile.STATE_DISCONNECTED) {
-                    if (bleReady) emit("ble-lost", "{}");
+                    if (bleReady) emit("ble-lost", "{\"why\":" + q("BLE ขาด (status " + status + ")") + "}");
                     else bleFail("เชื่อมต่อ Bluetooth ไม่สำเร็จ (status " + status + ")");
                     bleReady = false;
                     g.close();
@@ -750,7 +750,7 @@ public class JetBridge {
     public void sppOpen(final String addr) {
         sppClose();
         new Thread(() -> {
-            String err = "";
+            String err = "", why = "";
             try {
                 BluetoothManager bm = (BluetoothManager) act.getSystemService(Context.BLUETOOTH_SERVICE);
                 BluetoothAdapter ad = bm.getAdapter();
@@ -799,10 +799,12 @@ public class JetBridge {
                 byte[] buf = new byte[1024];
                 int n2;
                 while (sppUp && (n2 = in.read(buf)) > 0) emit("spp-data", q(b64(buf, n2)));
+                if (sppUp) why = "อแดปเตอร์ปิดการเชื่อมต่อเอง (ลิงก์ Bluetooth ถูกตัดจากฝั่งตัวอแดปเตอร์)";
             } catch (Exception e) {
+                if (sppUp) why = "อ่านข้อมูลไม่ได้: " + e.getMessage();
                 if (!sppUp) { emit("spp-open", "{\"ok\":false,\"err\":" + q("เชื่อมต่อไม่สำเร็จ: " + e.getMessage() + " — ตรวจว่าเสียบ ELM327 ที่รถและเปิดกุญแจ ON (ไฟบนตัว ELM ติด), ลบการจับคู่เก่าแล้วจับคู่ใหม่ PIN 1234/0000") + "}"); return; }
             }
-            if (sppUp) { sppUp = false; emit("spp-lost", "{}"); }
+            if (sppUp) { sppUp = false; emit("spp-lost", "{\"why\":" + q(why) + "}"); }
         }, "spp-io").start();
     }
 
