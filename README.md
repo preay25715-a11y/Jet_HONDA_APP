@@ -181,6 +181,10 @@ android/           แอป Android (MainActivity + JetBridge: USB OTG / BLE / 
 ## v1.3.2
 - Version badge (e.g. `v1.3.3`) placed after "By เปรียวจูนเนอร์" in the header and on the licence screen.
 
+## v1.5.5 — fixed update source, one Bluetooth button
+- **Update source locked:** the "ที่อยู่โปรเจกต์ GitHub" field in Setup is read-only and always `preay25715-a11y/Jet_HONDA_APP`; whatever an older version stored there is overwritten. The update check and the daily quiet check always use it.
+- **Setup → Bluetooth:** the separate "เชื่อม OBD-II (ELM327)" button was removed. OBD-II adapters (ELM327, KONNWEI, HONDA-KLINE bridge) are connected from "ค้นหาบลูทูธ" (same picker as before, lists every kind of device) or from the status chip at the top.
+
 ## v1.5.4 — portrait + landscape, AFR log axes follow the engine
 - **Screen rotation:** the Android app is no longer locked to landscape (`fullSensor`: follows how the phone is held, all four directions). Setup → "การหมุนจอ" can pin it to landscape or portrait instead (applied immediately, remembered). In portrait the Dash scrolls vertically and all seven tabs (including Setup) stay on screen; layouts were checked at 360×740, 390×844, 768×1024 and landscape 844×390, 915×412, 1024×768 with no horizontal overflow. Not yet tried on a real phone.
 - **AFR log axes:** the RPM rows now run from idle (about 7 % of the top, at least 600 rpm) to the redline of the chosen vehicle (90 % of the dial when no redline is set), closer together at low rpm, and the throttle columns run 0–100 %. They follow Setup / vehicle detection; each axis set keeps its own log. **Note:** the table from earlier versions (fixed 840–9,800 rpm × 0–72) is no longer shown — its data stays stored but is not migrated.

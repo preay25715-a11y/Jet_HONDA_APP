@@ -415,3 +415,4 @@ table.mtab{border-collapse:separate;border-spacing:0;font-family:var(--disp);fon
 .gauge .rpm.shift,.gauge .rpm.shift b{color:#ff3b4a;animation:shiftBlink .28s steps(1) infinite}
 
 #pkGrid button.na{opacity:.38}
+#updRepo[readonly]{opacity:.7;border-style:dashed;cursor:not-allowed;-webkit-user-select:none;user-select:none}

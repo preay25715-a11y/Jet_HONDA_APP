@@ -122,7 +122,6 @@
   setInterval(() => { if ($('#mSet').classList.contains('show')) renderGauge(); }, 1000);
   const gConnect = async () => { await connectBt('all'); renderGauge(); };
   $('#gBle').onclick = () => gConnect();
-  if ($('#gObd')) $('#gObd').onclick = async () => { await connectBt('obd'); renderGauge(); };
   $('#gOff').onclick = async () => {
     if (st.t && st.t.kind === 'obd') { rcStop = true; await disconnect(); pills(); renderGauge(); toast('ตัดการเชื่อมต่อ OBD แล้ว'); return; }
     if (!st.gauge) return;
