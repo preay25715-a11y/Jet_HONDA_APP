@@ -272,7 +272,7 @@
     ['FRATE', 'Fuel rate', 'อัตราสิ้นเปลือง', 'L/h', 2, 'b'], ['KPL', 'Fuel economy', 'ประหยัดน้ำมัน', 'km/L', 1, 'b'], ['FUELL', 'Fuel level', 'ระดับน้ำมัน', '%', 0, 'b'], ['FP', 'Fuel pressure', 'แรงดันน้ำมัน', 'kPa', 0, 'g'],
     ['STFT1', 'Short fuel trim B1', 'ปรับน้ำมันสั้น B1', '%', 1, 'g'], ['LTFT1', 'Long fuel trim B1', 'ปรับน้ำมันยาว B1', '%', 1, 'g'],
     ['STFT2', 'Short fuel trim B2', 'ปรับน้ำมันสั้น B2', '%', 1, 'g'], ['LTFT2', 'Long fuel trim B2', 'ปรับน้ำมันยาว B2', '%', 1, 'g'],
-    ['LAMB', 'Lambda B1S1', 'แลมบ์ดา B1S1', 'λ', 3, 'g'], ['EQR', 'Cmd equiv. ratio', 'สั่งอัตราส่วนผสม', 'λ', 3, 'g'], ['ETH', 'Ethanol', 'เอทานอล', '%', 0, 'g'],
+    ['LAMB', 'Lambda B1S1', 'แลมบ์ดา B1S1', 'λ', 3, 'g'], ['LAMB2', 'Lambda sensor 2', 'แลมบ์ดา เซ็นเซอร์ 2', 'λ', 3, 'g'], ['EQR', 'Cmd equiv. ratio', 'สั่งอัตราส่วนผสม', 'λ', 3, 'g'], ['ETH', 'Ethanol', 'เอทานอล', '%', 0, 'g'],
     ['EVAPC', 'EVAP purge', 'EVAP purge', '%', 0, 'g'], ['EVAPP', 'EVAP pressure', 'ความดัน EVAP', 'Pa', 0, 'g'],
     ['CAT11', 'Catalyst B1S1', 'อุณหภูมิแคท B1S1', '°C', 0, 'g'], ['CAT12', 'Catalyst B1S2', 'อุณหภูมิแคท B1S2', '°C', 0, 'g'],
     ['CAT21', 'Catalyst B2S1', 'อุณหภูมิแคท B2S1', '°C', 0, 'g'], ['CAT22', 'Catalyst B2S2', 'อุณหภูมิแคท B2S2', '°C', 0, 'g'],

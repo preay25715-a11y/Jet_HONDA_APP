@@ -21,9 +21,8 @@
       ['Giorno+', 125, 0, 10000], ['Lead 125', 125, 0, 10000], ['PCX 125', 125, 0, 10000], ['PCX 150', 149, 0, 10000], ['PCX 160 / PCX e:HEV', 157, 0, 10000],
       ['ADV 150', 149, 0, 10000], ['ADV 160', 157, 0, 10000], ['ADV 350', 330, 0, 9000], ['Forza 300', 279, 0, 9000], ['Forza 350', 330, 0, 9000], ['SH 125 / SH 150', 125, 0, 10000], ['SH 350', 330, 0, 9000],
     ]),
-    B(['car', 'รถยนต์ Honda (ELM327)'], [
-      ['City 1.5', 1497, 0, 8000], ['City Turbo 1.0', 998, 0, 7000], ['City e:HEV', 1498, 0, 7000], ['Civic 1.8', 1799, 0, 8000], ['Civic Turbo 1.5', 1498, 0, 7000],
-      ['Jazz', 1497, 0, 8000], ['Brio', 1199, 0, 8000], ['Mobilio', 1497, 0, 8000], ['BR-V', 1497, 0, 8000], ['HR-V', 1799, 0, 8000], ['CR-V 2.4', 2356, 0, 8000], ['Accord 2.0', 1998, 0, 8000],
+    B(['yam', 'Yamaha XMAX (ตั้งค่ารุ่น — ไม่ใช่ OBD-II/Honda ต่อ ECU ไม่ได้)'], [
+      ['XMAX 300 (2017)', 292, 0, 9000], ['XMAX 300 (2018)', 292, 0, 9000], ['XMAX 300 (2019)', 292, 0, 9000], ['XMAX 300 (2020)', 292, 0, 9000], ['XMAX 300 (2021)', 292, 0, 9000], ['XMAX 300 (2022)', 292, 0, 9000], ['XMAX 300 (2023)', 292, 0, 9000], ['XMAX 300 (2024)', 292, 0, 9000], ['XMAX 300 (2025)', 292, 0, 9000], ['XMAX 300 Tech MAX / SP', 292, 0, 9000],
     ]),
     B(['mini', 'มินิไบค์ / Retro'], [
       ['Monkey 125', 125, 5, 10000], ['MSX125 / Grom', 125, 4, 10000], ['Dax 125', 125, 4, 10000], ['CT125 / Hunter Cub', 125, 4, 10000],
@@ -49,7 +48,6 @@
     W4: [4.4, 7.2, 9.8, 12.4], C4: [4.0, 6.6, 9.2, 11.8], G5: [5.2, 8.0, 10.4, 12.4, 14.2], S6: [5.0, 7.4, 9.6, 11.6, 13.2, 14.6],
     M6: [6.0, 8.8, 11.2, 13.4, 15.2, 16.8], B6: [8.0, 11.2, 14.0, 16.4, 18.4, 20.0], GB: [8.0, 12.5, 16.0, 19.0, 22.0],
     L6: [9.0, 13.0, 16.6, 19.8, 22.6, 25.4], R6: [9.5, 12.5, 15.0, 17.5, 19.5, 21.0] };
-  const CARTANK = { 'City 1.5': 40, 'City Turbo 1.0': 40, 'City e:HEV': 40, 'Civic 1.8': 47, 'Civic Turbo 1.5': 47, Jazz: 40, Brio: 35, Mobilio: 42, 'BR-V': 42, 'HR-V': 50, 'CR-V 2.4': 58, 'Accord 2.0': 56 };
   const JD = [
     [/^Click 125/, 5.5, 9500, 1, 105], [/^Click 160/, 5.5, 10000, 1, 130], [/^PCX 160/, 8.1, 10000, 1, 130], [/^ADV 160/, 8.1, 10000, 1, 130],
     [/^Scoopy/, 4.2, 9500, 1, 90], [/^Giorno/, 5.4, 9500, 1, 105], [/^Lead 125/, 6.0, 9500, 1, 105], [/^Zoomer/, 4.5, 9500, 1, 90],
@@ -66,16 +64,121 @@
     [/^NC750X/, 14.1, 7000, 2, 280, 'L6'], [/^X-ADV/, 13.2, 7000, 2, 280, 'L6'], [/^XL750|^CB750 Hornet/, 16.9, 9500, 2, 300, 'B6'],
     [/^CRF1100L/, 18.8, 8500, 2, 330, 'L6'], [/^NT1100/, 20.4, 8500, 2, 330, 'L6'], [/^Rebel 1100/, 13.6, 7500, 2, 330, 'L6'],
     [/^CB1000 Hornet/, 17.0, 11500, 4, 250, 'B6'], [/^CB1000GT/, 21.0, 11500, 4, 250, 'B6'], [/^CBR1000RR-R/, 16.1, 14500, 4, 300, 'R6'],
-    [/^City 1\.5|^Civic 1\.8|^Jazz|^BR-V/, 0, 6800, 4, 0], [/^City Turbo/, 0, 6200, 3, 0], [/^City e:HEV/, 0, 6200, 4, 0], [/^Civic Turbo/, 0, 6200, 4, 0], [/^Brio|^Mobilio/, 0, 6600, 4, 0],
-    [/^HR-V/, 0, 6600, 4, 0], [/^CR-V/, 0, 6600, 4, 0], [/^Accord/, 0, 6600, 4, 0],
+    [/^XMAX 300 \((2017|2018|2019|2020|2021|2022)\)|^XMAX 300 Tech/, 13, 0, 1, 0], [/^XMAX 300 \((2023|2024|2025)\)/, 13.2, 0, 1, 0],   // Yamaha: 292 cc single, 20.6 kW @ 7,250 rpm; redline not published here → no shift light
   ];
   BIKES.forEach((b) => {
     const j = JD.find((r) => r[0].test(b.name)); if (!j) return;
     b.tank = j[1]; b.red = j[2]; b.cyl = j[3]; b.inj = j[4];
-    if (!b.tank && CARTANK[b.name]) b.tank = CARTANK[b.name];
     if (j[5] && GSET[j[5]]) b.gset = GSET[j[5]];
-    b.rpm = Math.ceil((j[2] + 500) / 1000) * 1000;       // gauge scale = redline + a little
+    if (j[2]) b.rpm = Math.ceil((j[2] + 500) / 1000) * 1000;       // gauge scale = redline + a little
   });
+
+  /* ---------- cars (Thai market) — data from the Smart Gauge CAR project: [brand, name, flags (1 diesel, 2 hybrid, 4 turbo), tank L, cc, redline/100] ---------- */
+  const BRANDS = ['Toyota', 'Honda', 'Isuzu', 'Mitsubishi', 'Nissan', 'Mazda'];
+  const CARS = [
+    [0, "VIOS", 0, 42, 1496, 66],
+    [0, "YARIS", 0, 42, 1197, 66],
+    [0, "YARIS ATIV", 0, 42, 1197, 66],
+    [0, "ALTIS", 0, 55, 1798, 66],
+    [0, "ALTIS HYBRID", 2, 43, 1798, 60],
+    [0, "CAMRY", 0, 60, 2494, 66],
+    [0, "CAMRY HYBRID", 2, 50, 2487, 60],
+    [0, "COROLLA CROSS", 0, 47, 1798, 66],
+    [0, "FORTUNER", 5, 80, 2393, 47],
+    [0, "HILUX REVO", 5, 80, 2393, 47],
+    [0, "INNOVA", 5, 55, 2393, 47],
+    [0, "COMMUTER", 5, 70, 2755, 46],
+    [1, "CITY", 0, 40, 1497, 68],
+    [1, "CITY TURBO", 4, 40, 998, 62],
+    [1, "CITY HEV", 2, 40, 1498, 62],
+    [1, "CIVIC", 0, 47, 1799, 68],
+    [1, "CIVIC TURBO", 4, 47, 1498, 62],
+    [1, "JAZZ", 0, 40, 1497, 68],
+    [1, "BRIO", 0, 35, 1199, 66],
+    [1, "MOBILIO", 0, 42, 1497, 66],
+    [1, "BR-V", 0, 42, 1497, 66],
+    [1, "HR-V", 0, 50, 1799, 66],
+    [1, "CR-V", 0, 58, 2356, 66],
+    [1, "ACCORD", 0, 56, 1998, 66],
+    [2, "D-MAX 1.9", 5, 76, 1898, 48],
+    [2, "D-MAX 3.0", 5, 76, 2999, 46],
+    [2, "D-MAX 2.5", 5, 76, 2499, 46],
+    [2, "MU-X 1.9", 5, 80, 1898, 48],
+    [2, "MU-X 3.0", 5, 80, 2999, 46],
+    [2, "MU-7", 5, 65, 2999, 46],
+    [3, "TRITON 2.4", 5, 75, 2442, 46],
+    [3, "TRITON 2.5", 5, 75, 2477, 46],
+    [3, "PAJERO SPORT", 5, 68, 2442, 46],
+    [3, "PAJERO 3.2", 5, 88, 3200, 45],
+    [3, "MIRAGE", 0, 35, 1193, 66],
+    [3, "ATTRAGE", 0, 42, 1193, 66],
+    [3, "XPANDER", 0, 45, 1499, 66],
+    [3, "LANCER EX", 0, 59, 1998, 68],
+    [3, "OUTLANDER PHEV", 2, 45, 2360, 58],
+    [4, "ALMERA 1.0T", 4, 41, 999, 62],
+    [4, "ALMERA 1.2", 0, 41, 1198, 66],
+    [4, "MARCH", 0, 41, 1198, 66],
+    [4, "NOTE", 0, 41, 1198, 66],
+    [4, "NOTE E-POWER", 2, 41, 1198, 60],
+    [4, "KICKS E-POWER", 2, 41, 1198, 60],
+    [4, "SYLPHY", 0, 52, 1598, 66],
+    [4, "TEANA", 0, 68, 1997, 66],
+    [4, "X-TRAIL", 0, 60, 1997, 66],
+    [4, "NAVARA", 5, 80, 2488, 45],
+    [4, "TERRA", 5, 80, 2298, 45],
+    [5, "MAZDA 2", 0, 44, 1496, 66],
+    [5, "MAZDA 2 DIESEL", 5, 44, 1498, 52],
+    [5, "MAZDA 3", 0, 51, 1998, 66],
+    [5, "CX-3", 0, 48, 1998, 66],
+    [5, "CX-30", 0, 51, 1998, 66],
+    [5, "CX-5", 0, 56, 1998, 66],
+    [5, "CX-5 DIESEL", 5, 58, 2191, 52],
+    [5, "CX-8", 5, 74, 2191, 52],
+    [5, "MAZDA 6", 0, 62, 1998, 66],
+    [5, "BT-50 1.9", 5, 80, 1898, 48],
+    [5, "BT-50 3.2", 5, 80, 3198, 46],
+    [5, "MX-5", 0, 45, 1998, 72]
+  ];
+  CARS.forEach((r) => {
+    const red = r[5] * 100;
+    BIKES.push({ id: 'car-' + BRANDS[r[0]].toLowerCase() + '-' + r[1].toLowerCase().replace(/[^a-z0-9]+/g, ''), group: 'รถยนต์ ' + BRANDS[r[0]] + ' (OBD-II)', name: r[1], cc: r[4], gears: 0,
+      rpm: Math.ceil((red + 500) / 1000) * 1000, tank: r[3], red, cyl: 4, inj: 0, car: true, brand: r[0], d: !!(r[2] & 1), h: !!(r[2] & 2), t: !!(r[2] & 4) });
+  });
+  // VIN world-manufacturer codes -> brand index (0..5 = BRANDS, 100+ = another make that is only named)
+  const OTHER = ['Ford', 'Suzuki', 'MG', 'Chevrolet', 'Subaru', 'BMW', 'Hino', 'GWM', 'Mercedes-Benz', 'Volvo', 'Kia', 'Hyundai'];
+  const WMIS = [['MR0', 0], ['MR1', 0], ['MR2', 0], ['JT', 0], ['4T1', 0], ['2T1', 0], ['5TD', 0], ['MHF', 0], ['SB1', 0],
+    ['MRH', 1], ['JHM', 1], ['JH1', 1], ['1HG', 1], ['2HG', 1], ['19X', 1], ['SHH', 1], ['MHR', 1], ['LHG', 1],
+    ['MPA', 2], ['MP1', 2], ['JAA', 2], ['JAB', 2], ['JAL', 2], ['JAC', 2],
+    ['MMA', 3], ['MMB', 3], ['MMC', 3], ['MMD', 3], ['MMT', 3], ['ML3', 3], ['JA3', 3], ['JA4', 3], ['JA7', 3], ['JMB', 3], ['JMY', 3], ['JMA', 3],
+    ['MNT', 4], ['MDH', 4], ['JN1', 4], ['JN6', 4], ['JN8', 4], ['SJN', 4], ['3N1', 4], ['1N4', 4],
+    ['MM0', 5], ['MM6', 5], ['MM7', 5], ['MM8', 5], ['MP2', 5], ['JM1', 5], ['JM2', 5], ['JM6', 5], ['JM7', 5], ['JMZ', 5], ['JM0', 5], ['3MZ', 5], ['3MV', 5],
+    ['MNA', 100], ['MNB', 100], ['MNC', 100], ['MPB', 100], ['MMS', 101], ['MML', 102], ['MMM', 103], ['MMR', 104], ['MMF', 105], ['WBA', 105],
+    ['MNK', 106], ['MNU', 107], ['WDB', 108], ['WDD', 108], ['YV1', 109], ['KNA', 110], ['KMH', 111]];
+  // Honda motorcycle plants (Thai Honda MLH, Japan JH2/JH3, Vietnam RLH, Indonesia MH1, India ME4, Italy ZDC, China LAL/LWB, USA 1HF)
+  const HWMI = ['MLH', 'JH2', 'JH3', 'RLH', 'MH1', 'ME4', 'ZDC', 'LAL', 'LWB', '1HF', '478'];
+  const COUNTRY = (v) => {
+    const a = v[0], b = v[1];
+    if (a === 'M') return b <= 'E' ? 'อินเดีย' : b <= 'K' ? 'อินโดนีเซีย' : b <= 'R' ? 'ไทย' : 'เอเชียอื่น';
+    if (a === 'R') return b >= 'L' && b <= 'R' ? 'เวียดนาม' : b >= 'F' && b <= 'K' ? 'ไต้หวัน' : '';
+    return ({ J: 'ญี่ปุ่น', K: 'เกาหลี', L: 'จีน', W: 'เยอรมนี', S: 'อังกฤษ', V: 'ฝรั่งเศส/สเปน', Z: 'อิตาลี', 1: 'สหรัฐฯ', 4: 'สหรัฐฯ', 5: 'สหรัฐฯ', 2: 'แคนาดา', 3: 'เม็กซิโก', 6: 'ออสเตรเลีย', 9: 'บราซิล' })[a] || '';
+  };
+  // Mazda Thailand: model from VIN characters 4-5 (same decode as the CAR gauge)
+  const mazdaModel = (v) => {
+    const a = v[3], b = v[4];
+    if (a === 'D' && 'JEW'.includes(b)) return 'MAZDA 2'; if (a === 'B' && 'MNPLK'.includes(b)) return 'MAZDA 3'; if (a === 'G' && 'JHL'.includes(b)) return 'MAZDA 6';
+    if (a === 'K' && 'EF'.includes(b)) return 'CX-5'; if (a === 'D' && b === 'K') return 'CX-3'; if (a === 'D' && b === 'M') return 'CX-30'; if (a === 'N' && b === 'D') return 'MX-5';
+    return '';
+  };
+  /** VIN -> { brand index / name, moto, country, year (approx.), model (when the code is known) } */
+  P.identifyVin = (vin) => {
+    vin = String(vin || '').toUpperCase(); if (vin.length < 11) return null;
+    const o = { vin, brand: -1, brandName: '', moto: false, country: COUNTRY(vin), model: '' };
+    if (HWMI.some((w) => vin.startsWith(w))) { o.brand = 1; o.brandName = 'Honda'; o.moto = true; }
+    else { const w = WMIS.find((x) => vin.startsWith(x[0])); if (w) { o.brand = w[1]; o.brandName = w[1] < 6 ? BRANDS[w[1]] : OTHER[w[1] - 100] || ''; } }
+    const y = 'ABCDEFGHJKLMNPRSTVWXY'.indexOf(vin[9]); o.year = y >= 0 ? 2010 + y : /[1-9]/.test(vin[9]) ? 2000 + +vin[9] : 0;
+    if (o.brand === 5) o.model = mazdaModel(vin);
+    return o;
+  };
   P.BIKES = BIKES;
   const byId = (id) => BIKES.find((b) => b.id === id);
 
@@ -101,8 +204,10 @@
     const card = $('#mSet .card'), anchor = card.querySelector('h3:nth-of-type(2)');
     const blk = document.createElement('div');
     const groups = [...new Set(BIKES.map((b) => b.group))];
-    blk.innerHTML = `<h3 style="margin-top:16px">🏍 รุ่นรถ</h3><div class="gsect">
-      <label class="f">เลือกรุ่น Honda<select id="sBike"><option value="">— เลือกรุ่น —</option>${groups.map((g) => `<optgroup label="${g}">${BIKES.filter((b) => b.group === g).map((b) => `<option value="${b.id}">${b.name}${b.cc ? ' · ' + b.cc + ' cc' : ''}${b.gears ? ' · ' + b.gears + ' สปีด' : ' · CVT'}</option>`).join('')}</optgroup>`).join('')}</select></label>
+    blk.innerHTML = `<h3 style="margin-top:16px">🏍🚗 รุ่นรถ</h3><div class="gsect">
+      <label class="f">เลือกรุ่นรถ<select id="sBike"><option value="">— เลือกรุ่น —</option>${groups.map((g) => `<optgroup label="${g}">${BIKES.filter((b) => b.group === g).map((b) => `<option value="${b.id}">${b.name}${b.cc ? ' · ' + b.cc + ' cc' : ''}${b.gears ? ' · ' + b.gears + ' สปีด' : ' · CVT'}</option>`).join('')}</optgroup>`).join('')}</select></label>
+      <div class="mut" id="sVeh" style="margin:6px 0;font-size:13px"></div>
+      <div class="row" style="margin:4px 0 8px"><button class="btn" id="sTilesAuto">↺ ช่องหน้าหลัก: ให้แอปเลือกอัตโนมัติ</button></div>
       <div class="grid g3">
         <label class="f">จำนวนเกียร์ (0 = ออโต้/CVT)<input id="sGears" type="number" min="0" max="8"></label>
         <label class="f">RPM เต็มสเกลหน้าปัด<input id="sRpmMax" type="number" step="500"></label>
@@ -122,7 +227,8 @@
       $('#gearLearn').style.display = n ? '' : 'none';
     };
     $('#bSet').addEventListener('click', fill);
-    $('#sBike').onchange = () => { const b = byId($('#sBike').value); if (b) { apply(b, false); fill(); toast('ตั้งค่ารุ่น ' + b.name + ' แล้ว'); } };
+    $('#sBike').onchange = () => { const b = byId($('#sBike').value); if (b) { S.bikeUser = true; apply(b, false); fill(); toast('ตั้งค่ารุ่น ' + b.name + ' แล้ว'); } };
+    $('#sTilesAuto').onclick = () => { C.resetTiles(); toast('ช่องหน้าหลักกลับเป็นอัตโนมัติแล้ว'); };
     $('#sGears').onchange = () => { S.gears = Math.max(0, Math.min(8, +$('#sGears').value || 0)); S.cvt = S.gears === 0; if (S.gears && !S.gearRatios) S.gearRatios = DEFAULT_RATIOS[S.gears] || DEFAULT_RATIOS[6]; C.saveS(); refresh(); fill(); };
     $('#sRpmMax').onchange = () => { S.rpmMax = Math.max(3000, +$('#sRpmMax').value || 12000); C.saveS(); window.dispatchEvent(new Event('jetvehicle')); };
     $('#sRatios').onchange = () => { S.gearRatios = $('#sRatios').value.trim(); S.gearLearned = true; C.saveS(); };
@@ -144,6 +250,42 @@
     refresh();
   })();
 
+  /* ---------- automatic vehicle identification (OBD): VIN brand/year/model + fuel type + hybrid → model defaults ---------- */
+  const FUELTH = (t) => (t.fuelType === 5 ? 'LPG' : t.fuelType === 6 ? 'CNG' : t.fuelType === 3 ? 'เอทานอล' : t.fuel === 'd' ? 'ดีเซล' : 'เบนซิน') + (t.hybrid ? ' ไฮบริด' : '');
+  P.vehOnObd = (t) => {
+    const id = (t && t.ident) || {}, det = id.vin ? P.identifyVin(id.vin) : null, v = { det, fuel: FUELTH(t), model: null, text: '' };
+    if (!t || t.honda) {
+      v.text = t && t.honda ? 'HONDA PGM-FI (มอเตอร์ไซค์)' : '';
+      const c0 = byId(S.bike); if (t && (!c0 || c0.car) && S.bikeBack && byId(S.bikeBack)) { apply(byId(S.bikeBack), true); S.bikeUser = true; }   // back on the bike: restore the bike chosen before a car was detected
+      st.veh = v; return v;
+    }
+    const parts = [];
+    let cands = BIKES.filter((b) => b.car && b.d === (t.fuel === 'd') && (t.hybrid ? b.h : !b.h));
+    if (!cands.length) cands = BIKES.filter((b) => b.car && b.d === (t.fuel === 'd'));
+    if (det && det.brand >= 0 && det.brand < 6) {
+      const byBrand = cands.filter((b) => b.brand === det.brand); if (byBrand.length) cands = byBrand;
+      if (det.model) { const m = cands.filter((b) => b.name.indexOf(det.model) === 0); if (m.length) cands = m; }
+    } else if (det && det.moto) cands = [];
+    if (det) parts.push((det.model || det.brandName || 'VIN ' + det.vin.slice(0, 3)) + (det.year ? ' ' + det.year : '') + (det.country ? ' · ' + det.country : ''));
+    parts.push(v.fuel);
+    if (cands.length === 1 && det && det.brand >= 0) v.model = cands[0];
+    v.cands = cands; v.text = parts.join(' · ');
+    // apply: a unique model fills everything; otherwise only the generic scale of this brand/fuel (never overrides the user's own car choice)
+    const cur = byId(S.bike); if (cur && !cur.car) S.bikeBack = cur.id;
+    const keepUser = S.bikeUser && cur && cur.car && (!det || det.brand < 0 || cur.brand === det.brand);
+    if (!keepUser) {
+      if (v.model) { S.bikeUser = false; apply(v.model, false); }
+      else if (cands.length) {
+        const red = cands.map((b) => b.red).sort((a, b) => a - b), mid = red[Math.floor(red.length / 2)];
+        S.bike = ''; S.bikeUser = false; S.cvt = true; S.gears = 0; S.gearRatios = ''; S.rpmMax = Math.ceil((Math.max.apply(null, red) + 500) / 1000) * 1000; S.redline = mid; S.tankL = 0; S.injFlow = 0;
+        C.saveS(); refresh(); window.dispatchEvent(new Event('jetvehicle'));
+      }
+    }
+    st.veh = v;
+    const el = $('#sVeh'); if (el) el.textContent = '🔎 ตรวจพบรถ: ' + v.text + (id.vin ? ' · VIN ' + id.vin : '') + (id.cal ? ' · ECU ' + id.cal : '') + (v.model ? ' → ตั้งค่ารุ่น ' + v.model.name + ' ให้อัตโนมัติ' : cands.length > 1 ? ' → เลือกรุ่นที่แน่ชัดได้ที่ช่องด้านบน' : '');
+    return v;
+  };
+
   /* ---------- derived values (only when the ECU/gauge does not provide them) ---------- */
   let baro = null, runStart = null, lastT = null, dist = 0;
   const hook = (d) => {
@@ -154,8 +296,13 @@
     if (d.BARO == null && d.MAP != null) { d.BARO = B0; d.baroEst = 1; }
     if (d.LOAD == null && d.MAP != null && d.RPM > 0) d.LOAD = Math.max(0, Math.min(100, d.MAP / B0 * 100));
     if (d.ABSL == null && d.LOAD != null) d.ABSL = d.LOAD;
-    if (d.AFR == null && d.LAMB != null && d.LAMB > 0.5 && d.LAMB < 2 && !(st.t && st.t.fuel === 'd')) d.AFR = d.LAMB * 14.7;   // car wideband (OBD PID 34) → AFR Log
-    if (d.AFR != null) { if (d.LAMB == null) d.LAMB = d.AFR / 14.7; if (d.EQR == null && d.LAMB > 0) d.EQR = 1 / d.LAMB; }
+    // AFR over OBD-II: measured lambda (PID 24/34 wideband) x stoichiometric ratio; if the car has none, the ECU's commanded lambda (PID 44) as a target value
+    const obd = st.t && st.t.kind === 'obd', stoich = (obd && st.t.stoich) || 14.7, dsl = obd && st.t.fuel === 'd';
+    if (d.AFR == null) {
+      if (d.LAMB != null && d.LAMB > 0.4 && d.LAMB < (dsl ? 12 : 3)) { d.AFR = d.LAMB * stoich; d.afrSrc = 'wb'; }
+      else if (obd && d.EQR != null && d.EQR > 0.4 && d.EQR < 3) { d.AFR = d.EQR * stoich; d.afrSrc = 'cmd'; d.LAMB = d.EQR; }
+    } else if (!d.afrSrc) d.afrSrc = 'gauge';
+    if (d.AFR != null) { if (d.LAMB == null) d.LAMB = d.AFR / stoich; if (d.EQR == null && d.LAMB > 0) d.EQR = d.LAMB; }
     if (d.RPM > 300) { if (runStart == null) runStart = now; d.RUNT = Math.round((now - runStart) / 1000); } else if (runStart != null) d.RUNT = Math.round((now - runStart) / 1000);
     const sp = d.SPD != null ? d.SPD : d.GPS;
     if (sp != null && lastT != null && now > lastT && now - lastT < 2000) dist += sp * (now - lastT) / 3.6e6;

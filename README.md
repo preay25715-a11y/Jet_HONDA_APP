@@ -181,6 +181,13 @@ android/           แอป Android (MainActivity + JetBridge: USB OTG / BLE / 
 ## v1.3.2
 - Version badge (e.g. `v1.3.3`) placed after "By เปรียวจูนเนอร์" in the header and on the licence screen.
 
+## v1.5.0 — AFR over OBD-II, automatic Dash tiles, vehicle detection
+- **AFR via OBD-II:** measured lambda (PID 24/34, second sensor 25/35) × the stoichiometric ratio of the fuel in use (petrol 14.7, diesel 14.5, LPG 15.5, CNG 17.2, ethanol 9.0 — from PID 51); if the car has no lambda PID, the ECU's commanded lambda (PID 44) is used and clearly labelled "ECU สั่ง" (a target, not a measurement). The source is shown on the AFR Log page and under the centre gauge. Same rule as the CAR gauge (PID 24, else 44).
+- **Dash 6 tiles follow the car:** after connecting, only values the vehicle really reports are shown — petrol: coolant, oil/fuel trim, load, intake, battery, AFR; diesel: coolant, oil, load, EGT/rail pressure, battery, boost (ported from the CAR gauge `autoSlots()`). Battery voltage comes from the adapter (`ATRV`) when the car has no PID 42. Your own choice is remembered per profile (petrol / diesel / motorcycle); **Setup → "ช่องหน้าหลัก: ให้แอปเลือกอัตโนมัติ"** resets it. Tile picker lists the car's channels first and can use every OBD channel.
+- **Vehicle detection:** reads the VIN (Mode 09) and ECU calibration id, decodes brand / country / model year (approx.) and, for Mazda Thailand, the model; fuel type (petrol/diesel/LPG/CNG/hybrid) from PID 51. A unique match sets scale, redline, tank automatically; otherwise the brand/fuel generic scale. Car catalogue (62 models: Toyota, Honda, Isuzu, Mitsubishi, Nissan, Mazda) taken from the CAR project. A model chosen by hand in Setup is not overridden.
+- **Yamaha XMAX 300** 2017–2025 + Tech MAX / SP added to the model list (292 cc, 13 L / 13.2 L from 2023, CVT). Yamaha's ECU is neither OBD-II nor Honda K-line, so this only sets the model defaults (live values from the ECU are not available; GPS speed works). Redline is not published in the sources used, so no shift light is set (enter it in Setup).
+- Tests: VIN (CAN multi-frame and ISO/KWP), EQR-only petrol, diesel keys; browser runs for petrol / EQR-only / diesel.
+
 ## v1.4.1
 - **Shift light / redline:** the RPM arc turns red exactly from the redline of the selected bike (Setup → "รอบเรดไลน์"), and the RPM number blinks red from 95 % of the redline. Redline 0 = off (arc keeps the old colours).
 

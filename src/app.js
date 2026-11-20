@@ -121,7 +121,7 @@
       ['ใช้เป็นตัวต่อสาย K-line', g && st.t === g ? '<span class="okc">ใช่</span>' : 'ไม่'], ['เซ็นเซอร์', g ? (fresh ? `ไวด์แบนด์ ${ok(s.afrOk)} จีพีเอส ${ok(s.gpsOk)}${s.gpsOk ? ' (' + s.sats + ')' : ''} อุณหภูมิน้ำมันเครื่อง ${ok(s.eotOk)} ออกซิเจน ${ok(s.o2Ok)}` : g.noSensors ? 'เฟิร์มแวร์ไม่รองรับ' : 'รอข้อมูล…') : '—'],
     ].map(([k, v]) => `<span>${k}</span><span>${v}</span>`).join('');
     const o = st.t && st.t.kind === 'obd' ? st.t : null;
-    $('#obdInfo').innerHTML = o ? '🚗 OBD-II: <span class="okc">เชื่อมแล้ว</span> · ' + esc(o.name) + ' · ' + (o.pidList ? o.pidList.length : 0) + ' ค่า · ' + (o.honda ? 'HONDA PGM-FI (มอเตอร์ไซค์)' : o.fuel === 'd' ? 'ดีเซล' : 'เบนซิน') : '🚗 OBD-II: ยังไม่เชื่อม';
+    $('#obdInfo').innerHTML = o ? '🚗 OBD-II: <span class="okc">เชื่อมแล้ว</span> · ' + esc(o.name) + ' · ' + (o.pidList ? o.pidList.length : 0) + ' ค่า · ' + esc(st.veh && st.veh.text ? st.veh.text : o.honda ? 'HONDA PGM-FI (มอเตอร์ไซค์)' : o.fuel === 'd' ? 'ดีเซล' : 'เบนซิน') + (o.ident && o.ident.vin ? '<br><small>VIN ' + esc(o.ident.vin) + (o.ident.cal ? ' · ECU ' + esc(o.ident.cal) : '') + '</small>' : '') : '🚗 OBD-II: ยังไม่เชื่อม';
     $('#gOff').disabled = !g && !o;
   }
   $('#bSet').addEventListener('click', renderGauge);
@@ -143,7 +143,7 @@
     stopLive();
     try { if (st.t) await st.t.close(); } catch (e) {}
     try { if (st.gauge && st.gauge !== st.t) await st.gauge.close(); } catch (e) {}
-    st.t = st.gauge = st.ecu = null; pills(); renderEcu(); log('info', 'ตัดการเชื่อมต่อ');
+    st.t = st.gauge = st.ecu = null; st.autoTiles = null; st.veh = null; pills(); renderEcu(); renderTiles(); log('info', 'ตัดการเชื่อมต่อ');
   }
   // find any Bluetooth device (paired + classic + BLE) and connect it by type: Smart Gauge / OBD-II (ELM327 etc.)
   async function connectBt(mode) {
@@ -174,9 +174,9 @@
         const stream = await JetBt.openObdStream(dev);
         const t = new Elm327(stream, { name: 'OBD ' + (dev.name || stream.name || 'ELM327'), log });
         try { await t.init(); } catch (e) { try { await stream.close(); } catch (x) {} throw e; }
-        t.onLost = () => { log('err', 'OBD หลุดการเชื่อมต่อ'); toast('OBD หลุดการเชื่อมต่อ'); stopLive(); st.t = null; st.ecu = null; pills(); };
-        st.t = t; st.ecu = t; pills();
-        log('info', 'เชื่อม ' + t.name + (t.ver ? ' · ' + t.ver : '')); toast('เชื่อม OBD-II แล้ว'); startLive();
+        t.onLost = () => { log('err', 'OBD หลุดการเชื่อมต่อ'); toast('OBD หลุดการเชื่อมต่อ'); stopLive(); st.t = null; st.ecu = null; st.autoTiles = null; pills(); renderTiles(); };
+        st.t = t; st.ecu = t; pills(); onObdReady(t);
+        log('info', 'เชื่อม ' + t.name + (t.ver ? ' · ' + t.ver : '')); toast('เชื่อม OBD-II แล้ว' + (st.veh && st.veh.text ? ' · ' + st.veh.text : '')); startLive();
         return;
       }
       if (kind === 'gauge-only' || kind === 'gauge-only-usb') {
@@ -261,6 +261,8 @@
     INJ: { l: 'Injector', u: 'ms', d: 2 }, IGN: { l: 'Ignition', u: '°', d: 1 }, AFR: { l: 'AFR', u: '', d: 1, col: '#2fd18b', bar: [10, 18] },
     CRP: { l: 'CRP volt', u: 'V', d: 2, col: '#ffc233', bar: [0, 5] }, EOT: { l: 'Oil temp', u: '°C', d: 0 }, O2: { l: 'O2', u: 'V', d: 2 }, GEAR: { l: 'Gear', u: '', d: 0 },
   };
+  P.OBD.forEach(([k, en, th, u, dec]) => { if (!CH[k]) CH[k] = { l: en, th, u, d: dec }; });          // all OBD-II channels are selectable as tiles
+  const chLab = (c) => c.l;                                     // short English tile labels (same as the original tiles)
   const chVal = (d, k) => (k === 'SPD' ? (d.SPD != null ? d.SPD : d.GPS) : d[k]);
   const chText = (d, k) => {
     const v = chVal(d || {}, k), c = CH[k]; if (v == null) return '--';
@@ -268,24 +270,55 @@
   };
   const DEF_RATIOS = '140 92 68 54 45 38';
   const DEF_TILES = ['ECT', 'IAT', 'MAP', 'BATT', 'INJ', 'IGN'];
-  function pick(title, cur, cb) {
+  function pick(title, cur, cb, avail) {
     $('#pkTitle').textContent = title;
-    $('#pkGrid').innerHTML = Object.keys(CH).map((k) => `<button class="${k === cur ? 'on' : ''}" data-k="${k}"><b>${CH[k].l}</b><small>${CH[k].u || '&nbsp;'}</small></button>`).join('');
+    const all = Object.keys(CH), ks = avail ? all.filter((k) => avail.has(k) || k === cur).concat(all.filter((k) => !avail.has(k) && k !== cur)) : all;
+    $('#pkGrid').innerHTML = ks.map((k) => `<button class="${k === cur ? 'on' : ''}${avail && !avail.has(k) && k !== cur ? ' na' : ''}" data-k="${k}"><b>${chLab(CH[k])}</b><small>${CH[k].u || '&nbsp;'}</small></button>`).join('');
     $$('#pkGrid button').forEach((b) => b.onclick = () => { modal('#mPick', false); cb(b.dataset.k); });
     modal('#mPick', true);
   }
+  // ---- the 6 Dash tiles follow the car: petrol / diesel pick different values, only ones the car really reports (same logic as the CAR gauge's autoSlots) ----
+  const PRI = {
+    g: [['ECT'], ['EOT', 'STFT1', 'MAP', 'LTFT1'], ['LOAD', 'APPD', 'MAF'], ['IAT', 'AMB'], ['BATT'], ['AFR', 'LAMB', 'MAP', 'IGN']],
+    d: [['ECT'], ['EOT', 'CACT', 'MAP'], ['LOAD', 'TQA', 'APPD'], ['EGT1', 'FRP', 'IAT', 'AMB'], ['BATT'], ['BOOST', 'FRP', 'MAP', 'CACT']],
+    b: [['ECT'], ['IAT'], ['MAP'], ['BATT'], ['INJ'], ['IGN']],
+  };
+  function autoTiles(keys, prof) {
+    const pri = PRI[prof] || PRI.g, used = new Set(), out = new Array(6).fill(null);
+    [0, 3, 1, 4, 2, 5].forEach((i) => { const k = pri[i].find((x) => keys.has(x) && !used.has(x)); if (k) { out[i] = k; used.add(k); } });
+    const rest = Object.keys(CH).filter((k) => keys.has(k) && !used.has(k) && !['RPM', 'SPD', 'TPS', 'GEAR', 'CRP', 'O2'].includes(k));
+    return out.map((k, i) => k || rest.shift() || DEF_TILES[i]);
+  }
+  const profile = () => (st.t && st.t.kind === 'obd' ? (st.t.honda ? 'b' : st.t.fuel === 'd' ? 'd' : 'g') : 'b');
+  function tilesNow() {
+    const pf = profile(), c = S.tilesBy && S.tilesBy[pf];
+    if (Array.isArray(c) && c.length === 6) return c;
+    if (st.autoTiles) return st.autoTiles;
+    return pf === 'b' && Array.isArray(S.tiles) && S.tiles.length === 6 ? S.tiles : DEF_TILES;
+  }
   function renderTiles(d) {
     d = d || st.last || {};
-    const t = Array.isArray(S.tiles) && S.tiles.length === 6 ? S.tiles : DEF_TILES;
+    const t = tilesNow();
     $$('.tile[data-s]').forEach((el) => {
       const k = t[+el.dataset.s], c = CH[k] || CH.ECT;
-      el.querySelector('.k').textContent = c.l; el.querySelector('b').textContent = chText(d, k); el.querySelector('small').textContent = c.u;
+      el.querySelector('.k').textContent = chLab(c); el.querySelector('b').textContent = chText(d, k); el.querySelector('small').textContent = c.u;
     });
   }
   $$('.tile[data-s]').forEach((el) => el.onclick = () => {
-    const t = (Array.isArray(S.tiles) && S.tiles.length === 6 ? S.tiles : DEF_TILES).slice(), i = +el.dataset.s;
-    pick('เลือกค่าที่ช่องนี้', t[i], (k) => { t[i] = k; S.tiles = t; saveS(); renderTiles(); });
+    const t = tilesNow().slice(), i = +el.dataset.s, pf = profile();
+    pick('เลือกค่าที่ช่องนี้', t[i], (k) => { t[i] = k; S.tilesBy = S.tilesBy || {}; S.tilesBy[pf] = t; if (pf === 'b') S.tiles = t; saveS(); renderTiles(); }, st.t && st.t.kind === 'obd' ? st.t.channelKeys() : null);
   });
+  window.addEventListener('jetlang', () => renderTiles());
+  function resetTiles() { const pf = profile(); if (S.tilesBy) delete S.tilesBy[pf]; if (pf === 'b') S.tiles = null; saveS(); renderTiles(); }
+  // after an OBD connection: identify the car, choose the tiles, poll the chosen channels fast
+  function onObdReady(t) {
+    try { P.vehOnObd(t); } catch (e) { log('err', 'ระบุรุ่นรถไม่สำเร็จ: ' + e.message); }
+    const keys = t.channelKeys(), pf = t.honda ? 'b' : t.fuel === 'd' ? 'd' : 'g';
+    st.autoTiles = autoTiles(keys, pf);
+    t.watch(st.autoTiles.concat(['LAMB', 'EQR', 'STFT1', 'LTFT1']));
+    log('info', 'ช่องหน้าหลักอัตโนมัติ (' + (pf === 'd' ? 'ดีเซล' : pf === 'b' ? 'มอเตอร์ไซค์ Honda' : 'เบนซิน') + '): ' + st.autoTiles.join(', '));
+    renderTiles();
+  }
   // centre of the round gauge: tap to cycle km/h → AFR → CRP volt
   const CENTER = { spd: ['SPD', 'km/h ⇄', 0], afr: ['AFR', 'AFR ⇄', 1], crp: ['CRP', 'CRP volt ⇄', 2] };
   const NEXT = { spd: 'afr', afr: 'crp', crp: 'spd' };
@@ -296,12 +329,12 @@
     if (v != null) el.textContent = m === 'spd' ? Math.round(v) : (+v).toFixed(dec);
     else el.textContent = m === 'spd' ? '0' : '--';
     el.style.color = m !== 'afr' || v == null ? '' : v < 11.5 ? '#ff6b7a' : v > 15.5 ? '#ffb020' : '#7dffb8';
-    $('#vUnit').textContent = unit;
+    $('#vUnit').textContent = m === 'afr' && d.afrSrc === 'cmd' ? 'AFR (ECU สั่ง) ⇄' : unit;
     const g = d.GEAR; $('#vGear').textContent = g == null ? '–' : g === 0 ? 'N' : g;
   }
   $('.gauge').addEventListener('click', () => {
     S.center = NEXT[CENTER[S.center] ? S.center : 'spd']; saveS(); showCenter();
-    const need = { afr: ['AFR', 'ยังไม่มีค่า AFR — ต้องต่อ Smart Gauge ที่มีไวด์แบนด์'], crp: ['CRP', 'ยังไม่มีค่า CRP — ต้องต่อ Smart Gauge ที่มีเซ็นเซอร์ CRP (หรือเปิด DEMO)'] }[S.center];
+    const need = { afr: ['AFR', st.t && st.t.kind === 'obd' ? 'รถคันนี้ไม่ส่งค่า Lambda/AFR ทาง OBD-II — ต่อ Smart Gauge ที่มีไวด์แบนด์เพิ่มได้' : 'ยังไม่มีค่า AFR — ต้องต่อ Smart Gauge ที่มีไวด์แบนด์'], crp: ['CRP', 'ยังไม่มีค่า CRP — ต้องต่อ Smart Gauge ที่มีเซ็นเซอร์ CRP (หรือเปิด DEMO)'] }[S.center];
     if (need && (!st.last || st.last[need[0]] == null)) toast(need[1], 3500);
   });
   function showLive(d) {
@@ -466,7 +499,7 @@
   };
 
   /* ---------------- API for ui-extra.js ---------------- */
-  window.JetCore = { CH, chText, chVal, pick, DEF_RATIOS, renderTiles, st, S, saveS, $, $$, P, toast, ask, askText, dlg, op, go, pageOf, fbytes, addFile, refreshFiles, log, esc, kb, download, modal,
+  window.JetCore = { resetTiles, tilesNow, CH, chText, chVal, pick, DEF_RATIOS, renderTiles, st, S, saveS, $, $$, P, toast, ask, askText, dlg, op, go, pageOf, fbytes, addFile, refreshFiles, log, esc, kb, download, modal,
     startLive, stopLive, renderHex, mergeSensors, emitLive, models, parseHex };
 
   /* ---------------- boot ---------------- */

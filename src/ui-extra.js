@@ -249,7 +249,7 @@
     if (!afr.rec || d[LK()] == null || d.RPM == null || !afr.log) return;
     const p = livePos(afr.info, afr.xs, afr.ys, d);
     if (!p) return;
-    if (isCrp()) afr.log.add(p.fr, p.fc, d.CRP, 0, 5.5); else afr.log.add(p.fr, p.fc, d.AFR); afr.dirty = true;
+    if (isCrp()) afr.log.add(p.fr, p.fc, d.CRP, 0, 5.5); else afr.log.add(p.fr, p.fc, d.AFR, undefined, st.t && st.t.kind === 'obd' && st.t.fuel === 'd' ? 90 : undefined); afr.dirty = true;
   }
   function renderAfr() {
     if (!afr.log) afrAxesChanged();
@@ -279,6 +279,8 @@
     if (last.TPS == null && last.LOAD == null) return '⚠ ไม่ได้รับตำแหน่งคันเร่ง/โหลดเครื่อง — ไม่มีแกนให้ลงตาราง';
     if (last[LK()] == null) return isCrp() ? '⚠ ไม่ได้รับค่า CRP volt จากเกจ' : obd ? '⚠ รถคันนี้ไม่ส่งค่า Lambda/AFR ทาง OBD-II (เซ็นเซอร์ O2 แบบ narrowband วัด AFR จริงไม่ได้) — ต้องต่อเกจ AFR/ไวด์แบนด์เพิ่ม' : '⚠ ไม่ได้รับค่า AFR จากเกจ — ตรวจสาย O2/ไวด์แบนด์ และสถานะเกจ';
     if (!afr.rec) return '⚠ REC ปิดอยู่ — กด ○ REC เพื่อบันทึก';
+    if (!isCrp() && last.afrSrc === 'cmd') return 'ℹ AFR นี้คือค่าที่ ECU "สั่ง" (PID 44) ไม่ใช่ค่าวัดจริงจากเซ็นเซอร์ — รถคันนี้ไม่ส่ง Lambda จริงทาง OBD-II';
+    if (!isCrp() && obd && st.t.fuel === 'd') return 'ℹ ดีเซลวิ่งบางเสมอ (AFR สูงกว่าเบนซินมาก) — ใช้ดูแนวโน้ม/ขีดจำกัดควันจากค่า λ';
     return '';
   }
   const aWrap = $('#atab').parentElement, aCur = Cursor(aWrap, $('#atab'));

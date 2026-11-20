@@ -414,3 +414,5 @@ table.mtab{border-collapse:separate;border-spacing:0;font-family:var(--disp);fon
 
 @keyframes shiftBlink{50%{opacity:.25}}
 .gauge .rpm.shift,.gauge .rpm.shift b{color:#ff3b4a;animation:shiftBlink .28s steps(1) infinite}
+
+#pkGrid button.na{opacity:.38}

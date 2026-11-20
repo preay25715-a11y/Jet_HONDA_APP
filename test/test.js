@@ -128,3 +128,22 @@ const { SimTransport } = require('../src/sim.js');
   assert(t.current.includes('12-1') && t.current.includes('21-2'), 'blink codes ' + JSON.stringify(t));
   console.log('HONDA-KLINE bridge tests passed', JSON.stringify(t));
 })().catch((x) => { console.error(x); process.exit(1); });
+
+// ---- v1.5: identification (VIN), fuel type, channel list, EQR-only AFR source ----
+(async () => {
+  const { Elm327, FakeElm } = require('../src/elm.js');
+  for (const kwp of [false, true]) {
+    const e = new Elm327(new FakeElm({ vin: 'MM8DJ2HAW0W123456', cal: 'CAL12345', kwp })); await e.init();
+    assert.strictEqual(e.ident.vin, 'MM8DJ2HAW0W123456', 'VIN ' + (kwp ? 'kwp' : 'can') + ' = ' + e.ident.vin);
+    assert.strictEqual(e.ident.cal, 'CAL12345', 'cal id ' + e.ident.cal);
+  }
+  const g = new Elm327(new FakeElm({ eqr: true, lambda: false })); await g.init();
+  assert.strictEqual(g.fuel, 'g'); assert.strictEqual(g.stoich, 14.7);
+  const kg = g.channelKeys(); assert(kg.has('AFR') && kg.has('EQR') && kg.has('BATT') && !kg.has('LAMB'), 'petrol keys');
+  let d; for (let i = 0; i < 14; i++) d = await g.readLive();
+  assert(d.EQR > 0.9 && d.EQR < 1.1, 'EQR ' + d.EQR);
+  const dd = new Elm327(new FakeElm({ diesel: true })); await dd.init();
+  assert.strictEqual(dd.fuel, 'd'); assert.strictEqual(dd.stoich, 14.5);
+  const kd = dd.channelKeys(); assert(kd.has('BOOST') && kd.has('FRP') && kd.has('EGT1') && !kd.has('IGN'), 'diesel keys ' + [...kd]);
+  console.log('v1.5 elm tests passed (VIN can/kwp, petrol EQR-only, diesel keys)');
+})().catch((x) => { console.error(x); process.exit(1); });
