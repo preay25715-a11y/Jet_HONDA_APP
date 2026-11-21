@@ -40,6 +40,8 @@
   // polled every cycle (fast) vs. every Nth cycle (slow)
   const FAST = ['RPM', 'SPD', 'TPS', 'MAP', 'ECT', 'IAT', 'LOAD', 'IGN', 'MAF', 'BOOST', 'LAMB', 'O2', 'INJ'];
   const MAX_PER_REQ = 6;
+  // values that change slowly: read now and then even when single-value requests are all the adapter can do
+  const SLOW_KEYS = ['ECT', 'IAT', 'EOT', 'BATT', 'STFT1', 'LTFT1', 'STFT2', 'LTFT2', 'FUELL', 'BARO', 'AMB', 'CLRT', 'MILT', 'RUNT', 'DISTC', 'MILD', 'WARM', 'FP', 'FRPR', 'FRP', 'EVAPP', 'EVAPC', 'CMDT'];
   // an ECU answers "not available" with all-ones bytes: such values must never reach the screen as numbers (FFFF = 16383 rpm, lambda 1.99997 …)
   const LAMB_OK = (v) => v < 1.9999;
   const PLAUS = { 0x0C: (v) => v < 16000, 0x10: (v) => v < 650, 0x42: (v) => v < 40, 0x5E: (v) => v < 3000, 0x24: LAMB_OK, 0x25: LAMB_OK, 0x34: LAMB_OK, 0x35: LAMB_OK, 0x44: LAMB_OK };
@@ -226,7 +228,10 @@
       // every 2nd-4th cycle a second request with the slow values (temperatures, battery, trims …) is added — the fast values refresh as often as the adapter can turn one request around.
       // Gentle mode keeps the old longer cycle. One value per request (K-line cars, the Honda bridge): see below.
       const slowEvery = this.rtt <= 60 ? 2 : this.rtt <= 120 ? 3 : 4, withSlow = this.single || this.safe || c % slowEvery === 0;
-      const reqs = this.single ? (this.honda ? Math.max(3, Math.min(4, Math.round(170 / Math.max(20, this.rtt)))) : Math.max(3, Math.min(5, Math.round(300 / Math.max(20, this.rtt))))) : this.safe ? Math.max(1, Math.min(2, Math.round(150 / Math.max(20, this.rtt)))) : withSlow ? 2 : 1;
+      // one value per request, not Honda (K-line / KWP / J1850 cars, gentle mode): RPM + throttle every cycle, plus as many "picks" as fit into a ~320 ms cycle (fractions carry over: 0.5 = every 2nd cycle)
+      let picks = 0;
+      if (this.single && !this.honda) { this.pickAcc = (this.pickAcc || 0) + Math.min(4, Math.max(0.5, 320 / Math.max(20, this.rtt) - 2)); picks = Math.floor(this.pickAcc); this.pickAcc -= picks; }
+      const reqs = this.single ? (this.honda ? Math.max(3, Math.min(4, Math.round(170 / Math.max(20, this.rtt)))) : Math.max(1, (rpm != null ? 1 : 0) + (has('TPS') != null && has('TPS') !== rpm ? 1 : 0) + picks)) : this.safe ? Math.max(1, Math.min(2, Math.round(150 / Math.max(20, this.rtt)))) : withSlow ? 2 : 1;
       const slots = reqs * per, want = [], add = (p) => { if (p != null && !want.includes(p) && (p === rpm || (this.pskip[p] || 0) <= c)) want.push(p); };      // a PID that keeps answering nothing sits out for a while
       let ringN = 0;
       add(rpm);
@@ -236,12 +241,20 @@
         ringN = Math.max(0, slots - want.length);
         this._mkRing([rpm, has('TPS'), has('SPD')]);                // stable skip list (a changing one would rebuild the ring and restart it every cycle)
       } else if (this.single) {
-        // one value per request: RPM + AFR every cycle, the next slots cycle through TPS → SPD → two rotating values (MAP, temperatures, …)
-        add(afrP);
-        const extra = Math.max(0, slots - want.length), L = ['TPS', 'SPD'].map(has).filter((p) => p != null); L.push('*', '*');
-        if (extra >= L.length) { for (const x of L) if (x !== '*') add(x); ringN = extra - (L.length - 2); }
-        else for (let k = 0; k < extra; k++) { const x = L[(c * extra + k) % L.length]; if (x === '*') ringN++; else add(x); }
-        this._mkRing([rpm, afrP]);
+        // v1.6.2 — one value per request: RPM and throttle in EVERY cycle (what the eye follows on the dial and the bar); every other slot goes to the value that is most overdue for its own
+        // refresh rate: the AFR source first, then speed, MAP / load / airflow, ignition, the Dash tiles; temperatures, battery, trims and the rest only now and then. Nothing is ever starved.
+        add(has('TPS'));
+        const clk = this.reqClock || 0, lr = this.lastReq || (this.lastReq = {}), SLOWK = SLOW_KEYS;
+        const wt = (p) => { const k = key(p), x = this.extraFast.has(k); if (p === afrP) return 5; if (k === 'SPD') return 3; if (k === 'MAP' || k === 'LOAD' || k === 'BOOST' || k === 'MAF') return 1; if (k === 'IGN') return 0.5;
+          if (SLOWK.includes(k)) return x ? 0.5 : 0.12; return x ? 0.8 : FAST.includes(k) ? 0.4 : 0.1; };
+        const cand = this.pidList.filter((p) => p !== rpm && !want.includes(p) && (this.pskip[p] || 0) <= c);
+        for (let n = 0; n < picks && cand.length; n++) {
+          let best = -1, bs = -1;
+          for (let i = 0; i < cand.length; i++) { const sc = (clk + n - (lr[cand[i]] == null ? -30 : lr[cand[i]])) * wt(cand[i]); if (sc > bs) { bs = sc; best = i; } }
+          const p = cand.splice(best, 1)[0]; want.push(p); lr[p] = clk + n;
+        }
+        this.reqClock = clk + want.length;
+        ringN = 0;
       } else {
         // several values per request (CAN): the core values ride along in every request, the free slots rotate through the rest
         const core = ['SPD', 'TPS', 'MAP'].concat(afrKeys).map(has).filter((p) => p != null);
@@ -255,6 +268,11 @@
         if (!want.includes(p) && (this.pskip[p] || 0) <= c) { want.push(p); ringN--; }
       }
       if (!want.length) return null;
+      if (this.single && rpm != null) {          // v1.6.2: one value per request — RPM (then throttle) are asked LAST, so when the cycle ends and the screen updates they are only one request old instead of a whole cycle
+        const tp = has('TPS'), last = [tp, rpm].filter((p) => p != null && want.includes(p));
+        for (const p of last) want.splice(want.indexOf(p), 1);
+        for (const p of last) want.push(p);
+      }
       const d = Object.assign({}, this.last);
       let any = 0;
       for (let i = 0; i < want.length; i += per) {
@@ -280,6 +298,7 @@
       else if (any) this.miss = 0;
       if (c % 40 === 20 && !this.supported.has(0x42) && this.atrvOk) { const l = await this.query('ATRV', 1500); const m = l && /([0-9.]+)\s*V/i.exec(l.join(' ')); if (m) d.BATT = parseFloat(m[1]); }
       this.last = d;
+      if (this.hz && Date.now() - (this.tDiag || (this.tDiag = Date.now() - 10000)) > 15000) { this.tDiag = Date.now(); this.log('info', 'LIVE: ' + this.hz.toFixed(1) + ' รอบ/วินาที · คำสั่งละ ' + Math.round(this.rtt) + ' ms · ' + (this.single ? 'ถามทีละค่า' : 'หลายค่า/คำสั่ง')); }      // for the Log page: the real speed of this adapter + car
       if (Date.now() - this.lastGood > this.deadMs) return null;       // nothing fresh for a long while: do not keep showing old numbers as if they were live
       return Object.assign({}, d);   // OBD keys (P.OBD) feed Dash/Grid directly
     }

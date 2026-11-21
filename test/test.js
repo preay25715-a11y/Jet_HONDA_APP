@@ -172,12 +172,19 @@ const { SimTransport } = require('../src/sim.js');
   { const f = new FakeElm({}), e = new Elm327(f); await e.init(); assert.strictEqual(e.useCnt, true);
     f.digit = false; let d; for (let i = 0; i < 4; i++) d = await e.readLive();
     assert.strictEqual(e.useCnt, false, 'digit dropped'); assert(d.RPM > 600 && d.ECT === 90, 'still reading after fallback'); }
-  // 5) one value per request (ISO/KWP cars): ≤ 5 requests per cycle, RPM + AFR every cycle, every other value still comes round
+  // 5) one value per request (ISO/KWP cars), v1.6.2: ≤ 6 requests per cycle, RPM + throttle every cycle, the AFR source and speed get most of the other slots, every other value still comes round
   { const f = new FakeElm({ noMulti: true, eqr: true, lambda: false }), e = new Elm327(f); await e.init(); assert.strictEqual(e.single, true);
-    f.pidCount = {}; const n0 = f.nreq, N = 60; for (let i = 0; i < N; i++) await e.readLive();
-    assert((f.nreq - n0) / N <= 5.1, 'single-PID requests per cycle ' + (f.nreq - n0) / N);
-    assert.strictEqual(f.pidCount[0x0C], N, 'RPM every cycle'); assert.strictEqual(f.pidCount[0x44], N, 'AFR (PID 44) every cycle');
+    f.pidCount = {}; const n0 = f.nreq, N = 150; for (let i = 0; i < N; i++) await e.readLive();
+    assert((f.nreq - n0) / N <= 6.1, 'single-PID requests per cycle ' + (f.nreq - n0) / N);
+    assert.strictEqual(f.pidCount[0x0C], N, 'RPM every cycle'); assert.strictEqual(f.pidCount[0x11], N, 'throttle every cycle'); assert(f.pidCount[0x44] >= N * 0.6, 'AFR (PID 44) most cycles ' + f.pidCount[0x44]);
+    assert(f.pidCount[0x0D] >= N * 0.4, 'speed often ' + f.pidCount[0x0D]);
     for (const p of e.pidList) assert(f.pidCount[p] >= 1, 'PID ' + p.toString(16) + ' never read'); }
+  // 5b) slow K-line link (100 ms per request): a cycle is RPM + throttle + 1-2 values ≈ 320 ms; throttle as fresh as RPM, AFR and speed next, nothing starved
+  { const f = new FakeElm({ noMulti: true, eqr: true, lambda: false, latency: 100 }), e = new Elm327(f); await e.init(); assert.strictEqual(e.single, true); e.rtt = 100;
+    f.pidCount = {}; const n0 = f.nreq, N = 24, t0 = Date.now(); for (let i = 0; i < N; i++) await e.readLive();
+    const per = (f.nreq - n0) / N; assert(per >= 2.7 && per <= 3.8, 'requests per cycle at 100 ms: ' + per);
+    assert.strictEqual(f.pidCount[0x0C], N, 'RPM every cycle'); assert.strictEqual(f.pidCount[0x11], N, 'throttle every cycle (was 1 in 4)');
+    assert(f.pidCount[0x44] >= N / 4, 'AFR ' + f.pidCount[0x44]); assert(f.pidCount[0x0D] >= N / 5, 'speed ' + f.pidCount[0x0D]); }
   // 6) HONDA-KLINE bridge (own firmware): no count digit, no timing changes
   { const f = new FakeElm({ honda: true, digit: false }), e = new Elm327(f); await e.init();
     assert.strictEqual(e.useCnt, false); assert.strictEqual(e.tuned, false); let d; for (let i = 0; i < 12; i++) d = await e.readLive(); assert(d.RPM > 600 && Math.abs(d.INJ - 6) < 0.01); }
@@ -218,7 +225,7 @@ const { SimTransport } = require('../src/sim.js');
   // 3) one value per request: the chosen source gets the every-cycle slot (auto → O2 when there is no wideband, forced "cmd" → PID 44)
   for (const [pref, pid] of [['auto', 0x14], ['cmd', 0x44], ['o2', 0x14]]) {
     const f = new FakeElm({ noMulti: true, o2V: 0.45, lambda: false, eqr: true }), e = new Elm327(f, {}); e.afrPref = pref; await e.init(); e.afrPref = pref; f.pidCount = {};
-    for (let i = 0; i < 24; i++) await e.readLive(); assert.strictEqual(f.pidCount[pid], 24, 'pref ' + pref + ' reads PID ' + pid.toString(16) + ' every cycle'); }
+    for (let i = 0; i < 24; i++) await e.readLive(); assert(f.pidCount[pid] >= 20, 'pref ' + pref + ' reads PID ' + pid.toString(16) + ' (' + f.pidCount[pid] + '/24 cycles)'); assert(f.pidCount[pid] > (f.pidCount[pid === 0x14 ? 0x44 : 0x14] || 0), 'the chosen source is read more than the other one'); }
   // 4) gentle modes after link drops: 1 = no count digit / AT2, 2 = one value per request, pauses between requests
   { const f = new FakeElm({}), e = new Elm327(f, { safe: 1 }); await e.init(); assert.strictEqual(e.useCnt, false); assert.strictEqual(e.tuned, false); assert.strictEqual(e.single, false); }
   { const f = new FakeElm({}), e = new Elm327(f, { safe: 2 }); await e.init(); assert.strictEqual(e.single, true); assert(e.gap >= 45, 'pause between requests');
@@ -321,5 +328,17 @@ const { SimTransport } = require('../src/sim.js');
     f.pidCount = {}; const n0 = f.nreq, N = 30; for (let i = 0; i < N; i++) await e.readLive();
     const per = (f.nreq - n0) / N; assert(per >= 1.8, 'gentle mode keeps 2+ requests per cycle (' + per + ')'); }
   console.log('v1.5.10 tests passed (CAN: one fast request per cycle, slow values ride along, gentle mode unchanged)');
+  // 5) v1.6.2: one value per request — RPM is asked LAST in every cycle (throttle just before it), so the screen shows them one request old; same for the Honda bridge
+  for (const o of [{ noMulti: true, eqr: true, lambda: false }, { honda: true }]) {
+    const f = new FakeElm(o), e = new Elm327(f); await e.init(); assert.strictEqual(e.single, true);
+    for (let i = 0; i < 12; i++) {                                       // order of the single requests inside one cycle
+      const seen = []; const orig = e._read.bind(e); e._read = async (pids, r) => { seen.push(pids[0]); return orig(pids, r); };
+      await e.readLive(); e._read = orig;
+      assert.strictEqual(seen[seen.length - 1], 0x0C, 'RPM last in the cycle ' + JSON.stringify(seen)); assert.strictEqual(seen[seen.length - 2], 0x11, 'throttle just before RPM ' + JSON.stringify(seen)); } }
+  // 6) the Log page gets a LIVE speed line (cycles/s, ms per request, mode)
+  { const logs = [], f = new FakeElm({ latency: 2 }), e = new Elm327(f, { log: (k, m) => logs.push(m) }); await e.init(); for (let i = 0; i < 6; i++) await e.readLive(); e.tDiag = 1; await e.readLive();
+    assert(logs.some((m) => /^LIVE: [0-9.]+ รอบ\/วินาที · คำสั่งละ \d+ ms · /.test(m)), 'LIVE speed line: ' + JSON.stringify(logs.slice(-3))); }
+  console.log('v1.6.2 tests passed (K-line / single-value links: throttle every cycle, RPM and throttle asked last, speed line in the log)');
+
 
 })().catch((e) => { console.error(e); process.exit(1); });

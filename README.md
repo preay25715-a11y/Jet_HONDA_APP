@@ -181,6 +181,15 @@ android/           แอป Android (MainActivity + JetBridge: USB OTG / BLE / 
 ## v1.3.2
 - Version badge (e.g. `v1.3.3`) placed after "By เปรียวจูนเนอร์" in the header and on the licence screen.
 
+## v1.6.2 — faster, more real-time values on K-line cars (one value per request)
+- **Why K-line cars were slow:** ISO 9141 / KWP / J1850 cars (and gentle mode) answer one value per request, about 6–10 requests per second at best. The old order spent most of them on a long rotation: throttle and speed were read only 1 cycle in 4 (≈ 1 per second), temperatures and MAP almost never.
+- **New order:** **RPM and throttle in every cycle.** The other slots go to the value that is most overdue for its own refresh rate — the AFR source first, then speed, MAP / load / airflow, ignition and the Dash tiles; temperatures, battery, trims and the rest only now and then (never starved). The cycle is about 320 ms on a 100 ms/request link and shorter on a faster one (RPM + throttle + up to 4 more values).
+- **Fresher on screen:** RPM is asked **last** in every cycle and throttle just before it, so when the cycle ends and the screen updates they are one request old instead of a whole cycle (also on the Honda bridge, one value per request).
+- **Log page:** a "LIVE: x.x รอบ/วินาที · คำสั่งละ nn ms · …" line every 15 s shows the real speed of the adapter and the car (send it when something is still slow).
+- Simulator numbers (K-line car, 100 ms per request, **not a real car**): throttle refresh 1.0 → 3.1 per second; RPM 3.2 → 3.1 per second; RPM age on screen 206 → 0 ms and throttle age 427 → 101 ms; speed 1.2 → 1.2 per second, AFR source 3.2 → 1.4 per second, MAP 0.2 → 0.5 per second (the AFR source gives up cycles to the throttle). At 150 ms per request the cycle goes from 2.1 to 2.5 per second. CAN adapters (several values per request) are unchanged.
+- The speed of a K-line link is set by the car's ECU and the adapter (ELM327 asks one value at a time); this version spends the requests where they show — it cannot make the ECU answer faster. **Not verified on a real car.**
+- Tests: node (order of requests inside a cycle, throttle every cycle, AFR/speed shares, slow-link cycle length, LIVE line) + the browser suites re-run unchanged.
+
 ## v1.6.1 — update test release
 - No functional change: the version number only, to test the in-app update (v1.6.0 → v1.6.1, Setup → ตรวจสอบอัปเดต → อัปเดตเลย). The APK keeps the same package name and signing key, and its version code (10601) is higher than v1.6.0's (10600), so Android installs it over the old one with settings and licence kept.
 
