@@ -212,7 +212,7 @@
   };
   const firstEntry = (keys) => { const m = S.bikeMem || {}; for (const k of keys) if (m[k]) return m[k]; return null; };
   const useProfile = (e) => {
-    const b = byId(e.b); S.bike = b && !b.car ? b.id : ''; S.cvt = !e.g; S.gears = e.g; S.rpmMax = e.rm; S.redline = e.rl; S.tankL = e.tk; S.injFlow = e.ij; S.cyl = e.cy; S.gearRatios = e.r; S.gearLearned = !!e.l; S.tpsZ = e.tz != null ? e.tz : null; S.tpsF = e.tf != null ? e.tf : null; tbuf.length = 0;
+    const b = byId(e.b); S.fromCar = false; S.bike = b && !b.car ? b.id : ''; S.cvt = !e.g; S.gears = e.g; S.rpmMax = e.rm; S.redline = e.rl; S.tankL = e.tk; S.injFlow = e.ij; S.cyl = e.cy; S.gearRatios = e.r; S.gearLearned = !!e.l; S.tpsZ = e.tz != null ? e.tz : null; S.tpsF = e.tf != null ? e.tf : null; tbuf.length = 0;
     C.saveS(); refresh(); window.dispatchEvent(new Event('jetvehicle'));
   };
   const neutral = () => useProfile({ b: '', g: 0, rm: 12000, rl: 0, tk: 0, ij: 0, cy: 1, r: '', l: 0 });
@@ -221,7 +221,7 @@
   const DEFAULT_RATIOS = { 4: '150 95 70 56', 5: '150 95 70 56 47', 6: '140 92 68 54 45 38', 7: '140 92 68 54 45 38 33' };
 
   function apply(b, keepCustom) {
-    S.bike = b.id;
+    S.bike = b.id; S.fromCar = !!b.car;
     S.rpmMax = b.rpm; S.cvt = b.gears === 0; S.gears = b.gears;
     if (!keepCustom || !S.gearRatios) S.gearRatios = b.gears ? (b.gset && b.gset.length === b.gears ? b.gset.map((k) => Math.round(1000 / k * 10) / 10).join(' ') : (DEFAULT_RATIOS[b.gears] || DEFAULT_RATIOS[6])) : '';
     S.tankL = b.tank || 0; S.injFlow = b.inj || 0; S.redline = b.red || 0; S.cyl = b.cyl || 1;
@@ -241,6 +241,7 @@
     blk.innerHTML = `<h3 style="margin-top:16px">🏍🚗 รถ</h3><div class="gsect">
       <div class="mut" id="sVeh" style="margin:6px 0;font-size:13px">ต่อรถแล้วแอปจะอ่านรหัสรถและตั้งค่าให้เอง (ค่าด้านล่างปรับเองได้ แอปจำไว้ให้รถแต่ละคัน)</div>
       <div class="row" style="margin:4px 0 8px"><button class="btn" id="sTilesAuto">↺ ช่องหน้าหลัก: ให้แอปเลือกอัตโนมัติ</button></div>
+      <label class="f">ชนิดรถ (ใช้เมื่อแอปแยกเองไม่ได้)<select id="sVehKind"><option value="auto">อัตโนมัติ</option><option value="bike">มอเตอร์ไซค์</option><option value="car">รถยนต์</option></select></label>
       <label class="f">แหล่งค่า AFR (OBD-II)<select id="sAfrSrc"><option value="auto">อัตโนมัติ (Lambda → O2 → ECU สั่ง)</option><option value="wb">Lambda ไวด์แบนด์ (PID 24/34)</option><option value="o2">เซ็นเซอร์ O2 (ค่าประมาณ)</option><option value="cmd">ค่าที่ ECU สั่ง (PID 44)</option></select></label>
       <div class="grid g3">
         <label class="f">จำนวนเกียร์ (0 = ออโต้/CVT)<input id="sGears" type="number" min="0" max="8"></label>
@@ -259,12 +260,13 @@
     </div>`;
     card.insertBefore(blk, anchor);
     const fill = () => {
-      $('#sAfrSrc').value = S.afrSrc || 'auto'; $('#sGears').value = S.gears != null ? S.gears : 6; $('#sRpmMax').value = S.rpmMax || 12000; $('#sRatios').value = S.gearRatios || ''; $('#sTank').value = S.tankL || ''; $('#sInj').value = S.injFlow || ''; $('#sRed').value = S.redline || '';
+      $('#sVehKind').value = S.vehKind || 'auto'; $('#sAfrSrc').value = S.afrSrc || 'auto'; $('#sGears').value = S.gears != null ? S.gears : 6; $('#sRpmMax').value = S.rpmMax || 12000; $('#sRatios').value = S.gearRatios || ''; $('#sTank').value = S.tankL || ''; $('#sInj').value = S.injFlow || ''; $('#sRed').value = S.redline || '';
       const n = +$('#sGears').value; $('#sLg').innerHTML = Array.from({ length: n }, (_, i) => `<option value="${i + 1}">เกียร์ ${i + 1}</option>`).join('');
       $('#gearLearn').style.display = n ? '' : 'none';
     };
     $('#bSet').addEventListener('click', fill);
     window.addEventListener('jetvehicle', fill);                 // the bike's profile was just applied on connect: show it
+    $('#sVehKind').onchange = () => { S.vehKind = $('#sVehKind').value; C.saveS(); toast('ชนิดรถ: ' + $('#sVehKind').selectedOptions[0].textContent + ' — มีผลตอนเชื่อมต่อครั้งถัดไป'); };
     $('#sAfrSrc').onchange = () => { S.afrSrc = $('#sAfrSrc').value; C.saveS(); if (st.t && st.t.kind === 'obd') st.t.afrPref = S.afrSrc; toast('แหล่งค่า AFR: ' + $('#sAfrSrc').selectedOptions[0].textContent); };
     $('#sTilesAuto').onclick = () => { C.resetTiles(); toast('ช่องหน้าหลักกลับเป็นอัตโนมัติแล้ว'); };
     $('#sGears').onchange = () => { S.gears = Math.max(0, Math.min(8, +$('#sGears').value || 0)); S.cvt = S.gears === 0; if (S.gears && !S.gearRatios) S.gearRatios = DEFAULT_RATIOS[S.gears] || DEFAULT_RATIOS[6]; C.saveS(); refresh(); fill(); remember(); };
@@ -301,10 +303,13 @@
   P.setModel = (id) => { const b = byId(id); if (b && !b.car) { apply(b, false); remember(); } return !!b; };   // sets a whole model preset (tests, built-in table)
   P.vehOnObd = (t) => {
     const id = (t && t.ident) || {}, det = id.vin ? P.identifyVin(id.vin) : null, v = { det, fuel: FUELTH(t), model: null, text: '' };
-    if (!t || t.honda || (det && det.moto)) {          // a motorcycle: the ECU's ID / VIN finds this bike's profile (built-in table or remembered numbers)
+    const kind = S.vehKind || 'auto';                   // Setup → ชนิดรถ: auto / bike / car (for adapters that give no VIN)
+    if (!t || t.honda || kind === 'bike' || (kind !== 'car' && (t.bridge || (det && det.moto)))) {          // a motorcycle: the ECU's ID / VIN finds this bike's profile (built-in table or remembered numbers)
       v.bike = !!t;
-      v.text = !t ? '' : t.honda ? 'HONDA PGM-FI (มอเตอร์ไซค์)' : 'Honda มอเตอร์ไซค์' + (det && det.year ? ' ' + det.year : '') + (det && det.country ? ' · ' + det.country : '');
-      v.keys = t ? idKeys(id) : []; st.veh = v;
+      v.text = !t ? '' : t.honda ? 'HONDA PGM-FI (มอเตอร์ไซค์)' : det && det.moto ? 'Honda มอเตอร์ไซค์' + (det.year ? ' ' + det.year : '') + (det.country ? ' · ' + det.country : '') : t.bridge ? 'Honda มอเตอร์ไซค์ (กล่อง HONDA-KLINE)' : 'มอเตอร์ไซค์ (ตั้งชนิดรถไว้เอง)';
+      v.keys = t ? idKeys(id) : [];
+      if (t && !v.keys.length && t.name) v.keys = ['DEV:' + String(t.name)];       // no VIN / ECU id on this bus (CAN / KWP bikes often send none): remember the bike per adapter
+      st.veh = v;
       const mem0 = S.bikeMem && Object.keys(S.bikeMem).length > 0;
       const c0 = byId(S.bike); if (t && !mem0 && (!c0 || c0.car) && S.bikeBack && byId(S.bikeBack)) { apply(byId(S.bikeBack), true); S.bikeUser = true; }   // back on the bike after a car: restore the bike set before
       let how = '';
@@ -313,10 +318,10 @@
         if (hit && hit.builtin) { v.model = hit.b; how = 'ตามตารางรหัสรถในแอป'; apply(hit.b, false); const pe = firstEntry(v.keys); S.tpsZ = pe && pe.tz != null ? pe.tz : null; S.tpsF = pe && pe.tf != null ? pe.tf : null; tbuf.length = 0; C.saveS(); }
         else if (hit) { useProfile(hit.e); v.model = byId(hit.e.b) || null; how = !hit.e.a ? 'ค่าประจำรถคันนี้ที่จำไว้' : hit.e.b || hit.e.g ? 'ใช้ค่าที่ตั้งไว้เดิม (จำให้รถคันนี้แล้ว)' : 'รถคันนี้ยังไม่เคยตั้งค่า (รถไม่ส่งชื่อรุ่นมา) — ใช้ค่ากลาง: ไม่แสดงเกียร์ หน้าปัดขยายเอง ปรับค่าด้านล่างครั้งเดียวแอปจำให้'; }
         else if (!mem0) {                                // the first bike this app has met: the numbers already set (older versions) belong to it
-          const cur = byId(S.bike); if (S.gears == null || (cur && cur.car)) neutral();
+          const cur = byId(S.bike); if (S.gears == null || S.fromCar || (cur && cur.car)) neutral();
           remember(true); v.model = byId(S.bike) || null; how = 'ใช้ค่าที่ตั้งไว้เดิม และจำให้รถคันนี้';
         } else { neutral(); how = 'รถคันนี้ยังไม่เคยตั้งค่า (รถไม่ส่งชื่อรุ่นมา) — ใช้ค่ากลาง: ไม่แสดงเกียร์ หน้าปัดขยายเอง ปรับค่าด้านล่างครั้งเดียวแอปจำให้'; }
-        log('info', 'รหัสรถ: ' + (id.vin ? 'VIN ' + id.vin + ' · ' : '') + (id.cal ? 'ECU ' + id.cal + ' · ' : '') + (v.model ? 'รุ่น ' + v.model.name + ' · ' : '') + how);
+        log('info', 'รหัสรถ: ' + (!id.vin && !id.cal ? 'อแดปเตอร์ ' + t.name + ' · ' : '') + (id.vin ? 'VIN ' + id.vin + ' · ' : '') + (id.cal ? 'ECU ' + id.cal + ' · ' : '') + (v.model ? 'รุ่น ' + v.model.name + ' · ' : '') + how);
       } else if (t) how = 'อ่านรหัสรถไม่ได้ — ใช้ค่าที่ตั้งไว้';
       const el0 = $('#sVeh'); if (el0 && t) el0.textContent = '🔎 ตรวจพบรถ: ' + v.text + (id.vin ? ' · VIN ' + id.vin : '') + (id.cal ? ' · รหัส ECU ' + id.cal : '') + (v.model ? ' → รุ่น ' + v.model.name : '') + (how ? ' (' + how + ')' : '');
       return v;
@@ -339,7 +344,7 @@
       if (v.model) { S.bikeUser = false; apply(v.model, false); }
       else if (cands.length) {
         const red = cands.map((b) => b.red).sort((a, b) => a - b), mid = red[Math.floor(red.length / 2)];
-        S.bike = ''; S.bikeUser = false; S.cvt = true; S.gears = 0; S.gearRatios = ''; S.rpmMax = Math.ceil((Math.max.apply(null, red) + 500) / 1000) * 1000; S.redline = mid; S.tankL = 0; S.injFlow = 0;
+        S.bike = ''; S.bikeUser = false; S.fromCar = true; S.cvt = true; S.gears = 0; S.gearRatios = ''; S.rpmMax = Math.ceil((Math.max.apply(null, red) + 500) / 1000) * 1000; S.redline = mid; S.tankL = 0; S.injFlow = 0;
         C.saveS(); refresh(); window.dispatchEvent(new Event('jetvehicle'));
       }
     }

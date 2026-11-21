@@ -338,6 +338,9 @@ const { SimTransport } = require('../src/sim.js');
   // 6) the Log page gets a LIVE speed line (cycles/s, ms per request, mode)
   { const logs = [], f = new FakeElm({ latency: 2 }), e = new Elm327(f, { log: (k, m) => logs.push(m) }); await e.init(); for (let i = 0; i < 6; i++) await e.readLive(); e.tDiag = 1; await e.readLive();
     assert(logs.some((m) => /^LIVE: [0-9.]+ รอบ\/วินาที · คำสั่งละ \d+ ms · /.test(m)), 'LIVE speed line: ' + JSON.stringify(logs.slice(-3))); }
+  // 7) v1.6.3: the HONDA-KLINE box is a motorcycle on any bus (CAN, KWP, Honda tables); other adapters are not
+  for (const [o, nm, want, label] of [[{}, 'OBD HONDA-KLINE', true, 'box on CAN'], [{ noMulti: true, kwp: true }, 'OBD HONDA-KLINE', true, 'box on KWP'], [{ honda: true }, 'OBD ELM327', true, 'Honda tables'], [{}, 'OBD OBDII', false, 'blue ELM327 on CAN'], [{ noMulti: true, kwp: true }, 'OBD KONNWEI', false, 'KONNWEI on KWP']]) {
+    const f = new FakeElm(o), e = new Elm327(f, { name: nm }); await e.init(); assert.strictEqual(e.bridge, want, label + ': bridge flag ' + e.bridge); }
   console.log('v1.6.2 tests passed (K-line / single-value links: throttle every cycle, RPM and throttle asked last, speed line in the log)');
 
 

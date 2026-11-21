@@ -107,6 +107,7 @@
       if (!ok) { this.state = 'NOECU'; throw new Error('ต่อ ELM327 ได้ แต่ไม่เจอ ECU — เปิดสวิตช์กุญแจ (ON) แล้วลองใหม่' + (this.last0100 ? ' (ELM ตอบ: ' + this.last0100 + ')' : '')); }
       const pr = await this.query('ATDPN', 1500); this.proto = pr ? pr.join('').replace(/^A/, '') : '';
       this.honda = /^H/.test(this.proto);          // HONDA-KLINE bridge speaking the Honda PGM-FI tables (protocol 'H')
+      this.bridge = this.honda || /HONDA/i.test(this.name || '');      // v1.6.3: the HONDA-KLINE box is only ever plugged into a Honda motorcycle — also when it talks CAN or KWP to the bike (not the Honda tables)
       this.single = !/^[6-9]/.test(this.proto) || this.safe >= 2;    // several PIDs per request only work on CAN; older ISO/KWP/J1850 cars need one PID per request (also: adapter that keeps dropping → gentlest mode)
       if (this.honda && this.safe < 2) {                 // newer bridge firmware answers "010C11…" with all the values in one line: one round trip for the whole cycle instead of one per value
         const l = await this.query('010C11', 1500), j = l ? this._join(l) : [];

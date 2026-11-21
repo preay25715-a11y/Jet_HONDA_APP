@@ -181,6 +181,14 @@ android/           แอป Android (MainActivity + JetBridge: USB OTG / BLE / 
 ## v1.3.2
 - Version badge (e.g. `v1.3.3`) placed after "By เปรียวจูนเนอร์" in the header and on the licence screen.
 
+## v1.6.3 — Honda motorcycles on CAN and KWP (standard OBD-II) are recognised as motorcycles
+- **What was missing:** a Honda bike on CAN (ISO 15765) or KWP2000 (ISO 14230) was read correctly, but the app treated it as a bike only if it sent a Honda VIN. Many bikes send none; the app then used the car logic (car dial scale, car Dash tiles, throttle not shown as 0–100 %).
+- **HONDA-KLINE box = motorcycle on any bus:** the box is only ever plugged into a Honda bike, so when it talks CAN or KWP to the bike (not the Honda tables) it is now treated as a motorcycle too. Same result as before for the Honda tables.
+- **Setup → รถ → "ชนิดรถ" (อัตโนมัติ / มอเตอร์ไซค์ / รถยนต์):** for other adapters (ELM327, KONNWEI) when the app cannot tell. Default is automatic (VIN or the box decide). "มอเตอร์ไซค์" gives the bike treatment (throttle 0–100 % learning, motorcycle Dash tiles, per-bike profile); "รถยนต์" forces the car logic. Takes effect at the next connection.
+- **Bike without ECU id / VIN:** its settings (gears, dial, tank …) are remembered per adapter (`DEV:<adapter name>`), like the VIN / ECU id profiles.
+- **Bug fixed:** the first motorcycle connected after a car no longer inherits the car's generic dial scale and redline (it starts with the neutral bike profile: dial 12000 rpm that widens by itself, no redline).
+- Tests: node (bridge flag per adapter / bus) + browser suite for CAN / KWP bikes (auto → car, forced bike, box on CAN and on KWP, forced car, Honda VIN, throttle 0 % on a forced bike, neutral first bike after a car) and the earlier suites re-run. **Not verified on a real bike** — whether a given bike answers standard OBD-II at all depends on the model and the cable.
+
 ## v1.6.2 — faster, more real-time values on K-line cars (one value per request)
 - **Why K-line cars were slow:** ISO 9141 / KWP / J1850 cars (and gentle mode) answer one value per request, about 6–10 requests per second at best. The old order spent most of them on a long rotation: throttle and speed were read only 1 cycle in 4 (≈ 1 per second), temperatures and MAP almost never.
 - **New order:** **RPM and throttle in every cycle.** The other slots go to the value that is most overdue for its own refresh rate — the AFR source first, then speed, MAP / load / airflow, ignition and the Dash tiles; temperatures, battery, trims and the rest only now and then (never starved). The cycle is about 320 ms on a 100 ms/request link and shorter on a faster one (RPM + throttle + up to 4 more values).

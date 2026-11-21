@@ -310,7 +310,8 @@
     const rest = Object.keys(CH).filter((k) => keys.has(k) && !used.has(k) && !['RPM', 'SPD', 'TPS', 'GEAR', 'CRP', 'O2'].includes(k));
     return out.map((k, i) => k || rest.shift() || DEF_TILES[i]);
   }
-  const profile = () => (st.t && st.t.kind === 'obd' ? (st.t.honda ? 'b' : st.t.fuel === 'd' ? 'd' : 'g') : 'b');
+  const isBike = (t) => !!(t && (t.honda || (st.veh && st.veh.bike)));
+  const profile = () => (st.t && st.t.kind === 'obd' ? (isBike(st.t) ? 'b' : st.t.fuel === 'd' ? 'd' : 'g') : 'b');
   function tilesNow() {
     const pf = profile(), c = S.tilesBy && S.tilesBy[pf];
     if (Array.isArray(c) && c.length === 6) return c;
@@ -334,7 +335,7 @@
   // after an OBD connection: identify the car, choose the tiles, poll the chosen channels fast
   function onObdReady(t) {
     try { P.vehOnObd(t); } catch (e) { log('err', 'ระบุรุ่นรถไม่สำเร็จ: ' + e.message); }
-    const keys = t.channelKeys(), pf = t.honda ? 'b' : t.fuel === 'd' ? 'd' : 'g';
+    const keys = t.channelKeys(), pf = isBike(t) ? 'b' : t.fuel === 'd' ? 'd' : 'g';
     st.autoTiles = autoTiles(keys, pf);
     t.afrPref = S.afrSrc || 'auto';
     t.watch(st.autoTiles.concat(['LAMB', 'EQR', 'O2', 'STFT1', 'LTFT1']));
