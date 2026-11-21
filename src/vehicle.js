@@ -187,12 +187,13 @@
    *   KNOWN_IDS = built-in table (ID -> model id): a listed bike gets the whole model preset on connect (filled from real bikes — see README)
    *   S.bikeMem = per-bike profile bound to the ID: gears / dial / redline / tank / injectors / ratios the owner changed or learned (+ the model when it came from the table)
    * A bike that is in neither gets the neutral profile (no gear display, dial that grows by itself) until its numbers are set once in Setup. */
+  const tbuf = [];                                     // last raw throttle samples (closed-throttle learning)
   const KNOWN_IDS = {};
   P.KNOWN_IDS = KNOWN_IDS;
   const idKeys = (id) => [].concat(id && id.cal ? ['ECU:' + String(id.cal).toUpperCase()] : [], id && id.vin ? ['VIN:' + String(id.vin).toUpperCase().slice(0, 8)] : []);
   const snap = (adopt) => {
     const b = byId(S.bike);
-    return { b: b && !b.car ? b.id : '', g: S.gears != null ? S.gears : 0, rm: S.rpmMax || 12000, rl: S.redline || 0, tk: S.tankL || 0, ij: S.injFlow || 0, cy: S.cyl || 1, r: S.gearRatios || '', l: S.gearLearned ? 1 : 0, t: Date.now(), a: adopt ? 1 : 0 };
+    return { b: b && !b.car ? b.id : '', g: S.gears != null ? S.gears : 0, rm: S.rpmMax || 12000, rl: S.redline || 0, tk: S.tankL || 0, ij: S.injFlow || 0, cy: S.cyl || 1, r: S.gearRatios || '', l: S.gearLearned ? 1 : 0, tz: S.tpsZ != null ? S.tpsZ : null, tf: S.tpsF != null ? S.tpsF : null, t: Date.now(), a: adopt ? 1 : 0 };
   };
   const savedProfile = (keys) => {
     const m = S.bikeMem || {};
@@ -204,12 +205,14 @@
   const remember = (adopt) => {                  // bind the profile that is on screen to the connected bike's ID
     const keys = st.veh && st.veh.bike && st.veh.keys; if (!keys || !keys.length) return;
     const b = byId(S.bike); if (b && b.car) return;
-    const m = (S.bikeMem = S.bikeMem || {}), e = snap(adopt); keys.forEach((k) => { m[k] = e; });
+    const m = (S.bikeMem = S.bikeMem || {}), prev = keys.map((k) => m[k]).find(Boolean), e = snap(adopt && (!prev || prev.a));
+    keys.forEach((k) => { m[k] = e; });
     const all = Object.keys(m); if (all.length > 60) all.sort((x, y) => m[x].t - m[y].t).slice(0, all.length - 60).forEach((k) => delete m[k]);
     C.saveS();
   };
+  const firstEntry = (keys) => { const m = S.bikeMem || {}; for (const k of keys) if (m[k]) return m[k]; return null; };
   const useProfile = (e) => {
-    const b = byId(e.b); S.bike = b && !b.car ? b.id : ''; S.cvt = !e.g; S.gears = e.g; S.rpmMax = e.rm; S.redline = e.rl; S.tankL = e.tk; S.injFlow = e.ij; S.cyl = e.cy; S.gearRatios = e.r; S.gearLearned = !!e.l;
+    const b = byId(e.b); S.bike = b && !b.car ? b.id : ''; S.cvt = !e.g; S.gears = e.g; S.rpmMax = e.rm; S.redline = e.rl; S.tankL = e.tk; S.injFlow = e.ij; S.cyl = e.cy; S.gearRatios = e.r; S.gearLearned = !!e.l; S.tpsZ = e.tz != null ? e.tz : null; S.tpsF = e.tf != null ? e.tf : null; tbuf.length = 0;
     C.saveS(); refresh(); window.dispatchEvent(new Event('jetvehicle'));
   };
   const neutral = () => useProfile({ b: '', g: 0, rm: 12000, rl: 0, tk: 0, ij: 0, cy: 1, r: '', l: 0 });
@@ -247,6 +250,9 @@
         <label class="f">หัวฉีด รวม (cc/นาที)<input id="sInj" type="number" step="5" min="0"></label>
         <label class="f">รอบเรดไลน์ (rpm)<input id="sRed" type="number" step="100" min="0"></label>
       </div>
+      <div class="mut" style="margin-top:10px;font-size:13px">ปีกผีเสื้อ (TPS): ปิดคันเร่ง = 0% ถึงบิดสุด = 100% — แอปเรียนรู้จุด 0% เอง (ตอนปิดคันเร่งนิ่งๆ) ตั้งเองได้ที่นี่ แอปจำไว้ให้รถแต่ละคัน</div>
+      <div class="row" style="margin:4px 0 0;flex-wrap:wrap;gap:6px"><button class="btn" id="sTps0">ตั้ง 0% ตอนนี้ (ปิดคันเร่ง)</button><button class="btn" id="sTps1">ตั้ง 100% ตอนนี้ (บิดสุด)</button><button class="btn" id="sTpsC">ล้างค่า TPS</button></div>
+      <div class="mut" id="sTpsMsg" style="margin:6px 0;font-size:13px"></div>
       <div class="row" id="gearLearn" style="margin-top:8px;align-items:center"><span class="mut">เรียนรู้เกียร์:</span>
         <select id="sLg"></select><button class="btn" id="sLgGo">บันทึกเกียร์นี้ (ขับค้างเกียร์ไว้ 2 วิ)</button></div>
       <div class="mut" id="sLgMsg" style="margin-top:6px;font-size:13px"></div>
@@ -264,6 +270,14 @@
     $('#sGears').onchange = () => { S.gears = Math.max(0, Math.min(8, +$('#sGears').value || 0)); S.cvt = S.gears === 0; if (S.gears && !S.gearRatios) S.gearRatios = DEFAULT_RATIOS[S.gears] || DEFAULT_RATIOS[6]; C.saveS(); refresh(); fill(); remember(); };
     $('#sRpmMax').onchange = () => { S.rpmMax = Math.max(3000, +$('#sRpmMax').value || 12000); C.saveS(); remember(); window.dispatchEvent(new Event('jetvehicle')); };
     $('#sRatios').onchange = () => { S.gearRatios = $('#sRatios').value.trim(); S.gearLearned = true; C.saveS(); remember(); };
+    const tpsMsg = () => {
+      const m = $('#sTpsMsg'); if (!m) return;
+      m.textContent = lastRaw == null ? 'TPS: ยังไม่มีค่า — เชื่อมต่อและกด LIVE' : 'TPS ดิบ ' + lastRaw.toFixed(1) + '% · 0% ที่ ' + (S.tpsZ != null ? S.tpsZ.toFixed(1) + '%' : 'ยังไม่เรียนรู้') + ' · 100% ที่ ' + (S.tpsF != null ? S.tpsF.toFixed(1) + '%' : '100% (ค่าตั้งต้น)');
+    };
+    P.tpsMsg = tpsMsg; setInterval(() => { if ($('#mSet') && $('#mSet').classList.contains('show')) tpsMsg(); }, 700);
+    $('#sTps0').onclick = () => { if (lastRaw == null) { toast('ยังไม่มีค่า TPS — เชื่อมต่อและกด LIVE ก่อน'); return; } S.tpsZ = Math.round(lastRaw * 10) / 10; if (S.tpsF != null && S.tpsF <= S.tpsZ + 20) S.tpsF = null; C.saveS(); remember(); tpsMsg(); toast('ตั้ง TPS 0% = ' + S.tpsZ.toFixed(1) + '% (ดิบ) แล้ว'); };
+    $('#sTps1').onclick = () => { if (lastRaw == null) { toast('ยังไม่มีค่า TPS — เชื่อมต่อและกด LIVE ก่อน'); return; } const z = S.tpsZ != null ? S.tpsZ : 0; if (lastRaw < z + 20) { toast('บิดคันเร่งสุดค้างไว้ก่อน แล้วกดอีกครั้ง'); return; } S.tpsF = Math.round(lastRaw * 10) / 10; C.saveS(); remember(); tpsMsg(); toast('ตั้ง TPS 100% = ' + S.tpsF.toFixed(1) + '% (ดิบ) แล้ว'); };
+    $('#sTpsC').onclick = () => { S.tpsZ = null; S.tpsF = null; tbuf.length = 0; C.saveS(); remember(); tpsMsg(); toast('ล้างค่า TPS แล้ว — แอปจะเรียนรู้จุด 0% ใหม่เอง'); };
     $('#sTank').onchange = () => { S.tankL = Math.max(0, +$('#sTank').value || 0); C.saveS(); remember(); };
     $('#sInj').onchange = () => { S.injFlow = Math.max(0, +$('#sInj').value || 0); C.saveS(); remember(); };
     $('#sRed').onchange = () => { S.redline = Math.max(0, +$('#sRed').value || 0); C.saveS(); remember(); window.dispatchEvent(new Event('jetvehicle')); };
@@ -296,8 +310,8 @@
       let how = '';
       if (t && v.keys.length) {
         const hit = savedProfile(v.keys);
-        if (hit && hit.builtin) { v.model = hit.b; how = 'ตามตารางรหัสรถในแอป'; apply(hit.b, false); }
-        else if (hit) { useProfile(hit.e); v.model = byId(hit.e.b) || null; how = hit.e.a ? 'ใช้ค่าที่ตั้งไว้เดิม (จำให้รถคันนี้แล้ว)' : 'ค่าประจำรถคันนี้ที่จำไว้'; }
+        if (hit && hit.builtin) { v.model = hit.b; how = 'ตามตารางรหัสรถในแอป'; apply(hit.b, false); const pe = firstEntry(v.keys); S.tpsZ = pe && pe.tz != null ? pe.tz : null; S.tpsF = pe && pe.tf != null ? pe.tf : null; tbuf.length = 0; C.saveS(); }
+        else if (hit) { useProfile(hit.e); v.model = byId(hit.e.b) || null; how = !hit.e.a ? 'ค่าประจำรถคันนี้ที่จำไว้' : hit.e.b || hit.e.g ? 'ใช้ค่าที่ตั้งไว้เดิม (จำให้รถคันนี้แล้ว)' : 'รถคันนี้ยังไม่เคยตั้งค่า (รถไม่ส่งชื่อรุ่นมา) — ใช้ค่ากลาง: ไม่แสดงเกียร์ หน้าปัดขยายเอง ปรับค่าด้านล่างครั้งเดียวแอปจำให้'; }
         else if (!mem0) {                                // the first bike this app has met: the numbers already set (older versions) belong to it
           const cur = byId(S.bike); if (S.gears == null || (cur && cur.car)) neutral();
           remember(true); v.model = byId(S.bike) || null; how = 'ใช้ค่าที่ตั้งไว้เดิม และจำให้รถคันนี้';
@@ -335,9 +349,27 @@
   };
 
   /* ---------- derived values (only when the ECU/gauge does not provide them) ---------- */
-  let baro = null, runStart = null, lastT = null, dist = 0, o2f = null, o2t = 0, over = 0;
+  let baro = null, runStart = null, lastT = null, dist = 0, o2f = null, o2t = 0, over = 0, lastRaw = null;
+  /* throttle: the ECU reports the sensor itself (closed throttle ≈ 10-12 %). The app learns the closed position (lowest value that stays steady) and shows 0 % there, 100 % at full throttle.
+   * Cars are left alone (their own absolute/relative throttle PIDs). The calibration is kept per bike (see snap/useProfile) */
+  const tpsHook = (d) => {
+    if (d.TPS == null || !isFinite(d.TPS) || (st.veh && !st.veh.bike)) return;
+    const raw = +d.TPS; lastRaw = raw; d.TPSraw = raw;
+    tbuf.push(raw); if (tbuf.length > 8) tbuf.shift();
+    if (tbuf.length >= 8) {
+      let lo = 1e9, hi = -1e9; for (const x of tbuf) { if (x < lo) lo = x; if (x > hi) hi = x; }
+      if (hi - lo <= 1.0) {                                // steady for 8 samples: a resting throttle
+        const m = tbuf.slice().sort((a, b) => a - b)[4];
+        if (m < 40 && (S.tpsZ == null || m < S.tpsZ - 0.25)) { S.tpsZ = Math.round(m * 10) / 10; if (S.tpsF != null && S.tpsF <= S.tpsZ + 20) S.tpsF = null; C.saveS(); remember(true); }
+      }
+    }
+    const z = S.tpsZ; if (z == null) return;
+    const full = S.tpsF != null && S.tpsF > z + 20 ? S.tpsF : 100, x = raw - z;
+    d.TPS = x < 0.8 ? 0 : Math.max(0, Math.min(100, x / (full - z) * 100));
+  };
   const hook = (d) => {
     const now = d.t || Date.now();
+    tpsHook(d);
     // a dial scale that is too small (bike not in the table): five samples in a row near the end of the scale -> widen it, remembered for this bike
     if (d.RPM > 0 && d.RPM < 20000 && S.rpmMax > 0 && S.rpmMax < 16000 && d.RPM > S.rpmMax * 0.97) {
       if (++over >= 5) { over = 0; S.rpmMax = Math.min(16000, Math.ceil(d.RPM * 1.1 / 1000) * 1000); C.saveS(); remember(); window.dispatchEvent(new Event('jetvehicle')); }

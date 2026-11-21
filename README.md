@@ -181,6 +181,13 @@ android/           แอป Android (MainActivity + JetBridge: USB OTG / BLE / 
 ## v1.3.2
 - Version badge (e.g. `v1.3.3`) placed after "By เปรียวจูนเนอร์" in the header and on the licence screen.
 
+## v1.5.9 — throttle starts at 0 %, faster Honda bridge readings
+- **Throttle (TPS) 0–100 %:** the ECU reports the sensor itself (closed throttle ≈ 10–12 %). The app now learns the closed position — the lowest value that stays steady for 8 samples (jitter and one-sample glitches are ignored, a part-throttle hold never lowers it) — and shows **0.0 % with the throttle closed**, 100 % at full throttle, linear in between. Dash value, bar, AFR-log throttle columns and the logs all use the corrected value (`TPSraw` keeps the raw one).
+- **Setup → TPS:** "ตั้ง 0% ตอนนี้" / "ตั้ง 100% ตอนนี้ (บิดสุด)" / "ล้างค่า TPS", with the raw value shown. The default 100 % point is raw 100 %; set it with the button if the bike's raw value at full throttle is lower. The calibration is kept per bike (same ECU-ID profile as v1.5.8). Cars keep their own throttle values.
+- **Honda bridge, current firmware (one value per request):** RPM, throttle, MAP and speed are read in **every** cycle (before, throttle/speed took turns with other values); temperatures, injector, O2 and battery rotate in the remaining 1–2 slots.
+- **Honda bridge, combined requests:** at connection the app asks `010C11`; a bridge that answers both values in one line is switched to combined mode automatically (all values in 1–2 requests per cycle instead of 5–6). The bridge firmware needs a small change for that (answer every PID of the request, up to 6) — until it is flashed nothing changes for the user.
+- Tests: node (per-cycle PIDs, request count, multi-value bridge detection) + browser (zero learned from the live stream, steady/jitter/glitch rules, per-bike restore, manual buttons, cars untouched). **Not verified on a real bike.**
+
 ## v1.5.8 — no model picker: the app sets itself up from the bike
 - **Removed:** the "เลือกรุ่นรถ" list in Setup. The ECU does not report a model name (neither the Honda K-line table nor OBD-II Mode 09 carries one for these bikes), so the app works from what the bike does send: its ECU ID (or the VIN's first 8 characters).
 - **Per-bike profile:** gears (0 = auto/CVT), dial scale, redline, tank, injector flow and gear ratios are remembered for each bike's ID. Change them once in Setup (or learn the ratios) and they come back by themselves on the next connection; a second bike has its own set. Whatever was set in earlier versions (including a model chosen from the old list) moves to the first bike that connects.

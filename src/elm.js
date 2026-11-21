@@ -49,7 +49,7 @@
       o = o || {};
       this.kind = 'obd'; this.name = o.name || 'ELM327'; this.via = 'bt'; this.s = stream; this.state = 'OFF';
       this.buf = ''; this.waiter = null; this.supported = new Set(); this.cycle = 0; this.last = {}; this.log = o.log || (() => {});
-      this.fuel = 'g'; this.proto = ''; this.ver = ''; this.single = false; this.honda = false; this.shortCnt = 0; this.fuelType = 1; this.hybrid = false; this.stoich = 14.7; this.ident = {}; this.extraFast = new Set(); this.atrvOk = false; this.useCnt = false; this.tuned = false; this.miss = 0; this.rtt = 80; this.rp = 0; this.ringKey = ''; this.ring = []; this.clone = !!o.clone; this.liveTO = 1500; this.hz = 0; this.tPrev = 0; this.opts = o; this.pfail = {}; this.pskip = {}; this.multiBad = 0; this.afrPref = o.afrPref || 'auto'; this.safe = o.safe || 0; this.gap = [0, 25, 50][Math.min(2, this.safe)]; this.lastGood = 0; this.deadMs = o.deadMs || 8000; this.stats = { tx: 0, rx: 0, retry: 0, bad: 0 };
+      this.fuel = 'g'; this.proto = ''; this.ver = ''; this.single = false; this.honda = false; this.hondaMulti = false; this.shortCnt = 0; this.fuelType = 1; this.hybrid = false; this.stoich = 14.7; this.ident = {}; this.extraFast = new Set(); this.atrvOk = false; this.useCnt = false; this.tuned = false; this.miss = 0; this.rtt = 80; this.rp = 0; this.ringKey = ''; this.ring = []; this.clone = !!o.clone; this.liveTO = 1500; this.hz = 0; this.tPrev = 0; this.opts = o; this.pfail = {}; this.pskip = {}; this.multiBad = 0; this.afrPref = o.afrPref || 'auto'; this.safe = o.safe || 0; this.gap = [0, 25, 50][Math.min(2, this.safe)]; this.lastGood = 0; this.deadMs = o.deadMs || 8000; this.stats = { tx: 0, rx: 0, retry: 0, bad: 0 };
       stream.onData = (u) => this._rx(u);
       stream.onLost = (why) => { this.state = 'OFF'; if (this.waiter) { const w = this.waiter; this.waiter = null; w(null); } if (this.onLost) this.onLost(why); };    // a pending request ends now, not after its timeout
     }
@@ -106,6 +106,11 @@
       const pr = await this.query('ATDPN', 1500); this.proto = pr ? pr.join('').replace(/^A/, '') : '';
       this.honda = /^H/.test(this.proto);          // HONDA-KLINE bridge speaking the Honda PGM-FI tables (protocol 'H')
       this.single = !/^[6-9]/.test(this.proto) || this.safe >= 2;    // several PIDs per request only work on CAN; older ISO/KWP/J1850 cars need one PID per request (also: adapter that keeps dropping → gentlest mode)
+      if (this.honda && this.safe < 2) {                 // newer bridge firmware answers "010C11…" with all the values in one line: one round trip for the whole cycle instead of one per value
+        const l = await this.query('010C11', 1500), j = l ? this._join(l) : [];
+        this.hondaMulti = j.some((h) => /^410C[0-9A-F]{4}11[0-9A-F]{2}/.test(h));
+        if (this.hondaMulti) { this.single = false; this.log('info', 'บริดจ์ Honda ตอบหลายค่าต่อคำสั่ง — อ่านเร็วขึ้น'); }
+      }
       this.liveTO = /^[6-9]/.test(this.proto) && !this.safe ? 800 : 1500;      // CAN answers in milliseconds: a silent adapter is noticed quickly
       if (/^[3-5]$/.test(this.proto)) await this.query('ATST64', 1000);      // slow K-line ECUs: allow 400 ms for an answer
       await this._scan();
@@ -217,11 +222,16 @@
       const rpm = has('RPM'), AK = { wb: 'LAMB', o2: 'O2', cmd: 'EQR' }[this.afrPref], afrKeys = ['LAMB', 'O2', 'EQR'].filter((k) => has(k) && !(k === 'O2' && this.fuel === 'd'));
       const afrP = has(AK && afrKeys.includes(AK) ? AK : afrKeys[0]);       // the AFR source the Dash is going to use gets the every-cycle slot (single-value cars)
       const per = this.single ? 1 : MAX_PER_REQ;
-      const reqs = this.single ? Math.max(3, Math.min(5, Math.round(300 / Math.max(20, this.rtt)))) : Math.max(1, Math.min(this.safe ? 2 : 3, Math.round(150 / Math.max(20, this.rtt))));
+      const reqs = this.single ? (this.honda ? Math.max(5, Math.min(6, Math.round(240 / Math.max(20, this.rtt)))) : Math.max(3, Math.min(5, Math.round(300 / Math.max(20, this.rtt))))) : Math.max(1, Math.min(this.safe ? 2 : 3, Math.round(150 / Math.max(20, this.rtt))));
       const slots = reqs * per, want = [], add = (p) => { if (p != null && !want.includes(p) && (p === rpm || (this.pskip[p] || 0) <= c)) want.push(p); };      // a PID that keeps answering nothing sits out for a while
       let ringN = 0;
       add(rpm);
-      if (this.single) {
+      if (this.single && this.honda) {
+        // HONDA-KLINE bridge, one value per request (every value comes out of the same table cache): RPM, throttle, MAP and speed in EVERY cycle, the others (temperatures, injector, O2, battery) rotate in the free slots
+        for (const k of ['TPS', 'MAP', 'SPD']) add(has(k));
+        ringN = Math.max(0, slots - want.length);
+        this._mkRing(want.slice());
+      } else if (this.single) {
         // one value per request: RPM + AFR every cycle, the next slots cycle through TPS → SPD → two rotating values (MAP, temperatures, …)
         add(afrP);
         const extra = Math.max(0, slots - want.length), L = ['TPS', 'SPD'].map(has).filter((p) => p != null); L.push('*', '*');
@@ -367,7 +377,7 @@
   class FakeElm {
     // o: { diesel, honda, noMulti, lambda(false = no PID 24/34), eqr(true = has commanded lambda 44), vin, kwp(VIN as ISO lines), cal }
     constructor(o) {
-      o = o || {}; this.diesel = !!o.diesel; this.noMulti = !!o.noMulti || !!o.honda; this.hondaBridge = !!o.honda; this.lambda = o.lambda !== false; this.eqr = !!o.eqr;
+      o = o || {}; this.diesel = !!o.diesel; this.noMulti = !!o.noMulti || (!!o.honda && !o.hmulti); this.plainMulti = !!o.honda && !!o.hmulti; this.hondaBridge = !!o.honda; this.lambda = o.lambda !== false; this.eqr = !!o.eqr;
       this.vin = o.vin || ''; this.kwp = !!o.kwp; this.cal = o.cal || ''; this.latency = o.latency || 0; this.wait = o.wait == null ? 0 : o.wait; this.digit = o.digit !== false; this.at2 = o.atat2 !== false; this.zFail = o.zFail || 0; this.dtcMode = o.dtc || ''; this.clear04 = o.clear04 || ''; this.deaf = new Set(o.deaf || []); this.junk = new Set(o.junk || []); this.partial = o.partial || 0; this.sent = []; this.o2V = o.o2V == null ? null : o.o2V; this.needSp = o.needSp == null ? null : String(o.needSp); this.sp = '0'; this.plainMulti = !!o.plainMulti; this.nreq = 0; this.pidCount = {}; this.t = 0; this.buf = ''; this.dtc = ['P0301', 'P0420']; this.cleared = false;
     }
     write(bytes) {

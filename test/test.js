@@ -287,3 +287,24 @@ const { SimTransport } = require('../src/sim.js');
   { const f = new FakeElm({ needSp: 3, noMulti: true, eqr: true }), e = new Elm327(f); await e.init(); f.sent.length = 0; await e.readDTC(); assert.strictEqual(f.sent[f.sent.length - 1], 'ATST64', 'K-line ST restored: ' + f.sent.slice(-3)); }
   console.log('v1.5.6 tests passed (DTC: padded / multi-frame / count byte, clear with long timeout, reasons, sticky fault)');
 })().catch((x) => { console.error(x); process.exit(1); });
+
+// ---- v1.5.9: Honda bridge — fast values every cycle; several values per request when the firmware allows it ----
+(async () => {
+  const assert = require('assert'), { Elm327, FakeElm } = require('../src/elm.js');
+  // 1) bridge that answers one value per request (current firmware): RPM, TPS, MAP and SPD are in EVERY cycle, a cycle is 5-6 requests
+  { const f = new FakeElm({ honda: true, latency: 1 }), e = new Elm327(f); await e.init();
+    assert.strictEqual(e.honda, true); assert.strictEqual(e.hondaMulti, false, 'old bridge: no combined requests'); assert.strictEqual(e.single, true);
+    f.pidCount = {}; const n0 = f.nreq, N = 30; let d; for (let i = 0; i < N; i++) d = await e.readLive();
+    for (const p of [0x0C, 0x11, 0x0B, 0x0D]) assert.strictEqual(f.pidCount[p], N, 'PID ' + p.toString(16) + ' read every cycle (' + f.pidCount[p] + ')');
+    const per = (f.nreq - n0) / N; assert(per >= 5 && per <= 6.2, 'requests per cycle ' + per);
+    assert(d.RPM > 600 && d.TPS > 10 && d.SPD === 62 && d.MAP === 50, 'live ' + JSON.stringify(d));
+    for (const p of [0x05, 0x0F, 0xD1]) assert(f.pidCount[p] >= 3, 'rotating value ' + p.toString(16) + ' still comes round (' + f.pidCount[p] + ')'); }
+  // 2) bridge with the multi-value firmware: found by the probe, the whole cycle takes 2 requests or fewer, every value every cycle
+  { const f = new FakeElm({ honda: true, hmulti: true, latency: 1 }), e = new Elm327(f); await e.init();
+    assert.strictEqual(e.hondaMulti, true, 'combined requests detected'); assert.strictEqual(e.single, false);
+    f.pidCount = {}; const n0 = f.nreq, N = 30; let d; for (let i = 0; i < N; i++) d = await e.readLive();
+    const per = (f.nreq - n0) / N; assert(per <= 2.2, 'requests per cycle with multi ' + per);
+    for (const p of [0x0C, 0x11, 0x0B, 0x0D, 0x05, 0x0F]) assert(f.pidCount[p] >= N - 1, 'PID ' + p.toString(16) + ' every cycle (' + f.pidCount[p] + ')');
+    assert.strictEqual(e.single, false, 'stays in combined mode'); assert(d.RPM > 600 && d.TPS > 10 && d.SPD === 62 && d.ECT === 90, 'live ' + JSON.stringify(d)); }
+  console.log('v1.5.9 tests passed (Honda bridge: fast values every cycle, combined requests detected)');
+})().catch((e) => { console.error(e); process.exit(1); });
