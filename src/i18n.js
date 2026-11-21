@@ -59,6 +59,7 @@
     ['🚗 OBD-II: ยังไม่เชื่อม', '🚗 OBD-II: not connected'], ['🚗 OBD-II:', '🚗 OBD-II:'], ['ดีเซล', 'Diesel'], ['เบนซิน', 'Petrol'],
     ['เลือกอุปกรณ์ Bluetooth…', 'Choose a Bluetooth device…'], ['เชื่อม OBD-II แล้ว', 'OBD-II connected'], ['ตัดการเชื่อมต่อ OBD แล้ว', 'OBD disconnected'],
     ['OBD หลุดการเชื่อมต่อ', 'OBD connection lost'], ['เชื่อม ELM327 ได้เฉพาะในแอป Android', 'ELM327 works only in the Android app'],
+    ['🏍🚗 รถ', '🏍🚗 Vehicle'], ['ต่อรถแล้วแอปจะอ่านรหัสรถและตั้งค่าให้เอง (ค่าด้านล่างปรับเองได้ แอปจำไว้ให้รถแต่ละคัน)', 'Connect to the vehicle and the app reads its ID and sets itself up (the values below can be changed; the app remembers them per vehicle)'],
     ['🏍 รุ่นรถ', '🏍 Vehicle'], ['เลือกรุ่น Honda', 'Choose Honda model'], ['— เลือกรุ่น —', '— choose model —'], ['รถครอบครัว / Cub', 'Family / Cub'], ['สกู๊ตเตอร์ (CVT)', 'Scooters (CVT)'],
     ['มินิไบค์ / Retro', 'Mini / Retro'], ['สปอร์ต / เนคเก็ต', 'Sport / Naked'], ['ครุยเซอร์ / คลาสสิก', 'Cruiser / Classic'], ['ผจญภัย / ออฟโรด', 'Adventure / Off-road'], ['ทัวร์ริ่ง', 'Touring'],
     ['กำหนดเอง (รุ่นอื่น)', 'Custom (other model)'], ['จำนวนเกียร์ (0 = ออโต้/CVT)', 'Gears (0 = auto/CVT)'], ['RPM เต็มสเกลหน้าปัด', 'Gauge full-scale RPM'], ['อัตราส่วนเกียร์ (rpm ต่อ km/h)', 'Gear ratios (rpm per km/h)'],

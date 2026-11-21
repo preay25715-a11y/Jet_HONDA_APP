@@ -181,6 +181,14 @@ android/           แอป Android (MainActivity + JetBridge: USB OTG / BLE / 
 ## v1.3.2
 - Version badge (e.g. `v1.3.3`) placed after "By เปรียวจูนเนอร์" in the header and on the licence screen.
 
+## v1.5.8 — no model picker: the app sets itself up from the bike
+- **Removed:** the "เลือกรุ่นรถ" list in Setup. The ECU does not report a model name (neither the Honda K-line table nor OBD-II Mode 09 carries one for these bikes), so the app works from what the bike does send: its ECU ID (or the VIN's first 8 characters).
+- **Per-bike profile:** gears (0 = auto/CVT), dial scale, redline, tank, injector flow and gear ratios are remembered for each bike's ID. Change them once in Setup (or learn the ratios) and they come back by themselves on the next connection; a second bike has its own set. Whatever was set in earlier versions (including a model chosen from the old list) moves to the first bike that connects.
+- **Bike not known yet:** neutral profile — no gear display (the app does not guess a gear it cannot know), dial 12000 rpm that **widens by itself** when the needle stays at the end of the scale (5 samples in a row, up to 16000, remembered for the bike), shift light off until a redline is set.
+- **Built-in table:** `HP.KNOWN_IDS` in `src/vehicle.js` (`'ECU:<id>'` / `'VIN:<8 chars>'` → model preset id) is still empty — there is no verified ID→model list for Thai-market bikes (the HondaECU table lists flash part numbers, not the ID the ECU sends on the K-line). A listed bike gets the whole preset (gears, ratios, dial, redline, tank, injectors) on connect with nothing to set. Fill it from real bikes: Setup → the 🔎 line (and the log line "รหัสรถ:") shows the ID.
+- Cars are unchanged (VIN → model, fuel type, hybrid). The model presets (`BIKES`) stay in the app as the table's targets.
+- Tests: fresh install, values set once come back, second bike neutral and independent, built-in table, owner numbers outrank the table, carried-over entry loses to a later table entry, OBD-II bike by VIN, dial widening (spike and short touch ignored). **Not verified on a real bike.**
+
 ## v1.5.7 — motorcycle model chosen automatically on connect
 - **What the bike tells us:** a Honda motorcycle ECU does not report its model name. What can be read is the ECU's own ID (the Honda K-line / HONDA-KLINE bridge `0904`) or, on an OBD-II bike, the VIN (first 8 characters). The app uses that ID as the bike's identity.
 - **Remembered per bike:** choose the model in Setup once; the app binds it (and the gear ratios you learned) to that ECU ID / VIN. Next time the same bike connects, the model and ratios are set by themselves, a different bike gets its own entry, and a correction made later only changes that bike. Choices made while disconnected are not bound to any bike.
