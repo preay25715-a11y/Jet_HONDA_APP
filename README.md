@@ -181,6 +181,13 @@ android/           แอป Android (MainActivity + JetBridge: USB OTG / BLE / 
 ## v1.3.2
 - Version badge (e.g. `v1.3.3`) placed after "By เปรียวจูนเนอร์" in the header and on the licence screen.
 
+## v1.6.0 — Setup → updates: the project address and links are no longer shown
+- **Removed from Setup → "เวอร์ชันและอัปเดต":** the "ที่อยู่โปรเจกต์ GitHub" field. The section now shows only the installed version, the latest version, "ตรวจสอบอัปเดต" and "อัปเดตเลย". The update check itself is unchanged (the source is built into the app), and it still runs once a day after the licence is OK.
+- **No address or link in any message:** the "no release in this project" message is now "ยังไม่มีข้อมูลเวอร์ชันล่าสุด"; network errors show only a short text (`HTTP nnn`, "เชื่อมต่อไม่ได้", "ดาวน์โหลดไม่สำเร็จ") instead of the raw error (which can contain a host name); when a new version has no APK file the project page is no longer opened as a fallback — the button stays hidden and the message says the file is not ready.
+- **Saved settings:** the old stored project address (`updRepo`, `updRepoV`) is deleted from the phone's settings on first start.
+- **Not a privacy measure for the repository itself:** the address is still inside the app code and the repository is still public; this only keeps it off the customer's screen. Making the repo private would stop the in-app update check (a private repo needs a login token).
+- Tests: browser suite for the update section (no field, no address/`http`/GitHub text anywhere in Setup in every state: new version, 404, 500, no network, release without APK, install error), the node suite and the v1.5.7–v1.5.10 browser suites re-run unchanged.
+
 ## v1.5.10 — less lag: faster refresh of the live values
 - **CAN / ELM327 / KONNWEI adapters:** a fast cycle is now **one** request carrying RPM, speed, throttle, MAP and lambda (up to 6 values per request); the slow values (coolant, intake temp, battery, fuel trim …) ride in a second request only every 2nd–4th cycle, depending on how fast the adapter answers (before: every cycle was 2 requests). Gentle mode (for fragile adapters) keeps the old, longer cycle.
 - **Honda bridge, current firmware (one value per request):** the cycle is cut to 3–4 requests chosen from the adapter's response time; RPM and throttle every cycle, speed every 2nd cycle, the rest rotate.
