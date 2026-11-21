@@ -291,20 +291,35 @@ const { SimTransport } = require('../src/sim.js');
 // ---- v1.5.9: Honda bridge — fast values every cycle; several values per request when the firmware allows it ----
 (async () => {
   const assert = require('assert'), { Elm327, FakeElm } = require('../src/elm.js');
-  // 1) bridge that answers one value per request (current firmware): RPM, TPS, MAP and SPD are in EVERY cycle, a cycle is 5-6 requests
+  // 1) bridge that answers one value per request (current firmware): RPM and throttle in EVERY cycle, speed every 2nd, the rest rotates; a cycle is 4 requests
   { const f = new FakeElm({ honda: true, latency: 1 }), e = new Elm327(f); await e.init();
     assert.strictEqual(e.honda, true); assert.strictEqual(e.hondaMulti, false, 'old bridge: no combined requests'); assert.strictEqual(e.single, true);
-    f.pidCount = {}; const n0 = f.nreq, N = 30; let d; for (let i = 0; i < N; i++) d = await e.readLive();
-    for (const p of [0x0C, 0x11, 0x0B, 0x0D]) assert.strictEqual(f.pidCount[p], N, 'PID ' + p.toString(16) + ' read every cycle (' + f.pidCount[p] + ')');
-    const per = (f.nreq - n0) / N; assert(per >= 5 && per <= 6.2, 'requests per cycle ' + per);
-    assert(d.RPM > 600 && d.TPS > 10 && d.SPD === 62 && d.MAP === 50, 'live ' + JSON.stringify(d));
-    for (const p of [0x05, 0x0F, 0xD1]) assert(f.pidCount[p] >= 3, 'rotating value ' + p.toString(16) + ' still comes round (' + f.pidCount[p] + ')'); }
+    f.pidCount = {}; const n0 = f.nreq, N = 40; let d; for (let i = 0; i < N; i++) d = await e.readLive();
+    for (const p of [0x0C, 0x11]) assert.strictEqual(f.pidCount[p], N, 'PID ' + p.toString(16) + ' read every cycle (' + f.pidCount[p] + ')');
+    assert(f.pidCount[0x0D] >= N / 2 - 1, 'speed every 2nd cycle (' + f.pidCount[0x0D] + ')');
+    const per = (f.nreq - n0) / N; assert(per >= 3.5 && per <= 4.3, 'requests per cycle ' + per);
+    assert(d.RPM > 600 && d.TPS > 10 && d.SPD === 62, 'live ' + JSON.stringify(d));
+    for (const p of [0x0B, 0x05, 0x0F, 0xD1]) assert(f.pidCount[p] >= 3, 'rotating value ' + p.toString(16) + ' still comes round (' + f.pidCount[p] + ')'); }
   // 2) bridge with the multi-value firmware: found by the probe, the whole cycle takes 2 requests or fewer, every value every cycle
   { const f = new FakeElm({ honda: true, hmulti: true, latency: 1 }), e = new Elm327(f); await e.init();
     assert.strictEqual(e.hondaMulti, true, 'combined requests detected'); assert.strictEqual(e.single, false);
     f.pidCount = {}; const n0 = f.nreq, N = 30; let d; for (let i = 0; i < N; i++) d = await e.readLive();
-    const per = (f.nreq - n0) / N; assert(per <= 2.2, 'requests per cycle with multi ' + per);
-    for (const p of [0x0C, 0x11, 0x0B, 0x0D, 0x05, 0x0F]) assert(f.pidCount[p] >= N - 1, 'PID ' + p.toString(16) + ' every cycle (' + f.pidCount[p] + ')');
+    const per = (f.nreq - n0) / N; assert(per <= 1.8, 'requests per cycle with multi ' + per);
+    for (const p of [0x0C, 0x11, 0x0B, 0x0D]) assert(f.pidCount[p] >= N - 1, 'fast PID ' + p.toString(16) + ' every cycle (' + f.pidCount[p] + ')');
+    for (const p of [0x05, 0x0F, 0x42]) assert(f.pidCount[p] >= N / 4, 'slow PID ' + p.toString(16) + ' still comes round (' + f.pidCount[p] + ')');
     assert.strictEqual(e.single, false, 'stays in combined mode'); assert(d.RPM > 600 && d.TPS > 10 && d.SPD === 62 && d.ECT === 90, 'live ' + JSON.stringify(d)); }
   console.log('v1.5.9 tests passed (Honda bridge: fast values every cycle, combined requests detected)');
+  // 3) CAN adapter (v1.5.10): a fast cycle is ONE request with RPM / speed / throttle / MAP / lambda; the slow values ride in a second request every 2nd-4th cycle
+  { const f = new FakeElm({ latency: 1 }), e = new Elm327(f); await e.init(); assert.strictEqual(e.single, false);
+    f.pidCount = {}; const n0 = f.nreq, N = 60; let d; for (let i = 0; i < N; i++) d = await e.readLive();
+    const per = (f.nreq - n0) / N; assert(per >= 1.2 && per <= 1.8, 'requests per cycle (CAN) ' + per);
+    for (const p of [0x0C, 0x0D, 0x11, 0x0B, 0x34]) assert(f.pidCount[p] >= N - 1, 'fast PID ' + p.toString(16) + ' every cycle (' + f.pidCount[p] + ')');
+    for (const p of [0x05, 0x0F, 0x42, 0x5C]) assert(f.pidCount[p] >= N / 5, 'slow PID ' + p.toString(16) + ' still comes round (' + f.pidCount[p] + ')');
+    assert(d.RPM > 600 && d.ECT === 90 && d.SPD === 62 && d.TPS > 10 && Math.abs(d.LAMB - 0.98) < 0.05 && d.BATT > 13, 'live ' + JSON.stringify(d)); }
+  // 4) gentle mode keeps the old longer cycle (fragile adapters)
+  { const f = new FakeElm({ latency: 1 }), e = new Elm327(f); e.safe = 1; await e.init();
+    f.pidCount = {}; const n0 = f.nreq, N = 30; for (let i = 0; i < N; i++) await e.readLive();
+    const per = (f.nreq - n0) / N; assert(per >= 1.8, 'gentle mode keeps 2+ requests per cycle (' + per + ')'); }
+  console.log('v1.5.10 tests passed (CAN: one fast request per cycle, slow values ride along, gentle mode unchanged)');
+
 })().catch((e) => { console.error(e); process.exit(1); });

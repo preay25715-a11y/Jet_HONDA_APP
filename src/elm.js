@@ -222,15 +222,19 @@
       const rpm = has('RPM'), AK = { wb: 'LAMB', o2: 'O2', cmd: 'EQR' }[this.afrPref], afrKeys = ['LAMB', 'O2', 'EQR'].filter((k) => has(k) && !(k === 'O2' && this.fuel === 'd'));
       const afrP = has(AK && afrKeys.includes(AK) ? AK : afrKeys[0]);       // the AFR source the Dash is going to use gets the every-cycle slot (single-value cars)
       const per = this.single ? 1 : MAX_PER_REQ;
-      const reqs = this.single ? (this.honda ? Math.max(5, Math.min(6, Math.round(240 / Math.max(20, this.rtt)))) : Math.max(3, Math.min(5, Math.round(300 / Math.max(20, this.rtt))))) : Math.max(1, Math.min(this.safe ? 2 : 3, Math.round(150 / Math.max(20, this.rtt))));
+      // several values per request (CAN, or a bridge that answers combined requests): a FAST cycle is ONE request with everything the Dash lives on (RPM, speed, throttle, MAP, AFR);
+      // every 2nd-4th cycle a second request with the slow values (temperatures, battery, trims …) is added — the fast values refresh as often as the adapter can turn one request around.
+      // Gentle mode keeps the old longer cycle. One value per request (K-line cars, the Honda bridge): see below.
+      const slowEvery = this.rtt <= 60 ? 2 : this.rtt <= 120 ? 3 : 4, withSlow = this.single || this.safe || c % slowEvery === 0;
+      const reqs = this.single ? (this.honda ? Math.max(3, Math.min(4, Math.round(170 / Math.max(20, this.rtt)))) : Math.max(3, Math.min(5, Math.round(300 / Math.max(20, this.rtt))))) : this.safe ? Math.max(1, Math.min(2, Math.round(150 / Math.max(20, this.rtt)))) : withSlow ? 2 : 1;
       const slots = reqs * per, want = [], add = (p) => { if (p != null && !want.includes(p) && (p === rpm || (this.pskip[p] || 0) <= c)) want.push(p); };      // a PID that keeps answering nothing sits out for a while
       let ringN = 0;
       add(rpm);
       if (this.single && this.honda) {
-        // HONDA-KLINE bridge, one value per request (every value comes out of the same table cache): RPM, throttle, MAP and speed in EVERY cycle, the others (temperatures, injector, O2, battery) rotate in the free slots
-        for (const k of ['TPS', 'MAP', 'SPD']) add(has(k));
+        // HONDA-KLINE bridge, one value per request (every value comes out of the same table cache): RPM and throttle in EVERY cycle (4 requests ≈ 6 cycles/s at 40 ms), speed / MAP / O2 / injector / temperatures / battery rotate in the other two slots
+        add(has('TPS')); if (c % 2 === 0) add(has('SPD'));          // speed every 2nd cycle
         ringN = Math.max(0, slots - want.length);
-        this._mkRing(want.slice());
+        this._mkRing([rpm, has('TPS'), has('SPD')]);                // stable skip list (a changing one would rebuild the ring and restart it every cycle)
       } else if (this.single) {
         // one value per request: RPM + AFR every cycle, the next slots cycle through TPS → SPD → two rotating values (MAP, temperatures, …)
         add(afrP);
@@ -241,7 +245,7 @@
       } else {
         // several values per request (CAN): the core values ride along in every request, the free slots rotate through the rest
         const core = ['SPD', 'TPS', 'MAP'].concat(afrKeys).map(has).filter((p) => p != null);
-        const keep = Math.max(0, Math.min(core.length, slots - (rpm != null ? 1 : 0) - 2));
+        const keep = Math.max(0, Math.min(core.length, slots - (rpm != null ? 1 : 0) - (withSlow ? 2 : 0)));
         for (const p of core.slice(0, keep)) add(p);
         ringN = slots - want.length;
         this._mkRing([rpm].concat(core));
@@ -274,7 +278,7 @@
       if (any) this.lastGood = Date.now(); else if (!this.lastGood) this.lastGood = Date.now();
       if (this.tuned && !any && ++this.miss >= 3) { this.miss = 0; await this._untune(); }      // faster timing made the car stop answering: go back to the safe values
       else if (any) this.miss = 0;
-      if (c % 6 === 0 && !this.supported.has(0x42) && this.atrvOk) { const l = await this.query('ATRV', 1500); const m = l && /([0-9.]+)\s*V/i.exec(l.join(' ')); if (m) d.BATT = parseFloat(m[1]); }
+      if (c % 40 === 20 && !this.supported.has(0x42) && this.atrvOk) { const l = await this.query('ATRV', 1500); const m = l && /([0-9.]+)\s*V/i.exec(l.join(' ')); if (m) d.BATT = parseFloat(m[1]); }
       this.last = d;
       if (Date.now() - this.lastGood > this.deadMs) return null;       // nothing fresh for a long while: do not keep showing old numbers as if they were live
       return Object.assign({}, d);   // OBD keys (P.OBD) feed Dash/Grid directly

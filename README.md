@@ -181,6 +181,13 @@ android/           แอป Android (MainActivity + JetBridge: USB OTG / BLE / 
 ## v1.3.2
 - Version badge (e.g. `v1.3.3`) placed after "By เปรียวจูนเนอร์" in the header and on the licence screen.
 
+## v1.5.10 — less lag: faster refresh of the live values
+- **CAN / ELM327 / KONNWEI adapters:** a fast cycle is now **one** request carrying RPM, speed, throttle, MAP and lambda (up to 6 values per request); the slow values (coolant, intake temp, battery, fuel trim …) ride in a second request only every 2nd–4th cycle, depending on how fast the adapter answers (before: every cycle was 2 requests). Gentle mode (for fragile adapters) keeps the old, longer cycle.
+- **Honda bridge, current firmware (one value per request):** the cycle is cut to 3–4 requests chosen from the adapter's response time; RPM and throttle every cycle, speed every 2nd cycle, the rest rotate.
+- **Honda bridge with the multi-PID firmware:** the 4 fast values every cycle in 1–2 requests; slow values every 2nd–4th cycle.
+- Simulator numbers (fixed 40 ms per request, **not a real adapter**): CAN 8.4 → 16.6 cycles/s at 40 ms, 6.2 → 9.2 at 80 ms; Honda bridge, one value per request: RPM/throttle 5.0 → 6.4 per second; Honda bridge, multi-value firmware: 12.4 → 16.6 per second. On a real adapter the gain depends on its response time and the bike/car ECU — **not verified on a real vehicle**. The big gain on a Honda needs the bridge firmware with multi-PID (`honda-bridge.bin`) flashed.
+- Tests: node (requests per cycle and PIDs per cycle for CAN, Honda single/multi, gentle mode) + the browser suites from v1.5.7–v1.5.9 re-run unchanged.
+
 ## v1.5.9 — throttle starts at 0 %, faster Honda bridge readings
 - **Throttle (TPS) 0–100 %:** the ECU reports the sensor itself (closed throttle ≈ 10–12 %). The app now learns the closed position — the lowest value that stays steady for 8 samples (jitter and one-sample glitches are ignored, a part-throttle hold never lowers it) — and shows **0.0 % with the throttle closed**, 100 % at full throttle, linear in between. Dash value, bar, AFR-log throttle columns and the logs all use the corrected value (`TPSraw` keeps the raw one).
 - **Setup → TPS:** "ตั้ง 0% ตอนนี้" / "ตั้ง 100% ตอนนี้ (บิดสุด)" / "ล้างค่า TPS", with the raw value shown. The default 100 % point is raw 100 %; set it with the button if the bike's raw value at full throttle is lower. The calibration is kept per bike (same ECU-ID profile as v1.5.8). Cars keep their own throttle values.
