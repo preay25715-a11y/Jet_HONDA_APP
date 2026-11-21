@@ -181,6 +181,9 @@ android/           แอป Android (MainActivity + JetBridge: USB OTG / BLE / 
 ## v1.3.2
 - Version badge (e.g. `v1.3.3`) placed after "By เปรียวจูนเนอร์" in the header and on the licence screen.
 
+## v1.6.1 — update test release
+- No functional change: the version number only, to test the in-app update (v1.6.0 → v1.6.1, Setup → ตรวจสอบอัปเดต → อัปเดตเลย). The APK keeps the same package name and signing key, and its version code (10601) is higher than v1.6.0's (10600), so Android installs it over the old one with settings and licence kept.
+
 ## v1.6.0 — Setup → updates: the project address and links are no longer shown
 - **Removed from Setup → "เวอร์ชันและอัปเดต":** the "ที่อยู่โปรเจกต์ GitHub" field. The section now shows only the installed version, the latest version, "ตรวจสอบอัปเดต" and "อัปเดตเลย". The update check itself is unchanged (the source is built into the app), and it still runs once a day after the licence is OK.
 - **No address or link in any message:** the "no release in this project" message is now "ยังไม่มีข้อมูลเวอร์ชันล่าสุด"; network errors show only a short text (`HTTP nnn`, "เชื่อมต่อไม่ได้", "ดาวน์โหลดไม่สำเร็จ") instead of the raw error (which can contain a host name); when a new version has no APK file the project page is no longer opened as a fallback — the button stays hidden and the message says the file is not ready.
