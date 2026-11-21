@@ -6,7 +6,7 @@
 (function () {
   'use strict';
   const C = window.JetCore, P = window.HP;
-  const { st, S, $, $$, toast } = C;
+  const { st, S, $, $$, toast, log } = C;
 
   // [id, group, name, cc, gears (0 = CVT/auto), gauge rpm scale]  — defaults, all editable in Setup
   const B = (g, rows) => rows.map((r) => ({ id: g[0] + '-' + r[0].toLowerCase().replace(/[^a-z0-9]+/g, ''), group: g[1], name: r[0], cc: r[1], gears: r[2], rpm: r[3] }));
@@ -182,6 +182,27 @@
   P.BIKES = BIKES;
   const byId = (id) => BIKES.find((b) => b.id === id);
 
+  /* ---------- bike recognition: the ECU's own ID (or the VIN's first 8 characters) -> model ----------
+   * 1) a model chosen once in Setup is remembered for that ECU ID / VIN, together with the learned gear ratios (the next time the same bike connects it is set up by itself)
+   * 2) KNOWN_IDS is the built-in table (ID -> model id), filled from real bikes: Setup shows the ID of the connected bike, e.g. 'ECU:0123456789ABCDEF0123': 'sct-pcx160' */
+  const KNOWN_IDS = {};
+  P.KNOWN_IDS = KNOWN_IDS;
+  const idKeys = (id) => [].concat(id && id.cal ? ['ECU:' + String(id.cal).toUpperCase()] : [], id && id.vin ? ['VIN:' + String(id.vin).toUpperCase().slice(0, 8)] : []);
+  const savedModel = (keys) => {
+    const m = S.bikeMem || {};
+    for (const k of keys) { const e = m[k], b = e && !e.a && byId(e.b); if (b && !b.car) return { b, e }; }          // chosen by the owner
+    for (const k of keys) { const b = byId(KNOWN_IDS[k]); if (b && !b.car) return { b, e: null, builtin: true }; }   // built-in table
+    for (const k of keys) { const e = m[k], b = e && e.a && byId(e.b); if (b && !b.car) return { b, e }; }          // only adopted from the previous selection
+    return null;
+  };
+  const remember = (adopt) => {                       // bind the current model (and gear ratios) to the connected bike's ID
+    const keys = st.veh && st.veh.keys, b = byId(S.bike); if (!keys || !keys.length || !b || b.car) return;
+    const m = (S.bikeMem = S.bikeMem || {}), now = Date.now();
+    keys.forEach((k) => { m[k] = { b: b.id, r: b.gears ? S.gearRatios || '' : '', l: S.gearLearned ? 1 : 0, t: now, a: adopt ? 1 : 0 }; });
+    const all = Object.keys(m); if (all.length > 60) all.sort((x, y) => m[x].t - m[y].t).slice(0, all.length - 60).forEach((k) => delete m[k]);
+    C.saveS();
+  };
+
   // starting ratio guess (rpm per km/h) — refined by "learn gear"; rough shape only
   const DEFAULT_RATIOS = { 4: '150 95 70 56', 5: '150 95 70 56 47', 6: '140 92 68 54 45 38', 7: '140 92 68 54 45 38 33' };
 
@@ -228,12 +249,12 @@
       $('#gearLearn').style.display = n ? '' : 'none';
     };
     $('#bSet').addEventListener('click', fill);
-    $('#sBike').onchange = () => { const b = byId($('#sBike').value); if (b) { S.bikeUser = true; apply(b, false); fill(); toast('ตั้งค่ารุ่น ' + b.name + ' แล้ว'); } };
+    $('#sBike').onchange = () => { const b = byId($('#sBike').value); if (b) { S.bikeUser = true; apply(b, false); remember(); fill(); toast('ตั้งค่ารุ่น ' + b.name + ' แล้ว'); } };
     $('#sAfrSrc').onchange = () => { S.afrSrc = $('#sAfrSrc').value; C.saveS(); if (st.t && st.t.kind === 'obd') st.t.afrPref = S.afrSrc; toast('แหล่งค่า AFR: ' + $('#sAfrSrc').selectedOptions[0].textContent); };
     $('#sTilesAuto').onclick = () => { C.resetTiles(); toast('ช่องหน้าหลักกลับเป็นอัตโนมัติแล้ว'); };
     $('#sGears').onchange = () => { S.gears = Math.max(0, Math.min(8, +$('#sGears').value || 0)); S.cvt = S.gears === 0; if (S.gears && !S.gearRatios) S.gearRatios = DEFAULT_RATIOS[S.gears] || DEFAULT_RATIOS[6]; C.saveS(); refresh(); fill(); };
     $('#sRpmMax').onchange = () => { S.rpmMax = Math.max(3000, +$('#sRpmMax').value || 12000); C.saveS(); window.dispatchEvent(new Event('jetvehicle')); };
-    $('#sRatios').onchange = () => { S.gearRatios = $('#sRatios').value.trim(); S.gearLearned = true; C.saveS(); };
+    $('#sRatios').onchange = () => { S.gearRatios = $('#sRatios').value.trim(); S.gearLearned = true; C.saveS(); remember(); };
     $('#sTank').onchange = () => { S.tankL = Math.max(0, +$('#sTank').value || 0); C.saveS(); };
     $('#sInj').onchange = () => { S.injFlow = Math.max(0, +$('#sInj').value || 0); C.saveS(); };
     $('#sRed').onchange = () => { S.redline = Math.max(0, +$('#sRed').value || 0); C.saveS(); window.dispatchEvent(new Event('jetvehicle')); };
@@ -247,7 +268,7 @@
       acc.sort((a, b) => a - b); const med = acc[acc.length >> 1];
       const r = P.parseRatios(S.gearRatios || DEFAULT_RATIOS[S.gears || 6]); while (r.length < (S.gears || 6)) r.push(r[r.length - 1] * 0.85);
       r[g - 1] = Math.round(med * 10) / 10; S.gearRatios = r.join(' '); S.gearLearned = true; C.saveS(); $('#sRatios').value = S.gearRatios;
-      msg.textContent = 'บันทึกเกียร์ ' + g + ' = ' + med.toFixed(1) + ' rpm/(km/h) แล้ว';
+      remember(); msg.textContent = 'บันทึกเกียร์ ' + g + ' = ' + med.toFixed(1) + ' rpm/(km/h) แล้ว';
     };
     refresh();
   })();
@@ -256,10 +277,23 @@
   const FUELTH = (t) => (t.fuelType === 5 ? 'LPG' : t.fuelType === 6 ? 'CNG' : t.fuelType === 3 ? 'เอทานอล' : t.fuel === 'd' ? 'ดีเซล' : 'เบนซิน') + (t.hybrid ? ' ไฮบริด' : '');
   P.vehOnObd = (t) => {
     const id = (t && t.ident) || {}, det = id.vin ? P.identifyVin(id.vin) : null, v = { det, fuel: FUELTH(t), model: null, text: '' };
-    if (!t || t.honda) {
-      v.text = t && t.honda ? 'HONDA PGM-FI (มอเตอร์ไซค์)' : '';
+    if (!t || t.honda || (det && det.moto)) {          // a motorcycle: the ECU's ID / VIN picks the model (remembered or built-in); an unknown bike keeps the current choice
+      v.text = !t ? '' : t.honda ? 'HONDA PGM-FI (มอเตอร์ไซค์)' : 'Honda มอเตอร์ไซค์' + (det && det.year ? ' ' + det.year : '') + (det && det.country ? ' · ' + det.country : '');
       const c0 = byId(S.bike); if (t && (!c0 || c0.car) && S.bikeBack && byId(S.bikeBack)) { apply(byId(S.bikeBack), true); S.bikeUser = true; }   // back on the bike: restore the bike chosen before a car was detected
-      st.veh = v; return v;
+      v.keys = t ? idKeys(id) : []; st.veh = v;
+      let how = '';
+      if (v.keys.length) {
+        const hit = savedModel(v.keys), cur = byId(S.bike);
+        if (hit) {
+          v.model = hit.b; how = hit.builtin ? 'ตามตารางรหัสในแอป' : 'จำจากที่เลือกไว้';
+          if (S.bike !== hit.b.id) apply(hit.b, false);
+          if (hit.e && hit.e.r && S.gearRatios !== hit.e.r) { S.gearRatios = hit.e.r; S.gearLearned = !!hit.e.l; C.saveS(); }
+        } else if (cur && !cur.car) { v.model = cur; how = 'ใช้รุ่นที่เลือกไว้ล่าสุด และจำรหัสรถคันนี้ไว้'; remember(true); }
+        else { how = 'ยังไม่รู้จักรุ่นของรถคันนี้ — เลือกรุ่นใน Setup ครั้งเดียว แอปจะจำให้'; v.text += ' · ยังไม่รู้จักรุ่น (เลือกใน Setup ครั้งเดียว)'; }
+        log('info', 'รหัสรถ: ' + (id.vin ? 'VIN ' + id.vin + ' · ' : '') + (id.cal ? 'ECU ' + id.cal + ' · ' : '') + (v.model ? 'รุ่น ' + v.model.name + ' (' + how + ')' : 'ยังไม่รู้จัก'));
+      }
+      const el0 = $('#sVeh'); if (el0 && t) el0.textContent = '🔎 ตรวจพบรถ: ' + v.text + (id.vin ? ' · VIN ' + id.vin : '') + (id.cal ? ' · รหัส ECU ' + id.cal : '') + (how ? ' → ' + (v.model ? 'รุ่น ' + v.model.name + ' (' + how + ')' : how) : '');
+      return v;
     }
     const parts = [];
     let cands = BIKES.filter((b) => b.car && b.d === (t.fuel === 'd') && (t.hybrid ? b.h : !b.h));

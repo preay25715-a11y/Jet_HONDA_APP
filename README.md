@@ -181,6 +181,14 @@ android/           แอป Android (MainActivity + JetBridge: USB OTG / BLE / 
 ## v1.3.2
 - Version badge (e.g. `v1.3.3`) placed after "By เปรียวจูนเนอร์" in the header and on the licence screen.
 
+## v1.5.7 — motorcycle model chosen automatically on connect
+- **What the bike tells us:** a Honda motorcycle ECU does not report its model name. What can be read is the ECU's own ID (the Honda K-line / HONDA-KLINE bridge `0904`) or, on an OBD-II bike, the VIN (first 8 characters). The app uses that ID as the bike's identity.
+- **Remembered per bike:** choose the model in Setup once; the app binds it (and the gear ratios you learned) to that ECU ID / VIN. Next time the same bike connects, the model and ratios are set by themselves, a different bike gets its own entry, and a correction made later only changes that bike. Choices made while disconnected are not bound to any bike.
+- **Never-seen bike:** keeps the model already selected (so nothing changes for a single-bike owner) and remembers it for this ID; if no model is selected, Setup says the model is not known yet and shows the ECU ID / VIN. A model adopted this way never overrides a built-in table entry added later.
+- **Built-in table:** `HP.KNOWN_IDS` in `src/vehicle.js` (`'ECU:<id>'` or `'VIN:<8 chars>'` → model id) is empty on purpose — there is no verified ID→model list yet and a wrong guess would set the wrong gear/RPM scale. It is filled from real bikes: send the ID shown in Setup (🔎 line / log "รหัสรถ:") together with the model name.
+- The Setup 🔎 line and the log show the detected ECU ID / VIN and how the model was decided (remembered / built-in table / last selection / unknown). Car detection and the restore of the bike after a car are unchanged.
+- Tests (simulated bridge + OBD-II bike): unknown → pick → reconnect restores it, second bike adopts then is corrected independently, learned gear ratios follow the bike, built-in table beats an adopted binding, no binding while disconnected. **Not verified on a real bike.**
+
 ## v1.5.6 — clearing trouble codes (DTC)
 - **Clear (service 04):** the ELM327 is given a long reply window (ST FF ≈ 1 s, adaptive timing off) for reading and clearing codes and returns to the quick live timing afterwards — clearing can keep the ECU busy longer than the short live timeouts allowed (v1.5.1 tuning). After the clear the app waits ~0.8 s and re-reads the codes.
 - **Honest result:** instead of a bare "ลบไม่สำเร็จ" the app says what happened — ECU refused (negative response 22: switch the engine off, key ON), not supported, no answer, adapter silent — or, when the ECU confirmed the clear but the code is back at the next read, that the fault is probably still present (e.g. P0118 with an unplugged / shorted coolant sensor is re-set at once). The raw ELM answers go to the log ("ลบโค้ด: ECU ตอบ …", "DTC ที่ ECU ตอบ …").
