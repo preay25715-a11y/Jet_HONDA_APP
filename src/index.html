@@ -166,6 +166,7 @@
     <div class="mut" id="obdInfo" style="margin-bottom:8px"></div>
     <div class="row" style="margin-top:10px">
       <button class="btn pri" id="gBle">📶 ค้นหาบลูทูธ</button>
+      <button class="btn pri" id="gWifi">📡 ค้นหา WiFi OBD2</button>
       <button class="btn red" id="gOff">ตัดการเชื่อมต่อ</button>
     </div>
   </div>
@@ -216,6 +217,14 @@
   <h2 id="pkTitle">เลือกค่าที่แสดง</h2>
   <div class="pkgrid" id="pkGrid"></div>
   <div class="row" style="margin-top:12px"><div class="sp"></div><button class="btn" data-close>ปิด</button></div>
+</div></div>
+
+<!-- WiFi OBD2 (ELM327 WiFi) -->
+<div class="modal" id="mWifi"><div class="card" style="max-width:560px">
+  <h2>📡 ค้นหา WiFi OBD2</h2>
+  <div class="mut" id="wfInfo" style="margin-bottom:10px"></div>
+  <div id="wfList" style="max-height:48vh;overflow:auto"></div>
+  <div class="row" style="margin-top:12px"><button class="btn" id="wfAgain">🔄 ค้นหาใหม่</button><button class="btn" id="wfManual">✎ ใส่ IP เอง</button><button class="btn" id="wfSet">⚙ ตั้งค่า WiFi</button><div class="sp"></div><button class="btn" data-close>ปิด</button></div>
 </div></div>
 
 <!-- in-app dialog -->

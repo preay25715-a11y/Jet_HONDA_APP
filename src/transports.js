@@ -108,6 +108,39 @@
     async write(bytes) { if (!root.JetNative.sppWrite(b64e(bytes))) throw new Error('Bluetooth ยังไม่พร้อม'); }
     async close() { Bus.h['spp-data'] = Bus.h['spp-lost'] = null; root.JetNative.sppClose(); }
   }
+  // ELM327 Wi-Fi adapter: plain TCP (usually 192.168.0.10:35000) through the Wi-Fi network of the adapter
+  class NativeTcp {
+    async open(host, port) {
+      if (!root.JetNative.tcpOpen) throw new Error('แอปรุ่นนี้ยังไม่รองรับ WiFi OBD2');
+      const p = waitEvt('tcp-open', 20000);
+      Bus.h['tcp-data'] = (b) => this.onData && this.onData(b64d(b));
+      Bus.h['tcp-lost'] = (d) => this.onLost && this.onLost(d && d.why);
+      root.JetNative.tcpOpen(host, port | 0);
+      const r = await p;
+      if (!r || !r.ok) { Bus.h['tcp-data'] = Bus.h['tcp-lost'] = null; try { root.JetNative.tcpClose(); } catch (e) {} throw new Error(r ? r.err : 'เชื่อมต่อ WiFi OBD2 ไม่สำเร็จ (หมดเวลา)'); }
+      this.name = r.name;
+    }
+    async write(bytes) { if (!root.JetNative.tcpWrite(b64e(bytes))) throw new Error('WiFi ยังไม่พร้อม'); }
+    async close() { Bus.h['tcp-data'] = Bus.h['tcp-lost'] = null; root.JetNative.tcpClose(); }
+  }
+  // look for ELM327 Wi-Fi adapters: the Wi-Fi the phone is on (+ nearby networks when the Location permission is given)
+  async function wifiSearch() {
+    if (!root.JetNative || !root.JetNative.wifiSearch) throw new Error('ค้นหา WiFi OBD2 ได้เฉพาะในแอป Android (รุ่นใหม่)');
+    const p = waitEvt('wifi-search', 45000);
+    root.JetNative.wifiSearch();
+    const r = await p;
+    if (!r) throw new Error('ค้นหา WiFi ไม่ตอบสนอง (หมดเวลา)');
+    if (!r.ok) throw new Error(r.err || 'ค้นหา WiFi ไม่สำเร็จ');
+    return r;
+  }
+  // Android 10+: join the adapter's Wi-Fi from inside the app (the system asks the user to confirm)
+  async function wifiJoin(ssid, pass) {
+    if (!root.JetNative || !root.JetNative.wifiJoin) throw new Error('แอปรุ่นนี้ยังไม่รองรับ WiFi OBD2');
+    const p = waitEvt('wifi-join', 45000);
+    root.JetNative.wifiJoin(ssid, pass || '');
+    const r = await p;
+    return r || { ok: false, err: 'เชื่อม WiFi ไม่สำเร็จ (หมดเวลา)' };
+  }
   // unified device finder: bonded + classic discovery + BLE scan. mode: 'all' | 'obd' | 'gauge'
   async function btPick(mode) {
     const p = waitEvt('bt-pick', 180000);
@@ -118,6 +151,7 @@
   }
   // open an OBD adapter chosen with btPick: SPP first for classic/paired, BLE UART otherwise
   async function openObdStream(dev) {
+    if (dev.wifi) { const s = new NativeTcp(); await s.open(dev.host, dev.port); s.name = s.name || dev.name; return s; }
     let err;
     if (dev.classic || dev.bonded || !dev.ble) { try { const s = new NativeSpp(); await s.open(dev.addr); s.name = s.name || dev.name; return s; } catch (e) { err = e; if (!dev.ble) throw e; } }
     try { const s = new NativeBle(); await s.open(dev.addr); s.name = s.name || dev.name; return s; } catch (e) { throw err || e; }
@@ -246,5 +280,5 @@
   root.JetApp = NATIVE ? { saveFile: (name, u8, mime) => root.JetNative.saveFile(name, b64e(u8), mime || ''), keepScreen: (on) => root.JetNative.keepScreen(!!on) } : null;
   root.DirectKLine = DirectKLine;
   root.GaugeLink = GaugeLink;
-  root.JetBt = { btPick, openObdStream, NativeSpp, NativeBle };
+  root.JetBt = { btPick, openObdStream, NativeSpp, NativeBle, NativeTcp, wifiSearch, wifiJoin };
 })(window);

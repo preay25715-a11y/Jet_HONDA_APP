@@ -26,7 +26,14 @@ import android.content.IntentFilter;
 import android.hardware.usb.UsbDevice;
 import android.hardware.usb.UsbDeviceConnection;
 import android.hardware.usb.UsbManager;
+import android.net.ConnectivityManager;
+import android.net.LinkProperties;
+import android.net.Network;
+import android.net.NetworkCapabilities;
+import android.net.NetworkRequest;
+import android.net.RouteInfo;
 import android.net.Uri;
+import android.net.wifi.WifiManager;
 import android.os.Build;
 import android.os.Environment;
 import android.os.Handler;
@@ -826,6 +833,213 @@ public class JetBridge {
         try { if (sock != null) sock.close(); } catch (Exception ignore) { }
         sock = null;
         sockOut = null;
+    }
+
+
+    /* ======================= Wi-Fi OBD-II adapters (ELM327 Wi-Fi: the phone joins the adapter's Wi-Fi, then TCP, usually 192.168.0.10:35000) ======================= */
+
+    volatile Network wifiNet;                       // set by wifiJoin (Android 10+ network request); otherwise the Wi-Fi network the phone is on
+    ConnectivityManager.NetworkCallback wifiCb;
+    java.net.Socket tcp;
+    java.io.OutputStream tcpOut;
+    volatile boolean tcpUp = false;
+
+    ConnectivityManager cm() { return (ConnectivityManager) act.getSystemService(Context.CONNECTIVITY_SERVICE); }
+
+    /** The Wi-Fi network sockets must use (works although that Wi-Fi has no internet and mobile data is the default network). */
+    Network findWifi() {
+        if (wifiNet != null) return wifiNet;
+        try {
+            ConnectivityManager c = cm();
+            if (c == null) return null;
+            Network best = null;
+            for (Network n : c.getAllNetworks()) {
+                NetworkCapabilities nc = c.getNetworkCapabilities(n);
+                if (nc != null && nc.hasTransport(NetworkCapabilities.TRANSPORT_WIFI)) best = n;
+            }
+            return best;
+        } catch (Exception e) { return null; }
+    }
+
+    String gatewayOf(Network n) {
+        try {
+            LinkProperties lp = cm().getLinkProperties(n);
+            if (lp != null) for (RouteInfo r : lp.getRoutes())
+                if (r.isDefaultRoute() && r.getGateway() instanceof java.net.Inet4Address) return r.getGateway().getHostAddress();
+        } catch (Exception ignore) { }
+        return null;
+    }
+
+    java.net.Socket wifiSocket(Network n) throws java.io.IOException {
+        java.net.Socket sk = new java.net.Socket();
+        if (n != null) n.bindSocket(sk);
+        return sk;
+    }
+
+    /** Looks for an ELM327 Wi-Fi adapter on the phone's Wi-Fi + lists nearby networks. Result: event 'wifi-search' */
+    @JavascriptInterface
+    public void wifiSearch() {
+        new Thread(() -> {
+            try {
+                WifiManager wm = (WifiManager) act.getApplicationContext().getSystemService(Context.WIFI_SERVICE);
+                boolean wifiOn = wm != null && wm.isWifiEnabled();
+                Network n = wifiOn ? findWifi() : null;
+                String gw = n == null ? null : gatewayOf(n);
+                String ssid = "";
+                try { if (wm != null && wm.getConnectionInfo() != null && wm.getConnectionInfo().getSSID() != null) ssid = wm.getConnectionInfo().getSSID().replace("\"", ""); } catch (Exception ignore) { }
+                if ("<unknown ssid>".equals(ssid)) ssid = "";
+                final java.util.LinkedHashSet<String> hosts = new java.util.LinkedHashSet<>();
+                if (gw != null) hosts.add(gw);
+                for (String h : new String[]{"192.168.0.10", "192.168.4.1", "192.168.1.5", "192.168.0.74", "192.168.1.10", "192.168.10.1"}) hosts.add(h);
+                final int[] ports = {35000, 23};
+                final JSONObject out = new JSONObject();
+                final org.json.JSONArray devs = new org.json.JSONArray();
+                if (n != null) {
+                    final Network fn = n;
+                    ExecutorService ex = Executors.newFixedThreadPool(8);
+                    ArrayList<java.util.concurrent.Future<JSONObject>> fut = new ArrayList<>();
+                    for (final String h : hosts) for (final int pt : ports) {
+                        if (!h.equals(gw) && pt != 35000) continue;      // port 23 only on the gateway itself
+                        fut.add(ex.submit(() -> probe(fn, h, pt)));
+                    }
+                    for (java.util.concurrent.Future<JSONObject> f : fut) {
+                        try { JSONObject o = f.get(6, java.util.concurrent.TimeUnit.SECONDS); if (o != null) devs.put(o); } catch (Exception ignore) { }
+                    }
+                    ex.shutdownNow();
+                }
+                // nearby networks (needs the Location permission; best effort)
+                org.json.JSONArray nets = new org.json.JSONArray();
+                boolean loc = act.checkSelfPermission(android.Manifest.permission.ACCESS_FINE_LOCATION) == android.content.pm.PackageManager.PERMISSION_GRANTED;
+                if (wm != null && wifiOn && loc) {
+                    try { wm.startScan(); } catch (Exception ignore) { }
+                    try {
+                        java.util.HashSet<String> seen = new java.util.HashSet<>();
+                        List<android.net.wifi.ScanResult> res = wm.getScanResults();
+                        java.util.Collections.sort(res, (a, b) -> b.level - a.level);
+                        for (android.net.wifi.ScanResult r : res) {
+                            if (r.SSID == null || r.SSID.isEmpty() || !seen.add(r.SSID)) continue;
+                            boolean obd = r.SSID.matches("(?i).*(obd|elm|v-?link|vgate|clkdevice|konnwei|super|wifi_|wi-fi_).*");
+                            JSONObject o = new JSONObject();
+                            o.put("ssid", r.SSID); o.put("level", r.level); o.put("obd", obd);
+                            o.put("open", r.capabilities == null || !(r.capabilities.contains("WPA") || r.capabilities.contains("WEP") || r.capabilities.contains("SAE")));
+                            nets.put(o);
+                            if (nets.length() >= 25) break;
+                        }
+                    } catch (Exception ignore) { }
+                }
+                out.put("ok", true); out.put("wifiOn", wifiOn); out.put("onWifi", n != null); out.put("ssid", ssid); out.put("gateway", gw == null ? "" : gw);
+                out.put("devices", devs); out.put("nets", nets); out.put("loc", loc); out.put("sdk", Build.VERSION.SDK_INT);
+                emit("wifi-search", out.toString());
+            } catch (Throwable e) {
+                emit("wifi-search", "{\"ok\":false,\"err\":" + q("ค้นหา WiFi ผิดพลาด: " + e) + "}");
+            }
+        }, "wifi-search").start();
+    }
+
+    /** TCP connect + "ATI": an ELM327 answers with its name and the '>' prompt. */
+    JSONObject probe(Network n, String host, int port) {
+        java.net.Socket sk = null;
+        try {
+            sk = wifiSocket(n);
+            sk.connect(new java.net.InetSocketAddress(host, port), 900);
+            boolean elm = false;
+            try {
+                sk.setSoTimeout(1200);
+                sk.getOutputStream().write("ATI\r".getBytes("US-ASCII"));
+                sk.getOutputStream().flush();
+                java.io.InputStream in = sk.getInputStream();
+                byte[] b = new byte[128];
+                int k = in.read(b);
+                if (k > 0) { String t = new String(b, 0, k, "US-ASCII"); elm = t.contains("ELM") || t.contains(">") || t.contains("OBD"); }
+            } catch (Exception ignore) { }
+            JSONObject o = new JSONObject();
+            o.put("host", host); o.put("port", port); o.put("elm", elm);
+            return o;
+        } catch (Exception e) { return null; }
+        finally { try { if (sk != null) sk.close(); } catch (Exception ignore) { } }
+    }
+
+    /** Android 10+: join an adapter's Wi-Fi from inside the app (the system asks the user to confirm). Result: event 'wifi-join' */
+    @JavascriptInterface
+    public void wifiJoin(final String ssid, final String pass) {
+        if (Build.VERSION.SDK_INT < 29) { emit("wifi-join", "{\"ok\":false,\"manual\":true,\"err\":" + q("Android รุ่นนี้ต้องต่อ WiFi ของอแดปเตอร์เองในหน้าตั้งค่า WiFi") + "}"); return; }
+        ui.post(() -> joinApi29(ssid, pass));
+    }
+
+    @android.annotation.TargetApi(Build.VERSION_CODES.Q)
+    void joinApi29(final String ssid, final String pass) {
+        {
+            try {
+                ConnectivityManager c = cm();
+                if (wifiCb != null) { try { c.unregisterNetworkCallback(wifiCb); } catch (Exception ignore) { } wifiCb = null; }
+                android.net.wifi.WifiNetworkSpecifier.Builder sb = new android.net.wifi.WifiNetworkSpecifier.Builder().setSsid(ssid);
+                if (pass != null && pass.length() >= 8) sb.setWpa2Passphrase(pass);
+                NetworkRequest req = new NetworkRequest.Builder()
+                        .addTransportType(NetworkCapabilities.TRANSPORT_WIFI)
+                        .removeCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET)
+                        .setNetworkSpecifier(sb.build()).build();
+                wifiCb = new ConnectivityManager.NetworkCallback() {
+                    @Override public void onAvailable(Network n) { wifiNet = n; emit("wifi-join", "{\"ok\":true,\"ssid\":" + q(ssid) + "}"); }
+                    @Override public void onUnavailable() { emit("wifi-join", "{\"ok\":false,\"err\":" + q("ไม่ได้เชื่อม WiFi “" + ssid + "” (ไม่พบสัญญาณ รหัสผ่านไม่ถูก หรือกดไม่อนุญาต)") + "}"); }
+                    @Override public void onLost(Network n) {
+                        if (wifiNet == n) wifiNet = null;
+                        if (tcpUp) { tcpUp = false; try { if (tcp != null) tcp.close(); } catch (Exception ignore) { } emit("tcp-lost", "{\"why\":" + q("WiFi ของอแดปเตอร์หลุด") + "}"); }
+                    }
+                };
+                c.requestNetwork(req, wifiCb, 30000);
+            } catch (Throwable e) { emit("wifi-join", "{\"ok\":false,\"err\":" + q("เชื่อม WiFi ไม่สำเร็จ: " + e.getMessage()) + "}"); }
+        }
+    }
+
+    @JavascriptInterface
+    public void openWifiSettings() {
+        try { Intent i = new Intent(android.provider.Settings.ACTION_WIFI_SETTINGS); i.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK); act.startActivity(i); } catch (Exception ignore) { }
+    }
+
+    @JavascriptInterface
+    public void tcpOpen(final String host, final int port) {
+        tcpClose();
+        new Thread(() -> {
+            String why = "";
+            try {
+                Network n = findWifi();
+                if (n == null) throw new Exception("ยังไม่ได้ต่อ WiFi ของอแดปเตอร์ — ต่อ WiFi (ชื่อ เช่น WiFi_OBDII / V-LINK) ในหน้าตั้งค่า WiFi ก่อน");
+                java.net.Socket s = wifiSocket(n);
+                s.setTcpNoDelay(true);
+                s.setKeepAlive(true);
+                s.connect(new java.net.InetSocketAddress(host, port), 5000);
+                tcp = s;
+                tcpOut = s.getOutputStream();
+                tcpUp = true;
+                emit("tcp-open", "{\"ok\":true,\"name\":" + q("WiFi OBD2 " + host) + "}");
+                java.io.InputStream in = s.getInputStream();
+                byte[] buf = new byte[1024];
+                int k;
+                while (tcpUp && (k = in.read(buf)) > 0) emit("tcp-data", q(b64(buf, k)));
+                if (tcpUp) why = "อแดปเตอร์ WiFi ปิดการเชื่อมต่อเอง";
+            } catch (Exception e) {
+                if (tcpUp) why = "อ่านข้อมูลไม่ได้: " + e.getMessage();
+                else emit("tcp-open", "{\"ok\":false,\"err\":" + q("เชื่อมต่อ " + host + ":" + port + " ไม่สำเร็จ: " + e.getMessage()) + "}");
+            }
+            if (tcpUp) { tcpUp = false; emit("tcp-lost", "{\"why\":" + q(why) + "}"); }
+        }, "tcp-io").start();
+    }
+
+    @JavascriptInterface
+    public boolean tcpWrite(String b64) {
+        try {
+            if (!tcpUp || tcpOut == null) return false;
+            synchronized (this) { tcpOut.write(unb64(b64)); tcpOut.flush(); }
+            return true;
+        } catch (Exception e) { return false; }
+    }
+
+    @JavascriptInterface
+    public void tcpClose() {
+        tcpUp = false;
+        try { if (tcp != null) tcp.close(); } catch (Exception ignore) { }
+        tcp = null;
+        tcpOut = null;
     }
 
     /* ======================= files ======================= */

@@ -157,6 +157,63 @@
       else if (loc) { /* message already says to enable Location */ }
     }
   }
+  // ---- WiFi OBD2 (ELM327 WiFi adapters): the phone joins the adapter's WiFi, the app talks TCP (usually 192.168.0.10:35000) ----
+  let wfBusy = false;
+  function wfSetInfo(t) { $('#wfInfo').textContent = t; }
+  function wfAdd(label, sub, fn) {
+    const b = document.createElement('button');
+    b.className = 'btn'; b.style.cssText = 'display:block;width:100%;text-align:left;margin:0 0 8px;white-space:normal';
+    b.innerHTML = '<b>' + esc(label) + '</b>' + (sub ? '<br><small>' + esc(sub) + '</small>' : ''); b.onclick = fn; $('#wfList').appendChild(b);
+  }
+  function wifiUse(host, port, elmOk) {
+    modal('#mWifi', false); rcStop = true;
+    S.wifiLast = host + ':' + port; saveS();
+    if (elmOk === false) toast('ไม่แน่ใจว่าเป็น ELM327 — ลองเชื่อมต่อดู', 3500);
+    return connect('obd', { kind: 'obd', name: 'WiFi OBD2', wifi: true, host, port, addr: 'WIFI:' + host + ':' + port });
+  }
+  function renderWifi(r) {
+    const L = $('#wfList'); L.innerHTML = '';
+    const devs = (r.devices || []).slice().sort((a, b) => (b.elm ? 1 : 0) - (a.elm ? 1 : 0));
+    devs.forEach((d) => wfAdd((d.elm ? '🚗 พบอแดปเตอร์ ELM327' : '❔ มีอุปกรณ์ตอบที่พอร์ตนี้') + ' · ' + d.host + ':' + d.port, d.elm ? 'แตะเพื่อเชื่อมต่อ' : 'ไม่ยืนยันว่าเป็น ELM327 — แตะเพื่อลองเชื่อมต่อ', () => wifiUse(d.host, d.port, d.elm)));
+    if (!r.wifiOn) wfSetInfo('WiFi ในมือถือปิดอยู่ — เปิด WiFi แล้วต่อกับ WiFi ของอแดปเตอร์ (ชื่อมักเป็น WiFi_OBDII / OBDII / V-LINK) แล้วกด “ค้นหาใหม่”');
+    else if (devs.length) wfSetInfo('WiFi ' + (r.ssid ? '“' + r.ssid + '” ' : '') + '— พบอแดปเตอร์ ' + devs.length + ' ตัว เลือกเพื่อเชื่อมต่อ');
+    else if (r.onWifi) wfSetInfo('WiFi ' + (r.ssid ? '“' + r.ssid + '” ' : '') + '— ไม่พบอแดปเตอร์ — ถ้านี่ไม่ใช่ WiFi ของอแดปเตอร์ ให้ต่อ WiFi ของอแดปเตอร์ก่อน (ปิดอแดปเตอร์แล้วเสียบใหม่ถ้าไม่เห็นชื่อ) หรือกด “ใส่ IP เอง”');
+    else wfSetInfo('มือถือยังไม่ได้ต่อ WiFi — เลือกชื่อ WiFi ของอแดปเตอร์ด้านล่าง หรือกด “ตั้งค่า WiFi” แล้วต่อเอง');
+    const nets = (r.nets || []).slice().sort((a, b) => (b.obd ? 1 : 0) - (a.obd ? 1 : 0) || b.level - a.level);
+    if (nets.length && !devs.length) nets.forEach((n) => wfAdd((n.obd ? '🚗 ' : '📶 ') + n.ssid, (n.open ? 'ไม่มีรหัสผ่าน' : 'มีรหัสผ่าน') + ' · ' + n.level + ' dBm · แตะเพื่อต่อ WiFi นี้', () => wifiJoinNet(n)));
+    if (r.wifiOn && !r.loc) wfAdd('📍 ยังไม่อนุญาต “ตำแหน่ง” ให้แอป', 'อนุญาตแล้วแอปจะแสดงรายชื่อ WiFi รอบตัวให้เลือก (หรือต่อ WiFi เองในตั้งค่า WiFi) — แตะเพื่อเปิดตั้งค่าแอป', () => { if (window.JetNative && JetNative.openAppSettings) JetNative.openAppSettings(); });
+  }
+  async function wifiScan() {
+    if (!window.JetLic || !JetLic.ok()) return;
+    if (!window.JetBt || !JetBt.wifiSearch || !window.JetNative) { toast('ค้นหา WiFi OBD2 ได้เฉพาะในแอป Android'); return; }
+    modal('#mWifi', true);
+    if (wfBusy) return; wfBusy = true;
+    wfSetInfo('กำลังค้นหาอแดปเตอร์…'); $('#wfList').innerHTML = '';
+    try { renderWifi(await JetBt.wifiSearch()); }
+    catch (e) { wfSetInfo(e.message || String(e)); log('err', e.message || e); }
+    finally { wfBusy = false; }
+  }
+  async function wifiJoinNet(n) {
+    let pass = '';
+    if (!n.open) { pass = await askText('รหัสผ่านของ WiFi “' + n.ssid + '”', ''); if (pass == null) return; }
+    wfBusy = true; wfSetInfo('กำลังต่อ WiFi “' + n.ssid + '” … (ถ้ามีหน้าต่างให้ยืนยัน กด “เชื่อมต่อ/อนุญาต”)'); $('#wfList').innerHTML = '';
+    let r; try { r = await JetBt.wifiJoin(n.ssid, pass); } catch (e) { r = { ok: false, err: e.message || String(e) }; }
+    wfBusy = false;
+    if (!r.ok) { log('err', r.err || 'ต่อ WiFi ไม่สำเร็จ'); toast(r.err || 'ต่อ WiFi ไม่สำเร็จ', 5000); if (r.manual && JetNative.openWifiSettings) JetNative.openWifiSettings(); }
+    else log('info', 'ต่อ WiFi ' + n.ssid + ' แล้ว');
+    wifiScan();
+  }
+  async function wifiManual() {
+    const v = await askText('ที่อยู่อแดปเตอร์ WiFi (IP:พอร์ต) เช่น 192.168.0.10:35000', S.wifiLast || '192.168.0.10:35000');
+    if (v == null) return;
+    const m = /^\s*([A-Za-z0-9.\-]+)(?::(\d{1,5}))?\s*$/.exec(v);
+    if (!m || +(m[2] || 35000) > 65535) { toast('รูปแบบไม่ถูกต้อง — ตัวอย่าง 192.168.0.10:35000', 4000); return; }
+    wifiUse(m[1], +(m[2] || 35000));
+  }
+  $('#gWifi').onclick = () => wifiScan();
+  $('#wfAgain').onclick = () => wifiScan();
+  $('#wfManual').onclick = () => wifiManual();
+  $('#wfSet').onclick = () => { if (window.JetNative && JetNative.openWifiSettings) JetNative.openWifiSettings(); else toast('ต่อ WiFi ของอแดปเตอร์ในตั้งค่ามือถือ'); };
   // ---- OBD link loss: say why, reconnect by itself, go gentler on an adapter that keeps dropping ----
   let rcBusy = false, rcStop = false;
   const DROP_WIN = 6 * 3600 * 1000;
