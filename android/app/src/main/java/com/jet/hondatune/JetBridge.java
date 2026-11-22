@@ -755,10 +755,12 @@ public class JetBridge {
     BluetoothSocket sock;
     java.io.OutputStream sockOut;
     volatile boolean sppUp = false;
+    volatile int sppGen = 0;      // every open/close starts a new generation: an old reader thread that wakes up late must not touch the new connection (nor report it lost)
 
     @JavascriptInterface
     public void sppOpen(final String addr) {
         sppClose();
+        final int gen = ++sppGen;
         new Thread(() -> {
             String err = "", why = "";
             try {
@@ -800,6 +802,7 @@ public class JetBridge {
                     }
                 }
                 if (s == null) throw new Exception(err);
+                if (gen != sppGen) { try { s.close(); } catch (Exception ignore) { } return; }      // the user closed / reopened meanwhile
                 sock = s;
                 sockOut = s.getOutputStream();
                 sppUp = true;
@@ -808,13 +811,14 @@ public class JetBridge {
                 java.io.InputStream in = s.getInputStream();
                 byte[] buf = new byte[1024];
                 int n2;
-                while (sppUp && (n2 = in.read(buf)) > 0) emit("spp-data", q(b64(buf, n2)));
-                if (sppUp) why = "อแดปเตอร์ปิดการเชื่อมต่อเอง (ลิงก์ Bluetooth ถูกตัดจากฝั่งตัวอแดปเตอร์)";
+                while (sppUp && gen == sppGen && (n2 = in.read(buf)) > 0) emit("spp-data", q(b64(buf, n2)));
+                if (sppUp && gen == sppGen) why = "อแดปเตอร์ปิดการเชื่อมต่อเอง (ลิงก์ Bluetooth ถูกตัดจากฝั่งตัวอแดปเตอร์)";
             } catch (Exception e) {
+                if (gen != sppGen) return;                       // closed on purpose / replaced: nothing to report
                 if (sppUp) why = "อ่านข้อมูลไม่ได้: " + e.getMessage();
                 if (!sppUp) { emit("spp-open", "{\"ok\":false,\"err\":" + q("เชื่อมต่อไม่สำเร็จ: " + e.getMessage() + " — ตรวจว่าเสียบ ELM327 ที่รถและเปิดกุญแจ ON (ไฟบนตัว ELM ติด), ลบการจับคู่เก่าแล้วจับคู่ใหม่ PIN 1234/0000") + "}"); return; }
             }
-            if (sppUp) { sppUp = false; emit("spp-lost", "{\"why\":" + q(why) + "}"); }
+            if (sppUp && gen == sppGen) { sppUp = false; emit("spp-lost", "{\"why\":" + q(why) + "}"); }
         }, "spp-io").start();
     }
 
@@ -829,6 +833,7 @@ public class JetBridge {
 
     @JavascriptInterface
     public void sppClose() {
+        sppGen++;
         sppUp = false;
         try { if (sock != null) sock.close(); } catch (Exception ignore) { }
         sock = null;
@@ -843,6 +848,7 @@ public class JetBridge {
     java.net.Socket tcp;
     java.io.OutputStream tcpOut;
     volatile boolean tcpUp = false;
+    volatile int tcpGen = 0;
 
     ConnectivityManager cm() { return (ConnectivityManager) act.getSystemService(Context.CONNECTIVITY_SERVICE); }
 
@@ -956,7 +962,7 @@ public class JetBridge {
             o.put("host", host); o.put("port", port); o.put("elm", elm);
             return o;
         } catch (Exception e) { return null; }
-        finally { try { if (sk != null) sk.close(); } catch (Exception ignore) { } }
+        finally { try { if (sk != null) { try { sk.setSoLinger(true, 0); } catch (Exception ignore) { } sk.close(); } } catch (Exception ignore) { } }      // RST: a WiFi adapter serves one client — free it at once
     }
 
     /** Android 10+: join an adapter's Wi-Fi from inside the app (the system asks the user to confirm). Result: event 'wifi-join' */
@@ -999,6 +1005,7 @@ public class JetBridge {
     @JavascriptInterface
     public void tcpOpen(final String host, final int port) {
         tcpClose();
+        final int gen = ++tcpGen;
         new Thread(() -> {
             String why = "";
             try {
@@ -1008,6 +1015,7 @@ public class JetBridge {
                 s.setTcpNoDelay(true);
                 s.setKeepAlive(true);
                 s.connect(new java.net.InetSocketAddress(host, port), 5000);
+                if (gen != tcpGen) { try { s.close(); } catch (Exception ignore) { } return; }      // closed / reopened meanwhile
                 tcp = s;
                 tcpOut = s.getOutputStream();
                 tcpUp = true;
@@ -1015,13 +1023,14 @@ public class JetBridge {
                 java.io.InputStream in = s.getInputStream();
                 byte[] buf = new byte[1024];
                 int k;
-                while (tcpUp && (k = in.read(buf)) > 0) emit("tcp-data", q(b64(buf, k)));
-                if (tcpUp) why = "อแดปเตอร์ WiFi ปิดการเชื่อมต่อเอง";
+                while (tcpUp && gen == tcpGen && (k = in.read(buf)) > 0) emit("tcp-data", q(b64(buf, k)));
+                if (tcpUp && gen == tcpGen) why = "อแดปเตอร์ WiFi ปิดการเชื่อมต่อเอง";
             } catch (Exception e) {
+                if (gen != tcpGen) return;                       // closed on purpose / replaced: nothing to report
                 if (tcpUp) why = "อ่านข้อมูลไม่ได้: " + e.getMessage();
                 else emit("tcp-open", "{\"ok\":false,\"err\":" + q("เชื่อมต่อ " + host + ":" + port + " ไม่สำเร็จ: " + e.getMessage()) + "}");
             }
-            if (tcpUp) { tcpUp = false; emit("tcp-lost", "{\"why\":" + q(why) + "}"); }
+            if (tcpUp && gen == tcpGen) { tcpUp = false; emit("tcp-lost", "{\"why\":" + q(why) + "}"); }
         }, "tcp-io").start();
     }
 
@@ -1036,6 +1045,7 @@ public class JetBridge {
 
     @JavascriptInterface
     public void tcpClose() {
+        tcpGen++;
         tcpUp = false;
         try { if (tcp != null) tcp.close(); } catch (Exception ignore) { }
         tcp = null;

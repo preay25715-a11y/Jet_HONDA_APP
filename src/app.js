@@ -98,7 +98,7 @@
     const s = st.ecu ? st.ecu.state : null;
     const good = s === 'OK' || s === 'SECURE' || s === 'READ';
     $('#tEcu').className = 'chipst' + (good ? ' on' : s && s !== 'OFF' ? ' mid' : '');
-    $('#tEcu').textContent = 'ECU ' + (s || '—');
+    $('#tEcu').textContent = 'ECU ' + (s === 'NOECU' ? 'WAIT' : s || '—');
     $('#pGauge').className = 'chipst' + (st.gauge ? ' on' : '');
     $('#tGauge').textContent = st.gauge ? 'GAUGE ✓' : 'GAUGE';
     const bd = $('#bDemo'); if (bd) bd.classList.toggle('on', !!(t && t.kind === 'demo'));
@@ -115,14 +115,15 @@
   function renderGauge() {
     const g = st.gauge;
     const o = st.t && st.t.kind === 'obd' ? st.t : null;
-    $('#obdInfo').innerHTML = o ? '🚗 OBD-II: <span class="okc">เชื่อมแล้ว</span> · ' + esc(o.name) + ' · ' + (o.pidList ? o.pidList.length : 0) + ' ค่า · ' + esc(st.veh && st.veh.text ? st.veh.text : o.honda ? 'HONDA PGM-FI (มอเตอร์ไซค์)' : o.fuel === 'd' ? 'ดีเซล' : 'เบนซิน') + (o.ident && o.ident.vin ? '<br><small>VIN ' + esc(o.ident.vin) + (o.ident.cal ? ' · ECU ' + esc(o.ident.cal) : '') + '</small>' : '') : '🚗 OBD-II: ยังไม่เชื่อม';
-    $('#gOff').disabled = !g && !o;
+    $('#obdInfo').innerHTML = o ? '🚗 OBD-II: <span class="okc">เชื่อมแล้ว</span> · ' + esc(o.name) + ' · ' + (o.pidList ? o.pidList.length : 0) + ' ค่า · ' + esc(st.veh && st.veh.text ? st.veh.text : o.honda ? 'HONDA PGM-FI (มอเตอร์ไซค์)' : o.fuel === 'd' ? 'ดีเซล' : 'เบนซิน') + (o.ident && o.ident.vin ? '<br><small>VIN ' + esc(o.ident.vin) + (o.ident.cal ? ' · ECU ' + esc(o.ident.cal) : '') + '</small>' : '') : connT ? '🚗 OBD-II: <span class="okc">ต่อ ELM327 แล้ว</span> — รอรถตอบ (เปิดกุญแจ / สตาร์ทเครื่อง) · กด “ตัดการเชื่อมต่อ” เพื่อยกเลิก' : '🚗 OBD-II: ยังไม่เชื่อม';
+    $('#gOff').disabled = !g && !o && !connT;
   }
   $('#bSet').addEventListener('click', renderGauge);
   setInterval(() => { if ($('#mSet').classList.contains('show')) renderGauge(); }, 1000);
   const gConnect = async () => { await connectBt('all'); renderGauge(); };
   $('#gBle').onclick = () => gConnect();
   $('#gOff').onclick = async () => {
+    if (connT && !st.t) { rcStop = true; await disconnect(); pills(); renderGauge(); toast('ยกเลิกการเชื่อมต่อแล้ว'); return; }      // still waiting for the car
     if (st.t && st.t.kind === 'obd') { rcStop = true; await disconnect(); pills(); renderGauge(); toast('ตัดการเชื่อมต่อ OBD แล้ว'); return; }
     if (!st.gauge) return;
     if (st.gauge === st.t) await disconnect(); else { try { await st.gauge.close(); } catch (e) {} st.gauge = null; st.sens = null; }
@@ -132,7 +133,9 @@
   $$('#mConnect .opt').forEach((o) => o.onclick = () => { modal('#mConnect', false); o.dataset.c === 'obd' ? connectBt('obd') : connect(o.dataset.c); });
   $('#bDisc').onclick = () => { rcStop = true; modal('#mConnect', false); disconnect(); };
 
+  let connAbort = false, connT = null, waitingCar = false;           // a connect that is still waiting for the car / retrying can be cancelled by the user
   async function disconnect() {
+    connAbort = true; if (connT) { try { connT.abort(); } catch (e) {} }
     stopLive();
     try { if (st.t) await st.t.close(); } catch (e) {}
     try { if (st.gauge && st.gauge !== st.t) await st.gauge.close(); } catch (e) {}
@@ -218,11 +221,11 @@
   let rcBusy = false, rcStop = false;
   const DROP_WIN = 6 * 3600 * 1000;
   const dropsOf = (addr) => ((S.obdDrops || {})[addr] || []).filter((t) => Date.now() - t < DROP_WIN);
-  const dropLevel = (addr) => Math.min(2, dropsOf(addr).length);               // 0 normal · 1 no count digit / AT2 · 2 one value per request + pauses (expires after 6 h without drops)
+  const dropLevel = (addr) => { const n = dropsOf(addr).length; return n >= 3 ? 2 : n >= 2 ? 1 : 0; };               // 0 normal · 1 no count digit / AT2 · 2 one value per request + pauses (expires after 6 h without drops). A single drop is ignored: starting the engine can power-cycle the adapter, that is no sign of a fragile adapter
   const noteDrop = (addr) => { S.obdDrops = S.obdDrops || {}; S.obdDrops[addr] = dropsOf(addr).concat(Date.now()).slice(-5); saveS(); };
   async function reconnectObd(dev) {
     if (rcBusy) return; rcBusy = true; rcStop = false;
-    const waits = [1500, 3000, 5000, 8000, 12000];
+    const waits = [1500, 3000, 5000, 8000, 12000, 15000, 15000, 15000, 15000, 15000, 15000];      // ≈ 2 minutes: an adapter that lost power while the engine was cranked needs a few seconds to come back
     try {
       for (let i = 0; i < waits.length && !rcStop; i++) {
         toast('OBD หลุด — กำลังต่อใหม่ ' + (i + 1) + '/' + waits.length, 3000); log('info', 'ต่อ OBD ใหม่ครั้งที่ ' + (i + 1) + '/' + waits.length);
@@ -242,12 +245,49 @@
         if (!dev) { dev = await JetBt.btPick('obd'); }
         await disconnect();
         toast('กำลังเชื่อม ' + (dev.name || 'OBD-II') + '…', 3000);
-        const stream = await JetBt.openObdStream(dev);
+        connAbort = false;
+        // a WiFi adapter serves one client at a time and may still hold the previous connection for a moment: try again a few times
+        const openStream = async () => {
+          for (let i = 1; ; i++) {
+            try { return await JetBt.openObdStream(dev); }
+            catch (e) { if (!dev.wifi || i >= 3 || connAbort) throw e; log('warn', 'WiFi ต่อไม่ติด (' + (e.message || e) + ') — ลองใหม่ ' + (i + 1) + '/3'); await P.sleep(1500); }
+          }
+        };
+        let stream = await openStream();
         const lvl = dev.addr ? dropLevel(dev.addr) : 0;
         if (lvl) log('info', 'อแดปเตอร์นี้เคยหลุดภายใน 6 ชม. — ใช้โหมดปลอดภัย ระดับ ' + lvl + ' (ช้าลงเล็กน้อยเพื่อไม่ให้หลุดอีก)');
         const lastProto = dev.addr && !lvl ? ((S.obdProto || {})[dev.addr] || '') : '';
-        const t = new Elm327(stream, { name: 'OBD ' + (dev.name || stream.name || 'ELM327'), log, safe: lvl, lastProto });
-        try { await t.init(); } catch (e) { try { await stream.close(); } catch (x) {} throw e; }
+        const mk = (sm) => new Elm327(sm, { name: 'OBD ' + (dev.name || sm.name || 'ELM327'), log, safe: lvl, lastProto });
+        let t = mk(stream); connT = t;
+        try {
+          for (let n = 0; ; n++) {
+            try { await t.init(); break; }
+            catch (e) {
+              if (connAbort) throw new Error('ยกเลิกการเชื่อมต่อ');
+              if (t.state === 'NOECU') {                  // the adapter answers, the car does not (key OFF, engine not started yet): stay connected and wait for the car
+                log('warn', 'ELM327 ต่อได้แล้ว แต่รถยังไม่ตอบ — รอรถ (เปิดกุญแจ ON / สตาร์ทเครื่อง) · กด ตัดการเชื่อมต่อ เพื่อยกเลิก');
+                toast('ต่อ ELM327 แล้ว — รอรถตอบ (เปิดกุญแจ/สตาร์ทเครื่อง)…', 6000);
+                let ok = false; const t0 = Date.now();
+                while (!connAbort && t.state !== 'OFF' && Date.now() - t0 < 180000) {
+                  await P.sleep(1500); if (connAbort) break;
+                  if (await t.retryEcu()) { ok = true; break; }
+                  if ((Date.now() - t0) % 20000 < 4000) toast('ยังรอรถตอบ… (เปิดกุญแจ/สตาร์ทเครื่อง)', 4000);
+                }
+                if (connAbort) throw new Error('ยกเลิกการเชื่อมต่อ');
+                if (!ok) throw e;
+                break;
+              }
+              if (t.silent && n < 2 && !connAbort) {      // the adapter does not answer at all: a stale connection (WiFi) or an adapter still waking up — reopen the link
+                log('warn', 'อแดปเตอร์ไม่ตอบ — เปิดการเชื่อมต่อใหม่ (' + (n + 2) + '/3)');
+                try { await stream.close(); } catch (x) {}
+                await P.sleep(2000); if (connAbort) throw new Error('ยกเลิกการเชื่อมต่อ');
+                stream = await openStream(); t = mk(stream); connT = t; continue;
+              }
+              throw e;
+            }
+          }
+        } catch (e) { try { await stream.close(); } catch (x) {} throw e; }
+        finally { connT = null; }
         if (dev.addr && /^[3-8]$/.test(t.proto) && (S.obdProto || {})[dev.addr] !== t.proto) { S.obdProto = S.obdProto || {}; S.obdProto[dev.addr] = t.proto; saveS(); }      // remembered per adapter for a quick start next time
         t.onLost = (why) => {
           log('err', 'OBD หลุดการเชื่อมต่อ' + (why ? ' — ' + why : '')); stopLive(); st.t = null; st.ecu = null; st.autoTiles = null; pills(); renderTiles();
@@ -454,7 +494,23 @@
     const t = st.t; let alive = true;
     try { alive = !(t && t.alive) || await t.alive(); } catch (e) { alive = false; }
     if (!alive && t && t.kind === 'obd' && t.onLost) { try { await t.s.close(); } catch (e) {} t.state = 'OFF'; t.onLost('อแดปเตอร์หยุดตอบ (ลิงก์ยังอยู่แต่ไม่มีคำตอบเกิน ' + Math.round((t.deadMs || 8000) / 1000) + ' วินาที)'); return; }
+    if (t && t.kind === 'obd' && t.recover && !t.dead && t.state !== 'OFF') { waitCar(t); return; }      // the adapter answers, the car does not: wait for the car (key ON / engine start) instead of giving up
     log('err', 'LIVE: กล่องไม่ตอบ' + (t && t.kind === 'obd' ? ' — อแดปเตอร์ยังตอบ แต่รถไม่ส่งค่า (เปิดกุญแจ ON อยู่หรือไม่?)' : '')); stopLive();
+  }
+  // key OFF, engine cranking (the voltage dip resets cheap adapters) or an ECU that went to sleep: keep the link, put the adapter back in a known state and ask again until the car answers — LIVE restarts by itself
+  async function waitCar(t) {
+    if (waitingCar) return; waitingCar = true; stopLive();
+    log('warn', 'LIVE: รถไม่ส่งค่า (กุญแจดับ / กำลังสตาร์ท) — รอรถตอบแล้วอ่านต่อเอง · กด ตัดการเชื่อมต่อ เพื่อหยุดรอ');
+    toast('รถไม่ส่งค่า — รอรถตอบ แล้วอ่านต่ออัตโนมัติ', 5000);
+    try {
+      const t0 = Date.now();
+      while (st.t === t && t.state !== 'OFF' && !t.dead && Date.now() - t0 < 600000) {
+        pills();
+        if (await t.recover()) { pills(); log('info', 'รถตอบแล้ว — อ่านค่าต่อ'); toast('รถตอบแล้ว — อ่านค่าต่อ'); startLive(); return; }
+        pills(); await P.sleep(2000);
+      }
+      if (st.t === t && t.state !== 'OFF') log('err', 'LIVE: รอรถตอบนานเกิน 10 นาที — หยุดรอ');
+    } finally { waitingCar = false; pills(); }
   }
   async function liveLoop() {
     st.liveRunning = true;

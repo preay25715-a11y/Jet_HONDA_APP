@@ -343,5 +343,25 @@ const { SimTransport } = require('../src/sim.js');
     const f = new FakeElm(o), e = new Elm327(f, { name: nm }); await e.init(); assert.strictEqual(e.bridge, want, label + ': bridge flag ' + e.bridge); }
   console.log('v1.6.2 tests passed (K-line / single-value links: throttle every cycle, RPM and throttle asked last, speed line in the log)');
 
+  // 8) v1.6.7: connecting / driving while the engine is started
+  // 8a) car silent at connect (key OFF): init reports NOECU, the adapter stays usable, retryEcu() succeeds as soon as the car answers
+  { const f = new FakeElm({ carOffMs: 60000 }), e = new Elm327(f); let err = null; try { await e.init(); } catch (x) { err = x; }
+    assert(err && e.state === 'NOECU' && !e.silent, 'NOECU, adapter answered: ' + (err && err.message)); assert(e.dump(6).includes('UNABLE TO CONNECT'), 'raw answers are kept: ' + e.dump(6));
+    assert.strictEqual(await e.retryEcu(), false, 'still silent'); f.carOffUntil = 0;                                   // the engine is started
+    let ok = false; for (let i = 0; i < 10 && !ok; i++) { await new Promise((r) => setTimeout(r, 100)); ok = await e.retryEcu(); }
+    assert(ok && e.state === 'OK' && e.pidList.length > 5, 'connected after the car answered'); const d = await e.readLive(); assert(d && d.RPM > 600, 'values: ' + JSON.stringify(d)); }
+  // 8b) battery dip: the adapter resets and searches again (every new request restarts the search) — values stop, recover() brings them back without a new link
+  { const f = new FakeElm({ searchMs: 300 }), e = new Elm327(f, { log: () => {} }); await e.init(); e.liveTO = 100;
+    assert((await e.readLive()).RPM > 600); f.brownOut(); let got = 0, cycles = 0;
+    for (; cycles < 40 && !got; cycles++) { const d = await e.readLive(); if (d && d.RPM > 600) got = cycles + 1; }
+    assert(got > 0 && got <= 12, 'values are back by themselves after ' + got + ' cycles'); assert.strictEqual(e.state, 'OK'); }
+  // 8c) key OFF for a while mid-session: readLive gives nothing, recover() fails while the car is silent and succeeds when it answers again
+  { const f = new FakeElm({}), e = new Elm327(f, { log: () => {} }); await e.init(); await e.readLive(); f.carOff(60000);
+    assert.strictEqual(await e.recover(), false, 'car still silent'); assert.strictEqual(e.state, 'NOECU');
+    f.carOffUntil = 0; assert.strictEqual(await e.recover(), true); assert.strictEqual(e.state, 'OK'); assert((await e.readLive()).RPM > 600); }
+  // 8d) abort() ends a pending wait at once and nothing is sent afterwards
+  { const f = new FakeElm({ carOffMs: 60000 }), e = new Elm327(f); try { await e.init(); } catch (x) { /* NOECU */ }
+    const t0 = Date.now(), pend = e.retryEcu(); setTimeout(() => e.abort(), 50); assert.strictEqual(await pend, false); assert(Date.now() - t0 < 2000, 'returned quickly'); const n = f.nreq; await e.retryEcu(); assert.strictEqual(f.nreq, n, 'no request after abort'); }
+  console.log('v1.6.7 tests passed (wait for the car, battery dip recovery, key-off recovery, abort)');
 
 })().catch((e) => { console.error(e); process.exit(1); });

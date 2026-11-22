@@ -61,31 +61,46 @@
     }
     /** send an AT/OBD command, resolve with cleaned lines (prompt '>' ends the answer) */
     async query(cmd, timeout) {
+      if (this.dead) return null;
+      if (this.suspect) { this.suspect = false; await sleep(150); }                  // the last answer was empty: a stray prompt may be shifting the answers — let the late one arrive and drop it
       const tm = timeout || 2500;
       this.buf = '';
       const p = new Promise((res) => { this.waiter = res; setTimeout(() => { if (this.waiter === res) { this.waiter = null; const t = this.buf; this.buf = ''; res(t.indexOf('>') >= 0 ? t : null); } }, tm); });
       this.stats.tx++;
       await this.s.write(Array.from(cmd + '\r', (c) => c.charCodeAt(0)));
       const raw = await p;
+      const h = this.hist || (this.hist = []); h.push(cmd + ' → ' + (raw == null ? '(ไม่มีคำตอบ)' : raw.replace(/>/g, '').replace(/[\r\n]+/g, ' / ').trim().slice(0, 60))); if (h.length > 40) h.shift();
       if (raw == null) { this.stats.bad++; return null; }
       this.stats.rx++;
-      return raw.replace(/>/g, '').split(/[\r\n]+/).map((l) => l.trim()).filter((l) => l && l.toUpperCase() !== cmd.toUpperCase());
+      const lines = raw.replace(/>/g, '').split(/[\r\n]+/).map((l) => l.trim()).filter((l) => l && l.toUpperCase() !== cmd.toUpperCase());
+      if (!lines.length && !/^AT/i.test(cmd)) this.suspect = true;
+      return lines;
     }
     async init() {
+      await this._hello();
+      if (!(await this._findEcu(false))) { this.state = 'NOECU'; throw this._noEcu(); }
+      await this._after();
+      return true;
+    }
+    _noEcu() { this.log('warn', 'ELM trace: ' + this.dump(10)); return new Error('ต่อ ELM327 ได้ แต่ไม่เจอ ECU — เปิดสวิตช์กุญแจ (ON) แล้วลองใหม่' + (this.last0100 ? ' (ELM ตอบ: ' + this.last0100 + ')' : '')); }
+    _chk() { if (this.dead) throw new Error('ยกเลิกการเชื่อมต่อ'); }
+    /** stop whatever is going on (the user pressed disconnect while the app was still waiting for the car) */
+    abort() { this.dead = true; if (this.waiter) { const w = this.waiter; this.waiter = null; w(null); } }
+    /** the last raw exchanges with the adapter, for the Log page (what the adapter really said) */
+    dump(n) { return (this.hist || []).slice(-(n || 8)).join(' | '); }
+    async _hello() {
       this.state = 'INIT';
       let r = await this.query('ATZ', 4000);
       if (!r) { await sleep(300); r = await this.query('ATZ', 5000); }                    // clones (KONNWEI KW90x …) can miss the first reset
-      if (!r) { r = await this.query('ATI', 3000); if (!r) throw new Error('ELM327 ไม่ตอบ — ตรวจว่าเสียบที่รถและจับคู่ Bluetooth แล้ว (PIN 1234 / 0000)'); }
+      if (!r) { r = await this.query('ATI', 3000); if (!r) { this.silent = true; this.log('warn', 'ELM trace: ' + this.dump(6)); throw new Error('ELM327 ไม่ตอบ — ตรวจว่าเสียบที่รถและจับคู่ Bluetooth แล้ว (PIN 1234 / 0000)'); } }
       this.ver = (r.find((l) => /ELM|OBD|v\d/i.test(l)) || '').replace(/[^\x20-\x7e]/g, '');
       // a short gap between the AT commands: cheap clones (blue ELM327 MINI, KW90x) lose commands when the Bluetooth side outruns the bus side
       for (const c of ['ATE0', 'ATL0', 'ATS0', 'ATH0', 'ATAT1', 'ATST32']) { await this.query(c, 1500); await sleep(70); }
-      let ok = false, bus = false; this.last0100 = '';
-      const tryRead = async (to) => {                       // 0100 = "which PIDs do you support": the first sign that the car answers
-        const l = await this.query('0100', to); this.last0100 = l ? l.join(' | ') : '(ไม่มีคำตอบ)';
-        if (l && l.some((x) => /41\s?00/.test(x.replace(/\s/g, '').replace(/^SEARCHING\.\.\./, '')))) return true;
-        if (l && l.some((x) => /UNABLE|ERROR|CAN ERROR|BUS/i.test(x))) bus = true;
-        return false;
-      };
+    }
+    /** the adapter answers, the car may not (yet): search for the ECU. quick = the repeat pass while waiting for the car (key ON / engine start) */
+    async _findEcu(quick) {
+      let ok = false; this.bus = false; this.last0100 = '';
+      const tryRead = (to) => this._try0100(to);
       // auto protocol; first 0100 can be slow (SEARCHING…, bus init)
       const lp = String(this.opts.lastProto || '');
       if (/^[3-8]$/.test(lp)) {                             // the protocol that worked last time on this adapter: connects in a second instead of searching
@@ -93,8 +108,8 @@
         if (a && a.some((x) => /^OK/i.test(x)) && await tryRead(4000)) ok = true; else this.log('info', 'ELM: โปรโตคอลที่จำไว้ (' + lp + ') ใช้ไม่ได้ — ค้นหาใหม่');
       }
       if (!ok) { await this.query('ATSP0', 1500);
-        for (let i = 0; i < 3 && !ok; i++) { ok = await tryRead(12000); if (!ok) await sleep(500); } }
-      if (!ok && bus) {
+        for (let i = 0; i < (quick ? 1 : 3) && !ok; i++) { this._chk(); ok = await tryRead(quick ? 10000 : 12000); if (!ok) await sleep(500); } }
+      if (!ok && this.bus && !quick) {
         // the adapter is alive but its automatic protocol search gave up (common with cheap clones): try the usual protocols one by one
         for (const sp of [['6', 4000], ['5', 8000], ['3', 8000], ['4', 8000], ['8', 4000]]) {
           this.log('info', 'ELM: ลองโปรโตคอล ' + sp[0]);
@@ -104,7 +119,16 @@
         }
         if (!ok) await this.query('ATSP0', 1500);
       }
-      if (!ok) { this.state = 'NOECU'; throw new Error('ต่อ ELM327 ได้ แต่ไม่เจอ ECU — เปิดสวิตช์กุญแจ (ON) แล้วลองใหม่' + (this.last0100 ? ' (ELM ตอบ: ' + this.last0100 + ')' : '')); }
+      return ok;
+    }
+    /** one "0100" ("which PIDs do you support") = the first sign that the car answers; sets this.bus when the adapter said the bus is the problem */
+    async _try0100(to) {
+      const l = await this.query('0100', to); this.last0100 = l ? l.join(' | ') : '(ไม่มีคำตอบ)';
+      if (l && l.some((x) => /41\s?00/.test(x.replace(/\s/g, '').replace(/^SEARCHING\.\.\./, '')))) return true;
+      if (l && l.some((x) => /UNABLE|ERROR|CAN ERROR|BUS/i.test(x))) this.bus = true;
+      return false;
+    }
+    async _after() {
       const pr = await this.query('ATDPN', 1500); this.proto = pr ? pr.join('').replace(/^A/, '') : '';
       this.honda = /^H/.test(this.proto);          // HONDA-KLINE bridge speaking the Honda PGM-FI tables (protocol 'H')
       this.bridge = this.honda || /HONDA/i.test(this.name || '');      // v1.6.3: the HONDA-KLINE box is only ever plugged into a Honda motorcycle — also when it talks CAN or KWP to the bike (not the Honda tables)
@@ -122,6 +146,40 @@
       this.log('info', 'อแดปเตอร์ ' + (this.ver || 'ELM327') + (this.safe ? ' · โหมดปลอดภัย ' + this.safe : '') + ' · โปรโตคอล ' + (this.proto || '?') + ' · ' + (this.single ? 'ถามทีละค่า' : 'หลายค่า/คำสั่ง') + ' · นับคำตอบ ' + (this.useCnt ? 'ใช่' : 'ไม่') + ' · AT2 ' + (this.tuned ? 'ใช่' : 'ไม่'));
       this.state = 'OK';
       return true;
+    }
+    /** the car was silent at connect time (key OFF, engine not started yet): the adapter stays connected and asks again until the car answers */
+    async retryEcu() {
+      if (this.dead || this.state === 'OFF') return false;
+      this.state = 'INIT';
+      try { await this._resync(); if (!(await this._findEcu(true))) { this.state = 'NOECU'; return false; } await this._after(); return true; }
+      catch (e) { if (this.state !== 'OFF') this.state = 'NOECU'; return false; }
+    }
+    /** a stray prompt or a late answer shifts every answer by one: send a bare CR, wait for the prompt, throw away what is left */
+    async _resync() {
+      for (let i = 0; i < 3; i++) {
+        await sleep(120); this.buf = '';
+        const p = new Promise((res) => { this.waiter = res; setTimeout(() => { if (this.waiter === res) { this.waiter = null; res(null); } }, 1200); });
+        try { await this.s.write([13]); } catch (e) { this.waiter = null; return; }
+        if ((await p) != null) break;
+      }
+      await sleep(100); this.buf = '';
+    }
+    /** adapter alive, car silent mid-session (key OFF, engine cranking — the voltage dip makes cheap adapters reset and forget the protocol, and a protocol search is interrupted by every new request): put the adapter back into the known state and ask again */
+    async recover() {
+      if (this.dead || this.state === 'OFF') return false;
+      this.state = 'INIT'; this.log('warn', 'ELM: ไม่มีค่าจากรถ — ตั้งค่าอแดปเตอร์ใหม่แล้วถามอีกครั้ง' + ((this.nRec = (this.nRec || 0) + 1) % 6 === 1 ? ' · ที่ผ่านมา: ' + this.dump(6) : ''));
+      try {
+        await this._resync();
+        for (const c of ['ATE0', 'ATL0', 'ATS0', 'ATH0', 'ATAT1', this._stDefault()]) { this._chk(); await this.query(c, 1500); await sleep(70); }
+        let ok = false; this.bus = false;
+        if (/^[3-8]$/.test(this.proto)) { const a = await this.query('ATSP' + this.proto, 1500); await sleep(70); ok = !!(a && a.some((x) => /^OK/i.test(x))) && await this._try0100(6000); }
+        if (!ok) { this._chk(); await this.query('ATSP0', 1500); ok = await this._try0100(12000); }
+        if (!ok) { this.state = 'NOECU'; return false; }
+        this.nRec = 0; this.tuned = false; this.miss = 0; this.noAny = 0; this.pfail = {}; this.pskip = {}; this.lastGood = Date.now(); this.state = 'OK';
+        try { await this._tune(); } catch (e) { /* timing tweaks are optional */ }
+        this.log('info', 'ELM: รถตอบแล้ว — อ่านค่าต่อ');
+        return true;
+      } catch (e) { if (this.state !== 'OFF') this.state = 'NOECU'; return false; }
     }
     /** ELM327 prints long CAN answers as a byte-count line plus numbered lines ("00B" / "0: 41 0C .." / "1: .."): join them into one hex string per message */
     _join(lines) {
@@ -297,6 +355,8 @@
       if (any) this.lastGood = Date.now(); else if (!this.lastGood) this.lastGood = Date.now();
       if (this.tuned && !any && ++this.miss >= 3) { this.miss = 0; await this._untune(); }      // faster timing made the car stop answering: go back to the safe values
       else if (any) this.miss = 0;
+      if (any) this.noAny = 0;
+      else if (this.state === 'OK' && ++this.noAny >= 4 && Date.now() - (this.tRec || 0) > 5000) { this.noAny = 0; await this.recover(); this.tRec = Date.now(); }      // nothing answers for a few cycles although the link is up: reset the adapter state (engine start, key cycle)
       if (c % 40 === 20 && !this.supported.has(0x42) && this.atrvOk) { const l = await this.query('ATRV', 1500); const m = l && /([0-9.]+)\s*V/i.exec(l.join(' ')); if (m) d.BATT = parseFloat(m[1]); }
       this.last = d;
       if (this.hz && Date.now() - (this.tDiag || (this.tDiag = Date.now() - 10000)) > 15000) { this.tDiag = Date.now(); this.log('info', 'LIVE: ' + this.hz.toFixed(1) + ' รอบ/วินาที · คำสั่งละ ' + Math.round(this.rtt) + ' ms · ' + (this.single ? 'ถามทีละค่า' : 'หลายค่า/คำสั่ง')); }      // for the Log page: the real speed of this adapter + car
@@ -402,7 +462,7 @@
     // o: { diesel, honda, noMulti, lambda(false = no PID 24/34), eqr(true = has commanded lambda 44), vin, kwp(VIN as ISO lines), cal }
     constructor(o) {
       o = o || {}; this.diesel = !!o.diesel; this.noMulti = !!o.noMulti || (!!o.honda && !o.hmulti); this.plainMulti = !!o.honda && !!o.hmulti; this.hondaBridge = !!o.honda; this.lambda = o.lambda !== false; this.eqr = !!o.eqr;
-      this.vin = o.vin || ''; this.kwp = !!o.kwp; this.cal = o.cal || ''; this.latency = o.latency || 0; this.wait = o.wait == null ? 0 : o.wait; this.digit = o.digit !== false; this.at2 = o.atat2 !== false; this.zFail = o.zFail || 0; this.dtcMode = o.dtc || ''; this.clear04 = o.clear04 || ''; this.deaf = new Set(o.deaf || []); this.junk = new Set(o.junk || []); this.partial = o.partial || 0; this.sent = []; this.o2V = o.o2V == null ? null : o.o2V; this.needSp = o.needSp == null ? null : String(o.needSp); this.sp = '0'; this.plainMulti = !!o.plainMulti; this.nreq = 0; this.pidCount = {}; this.t = 0; this.buf = ''; this.dtc = ['P0301', 'P0420']; this.cleared = false;
+      this.vin = o.vin || ''; this.kwp = !!o.kwp; this.cal = o.cal || ''; this.latency = o.latency || 0; this.wait = o.wait == null ? 0 : o.wait; this.digit = o.digit !== false; this.at2 = o.atat2 !== false; this.zFail = o.zFail || 0; this.carOffUntil = o.carOffMs ? Date.now() + o.carOffMs : 0; this.stray = o.stray || 0; this.sayN = 0; this.searchMs = o.searchMs || 3500; this.lost = false; this.searchGen = 0;  this.dtcMode = o.dtc || ''; this.clear04 = o.clear04 || ''; this.deaf = new Set(o.deaf || []); this.junk = new Set(o.junk || []); this.partial = o.partial || 0; this.sent = []; this.o2V = o.o2V == null ? null : o.o2V; this.needSp = o.needSp == null ? null : String(o.needSp); this.sp = '0'; this.plainMulti = !!o.plainMulti; this.nreq = 0; this.pidCount = {}; this.t = 0; this.buf = ''; this.dtc = ['P0301', 'P0420']; this.cleared = false;
     }
     write(bytes) {
       for (const b of bytes) this.buf += String.fromCharCode(b);
@@ -411,13 +471,24 @@
     }
     _cmd(c) {
       if (c === 'ATZ' && this.zFail > 0) { this.zFail--; return; }                    // clone that misses the first reset
+      if (c === '') { this.searchGen++; return this._say(''); }                         // a bare CR: stops whatever the adapter was doing, answers with the prompt
+      if (this.lost && /^ATSP[1-9A-C]$/.test(c)) this.lost = false;                   // an explicitly selected protocol needs no search
       // timing model: bus round trip + (without the response-count digit) the ELM keeps waiting for more answers
       let cnt = false; if (/^01([0-9A-F]{2})+[0-9A-F]$/.test(c) || /^0[19]([0-9A-F]{2})+[0-9A-F]$/.test(c)) { if (!this.digit) return setTimeout(() => this._say('?'), 1); c = c.slice(0, -1); cnt = true; }
       if (this.muted) return;                                                                // adapter frozen: no answer at all
+      if (this.lost && /^0[1-9]/.test(c)) {                                                  // after a brown-out the adapter searches for the protocol again; every new request interrupts that search and starts it over
+        const g = ++this.searchGen;
+        setTimeout(() => { if (g === this.searchGen && this.lost) { this.lost = false; this._on(c); } }, this.searchMs); return;
+      }
       this.nreq++; this.sent.push(c);
       setTimeout(() => this._on(c), Math.max(1, this.latency + (/^0[1-9]/.test(c) && !cnt ? this.wait : 0)));
     }
-    _say(t) { if (this.onData) this.onData(Uint8Array.from(Array.from(t + '\r\r>', (c) => c.charCodeAt(0)))); }
+    _say(t) {
+      if (this.onData) this.onData(Uint8Array.from(Array.from(t + '\r\r>', (c) => c.charCodeAt(0))));
+      if (this.stray && ++this.sayN % this.stray === 0) setTimeout(() => { if (this.onData) this.onData(Uint8Array.from(['>'.charCodeAt(0)])); }, 40);      // clone that sends a second prompt: every later answer shifts by one
+    }
+    carOff(ms) { this.carOffUntil = Date.now() + ms; }                                    // key off / engine cranking: the car does not answer for a while
+    brownOut() { this.lost = true; this.sp = '0'; this.searchGen++; if (this.onData) this.onData(Uint8Array.from(Array.from('\rELM327 v1.5\r\r>', (c) => c.charCodeAt(0)))); }      // the battery dipped: the adapter reset itself
     _sup() {
       const base = this.diesel ? [0x04, 0x05, 0x0B, 0x0C, 0x0D, 0x0F, 0x11, 0x23, 0x42, 0x51, 0x5C, 0x70, 0x78]
         : [0x04, 0x05, 0x0B, 0x0C, 0x0D, 0x0E, 0x0F, 0x11, 0x2F, 0x33, 0x42, 0x51, 0x5C];
@@ -442,6 +513,7 @@
       if (c === 'ATAT2' && !this.at2) return this._say('?');
       if (/^ATSP[0-9A-C]$/.test(c)) { this.sp = c.slice(4); return this._say('OK'); }
       if (c === '0100' && this.needSp !== null && this.sp !== this.needSp) return this._say('SEARCHING...\rUNABLE TO CONNECT');       // the car only answers on one specific protocol
+      if (this.carOffUntil && Date.now() < this.carOffUntil && /^0[1-9]/.test(c)) return this._say(c === '0100' ? 'SEARCHING...\rUNABLE TO CONNECT' : 'NO DATA');
       if (/^AT/.test(c)) return this._say(c === 'ATRV' ? '12.6V' : c === 'ATDPN' ? (this.needSp !== null && this.sp === this.needSp ? this.needSp : this.hondaBridge ? 'AH' : this.noMulti ? 'A5' : 'A6') : 'OK');
       if (c === '03') {
         if (this.cleared && this.dtcMode !== 'sticky') return this._say('43 00 00 00 00 00 00');
