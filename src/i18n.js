@@ -10,7 +10,7 @@
   const D = [
     ['กำลังเริ่มระบบ…', 'Starting…'], ['เชื่อมต่อ', 'Connect'], ['ย้อนหลัง 30 วินาที', 'Last 30 seconds'], ['⏸ หยุดกราฟ', '⏸ Pause graph'], ['▶ เดินกราฟ', '▶ Resume graph'],
     ['รีเซ็ต min/max', 'Reset min/max'], ['AFR LOG · เบนซิน', 'AFR LOG · Gasoline'], ['CRP LOG · ดีเซล', 'CRP LOG · Diesel'], ['⛽ เบนซิน', '⛽ Gasoline'], ['🛢 ดีเซล', '🛢 Diesel'],
-    ['ล้าง', 'Clear'], ['11.5 รวย · 14.7 · 16.5 บาง', '11.5 rich · 14.7 · 16.5 lean'], ['0 V ต่ำ · 2.5 V · 5 V สูง', '0 V low · 2.5 V · 5 V high'],
+    ['ล้าง', 'Clear'], ['11.5 หนา · 14.7 · 16.5 บาง', '11.5 rich · 14.7 · 16.5 lean'], ['0 V ต่ำ · 2.5 V · 5 V สูง', '0 V low · 2.5 V · 5 V high'],
     ['ช่องมืด = ยังไม่มีข้อมูล · กรอบขาว = ตำแหน่งเครื่องตอนนี้ · แตะช่อง = ดูรายละเอียด', 'Dark cell = no data · white box = current engine position · tap a cell for details'],
     ['แหล่ง: AUTO', 'Source: AUTO'], ['แหล่ง: เกจ', 'Source: Gauge'], ['แหล่ง: มือถือ', 'Source: Phone'], ['แหล่ง GPS', 'GPS source'],
     ['โค้ดปัญหา (DTC)', 'Diagnostic trouble codes (DTC)'], ['ปัจจุบัน', 'Current'], ['ที่เคยเกิด', 'History'], ['ลบโค้ด', 'Clear codes'], ['อ่านโค้ด', 'Read codes'], ['กด "อ่านโค้ด"', 'Press "Read codes"'],

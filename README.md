@@ -181,6 +181,9 @@ android/           แอป Android (MainActivity + JetBridge: USB OTG / BLE / 
 ## v1.3.2
 - Version badge (e.g. `v1.3.3`) placed after "By เปรียวจูนเนอร์" in the header and on the licence screen.
 
+## v1.6.6 — AFR scale wording: "รวย" → "หนา"
+- The colour scale under the AFR LOG table now reads "11.5 หนา · 14.7 · 16.5 บาง" (English: "11.5 rich · 14.7 · 16.5 lean" — unchanged). Text change only.
+
 ## v1.6.5 — AFR / CRP LOG grid 20 × 13, fits the screen without scrolling
 - **Grid:** 20 RPM rows × 13 TPS columns (was 26 × 23, which had to be scrolled up/down and left/right).
 - **Evenly spaced axes:** RPM rows are spread evenly from idle to the redline (rounded to 50 / 100 rpm; before, they were bunched at the low end); TPS columns are twelfths of 0–100 % (0, 8, 17, 25, 33, 42, 50, 58, 67, 75, 83, 92, 100).

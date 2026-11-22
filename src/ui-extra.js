@@ -330,7 +330,7 @@
     const c = isCrp();
     $('#aTitle').textContent = c ? 'CRP LOG · ดีเซล' : 'AFR LOG · เบนซิน';
     $('#aFuel').textContent = c ? '🛢 ดีเซล' : '⛽ เบนซิน';
-    $('.ascale span').textContent = c ? '0 V ต่ำ · 2.5 V · 5 V สูง' : '11.5 รวย · 14.7 · 16.5 บาง';
+    $('.ascale span').textContent = c ? '0 V ต่ำ · 2.5 V · 5 V สูง' : '11.5 หนา · 14.7 · 16.5 บาง';
     $('.abar').classList.toggle('crp', c);
     const nb = $('#nav button[data-p="' + C.pageOf('AFR') + '"]'); if (nb) nb.textContent = c ? 'CRP Log' : 'AFR Log';
   }
