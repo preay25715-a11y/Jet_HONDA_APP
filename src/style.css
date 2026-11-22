@@ -299,6 +299,15 @@ table.mtab{border-collapse:separate;border-spacing:0;font-family:var(--disp);fon
 .mtab td.chg::after{content:"";position:absolute;right:2px;top:2px;width:5px;height:5px;border-radius:50%;background:#ff3fd2}
 .mtab td.dim{opacity:.35}.mtab td.afrv{color:#fff}
 .mtab.afr td{color:#fff;min-width:clamp(30px,4.2vw,46px)}.mtab.afr td.empty{background:#0c1830}
+/* AFR / CRP log grid: fits the box, no scrolling (size set by fitAfr) */
+.mtab.afr.fit{table-layout:fixed;border-collapse:collapse}
+.mtab.afr.fit td{min-width:0;padding:0;overflow:hidden;white-space:nowrap;line-height:1;text-overflow:clip}
+.mtab.afr.fit th{padding:0 2px;line-height:1;overflow:hidden;white-space:nowrap}
+.mtab.afr.fit th.yh{padding:0 4px 0 0}
+.mtab.afr.fit th.corner{font-size:.62em;white-space:normal;line-height:1.05;text-align:center;padding:0}
+.mtab.afr.fit td.live{box-shadow:inset 0 0 0 2px #fff,0 0 8px #fff}
+.mtab.afr.fit td.sel{outline-width:1.5px}
+.twrap:has(.mtab.afr.fit){overflow:hidden}
 #t3c{position:absolute;inset:0;touch-action:none;cursor:grab}
 .tpop{position:absolute;z-index:20;top:clamp(46px,13vh,70px);left:50%;transform:translateX(-50%);background:#0d1d3a;border:1.5px solid var(--ac);border-radius:16px;padding:10px 12px;box-shadow:0 12px 30px #000a;max-width:96%}
 .tpop .row{flex-wrap:wrap;gap:6px}

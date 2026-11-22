@@ -228,11 +228,34 @@
   /* ================= AFR LOG ================= */
   // The axes follow the engine: rows = RPM from idle up to the redline (closer together at low rpm, where idle / cruise tuning happens),
   // columns = throttle 0–100 %. Redline and dial full-scale come from the chosen vehicle (Setup); without a redline 90 % of the dial is used.
+  // v1.6.5: a 20 × 13 grid that fits the screen without scrolling; both axes are evenly spaced (RPM rounded to 50 / 100, TPS in twelfths of 0–100 %)
+  const AFR_ROWS = 20, AFR_COLS = 13;
+  const AFR_XS = Array.from({ length: AFR_COLS }, (_, i) => Math.round(i * 100 / (AFR_COLS - 1)));
   function engineAxes() {
     const top = Math.max(3000, Math.ceil((S.redline > 0 ? S.redline : (S.rpmMax || 12000) * 0.9) / 500) * 500);
-    const lo = Math.max(600, Math.round(top * 0.07 / 100) * 100), step = top > 8000 ? 100 : 50, N = 26, ys = [];
-    for (let i = 0; i < N; i++) { const v = Math.round((lo + (top - lo) * Math.pow(i / (N - 1), 1.35)) / step) * step; if (!ys.length || v > ys[ys.length - 1]) ys.push(v); }
-    return { ys, xs: [0, 1, 2, 3, 4, 5, 6, 8, 10, 12, 15, 18, 21, 25, 30, 35, 40, 50, 60, 70, 80, 90, 100] };
+    const lo = Math.max(600, Math.round(top * 0.07 / 100) * 100), step = top > 8000 ? 100 : 50, ys = [];
+    for (let i = 0; i < AFR_ROWS; i++) { const v = Math.round((lo + (top - lo) * i / (AFR_ROWS - 1)) / step) * step; if (!ys.length || v > ys[ys.length - 1]) ys.push(v); }
+    return { ys, xs: AFR_XS };
+  }
+  // the 26 × 23 grid of v1.5.4–v1.6.4 (RPM rows bunched at the low end, 23 TPS columns): rebuilt only to carry an old log over to the new grid
+  const OLD_XS = [0, 1, 2, 3, 4, 5, 6, 8, 10, 12, 15, 18, 21, 25, 30, 35, 40, 50, 60, 70, 80, 90, 100];
+  function oldYs(lo, top) {
+    const step = top > 8000 ? 100 : 50, ys = [];
+    for (let i = 0; i < 26; i++) { const v = Math.round((lo + (top - lo) * Math.pow(i / 25, 1.35)) / step) * step; if (!ys.length || v > ys[ys.length - 1]) ys.push(v); }
+    return ys;
+  }
+  function afrMigrate(ys, xs) {
+    const o = LSget('jht.' + (isCrp() ? 'crp.' : 'afr.') + afr.mode + ':26x23:' + ys[0] + '-' + ys[ys.length - 1] + ':0-100', null);
+    if (!o || !o.c) return null;
+    const oy = oldYs(ys[0], ys[ys.length - 1]);
+    if (o.rows !== oy.length || o.cols !== OLD_XS.length || o.c.length !== o.rows * o.cols) return null;
+    const L = new T.AfrLog(ys.length, xs.length);
+    o.c.forEach((s, k) => {
+      if (!s || !(s.n > 0)) return;
+      const r = Math.round(T.axisPos(ys, oy[Math.floor(k / o.cols)])), c = Math.round(T.axisPos(xs, OLD_XS[k % o.cols])), i = r * L.cols + c, d = L.c[i] || (L.c[i] = { n: 0, sum: 0, min: 99, max: 0 });
+      d.n += s.n; d.sum += s.sum; d.min = Math.min(d.min, s.min); d.max = Math.max(d.max, s.max); L.total += s.n;
+    });
+    return L;
   }
   const AX0 = engineAxes();
   const afr = { xs: AX0.xs, ys: AX0.ys, title: 'ตามรอบเครื่อง', sig: '', log: null, dirty: false, rec: S.afrRec !== false, mode: S.logMode === 'crp' ? 'crp' : 'afr' };
@@ -246,7 +269,8 @@
     afr.info = axisInfo(null, xs, ys);
     if (sig === afr.sig && afr.log) { afr.title = ttl; if (force && curTab === 'AFR') renderAfr(); return; }
     afrSave(); afr.xs = xs; afr.ys = ys; afr.sig = sig; afr.title = ttl;
-    const o = LSget('jht.' + (isCrp() ? 'crp.' : 'afr.') + sig, null); afr.log = o ? T.AfrLog.from(o) : new T.AfrLog(ys.length, xs.length);
+    const o = LSget('jht.' + (isCrp() ? 'crp.' : 'afr.') + sig, null); afr.log = o ? T.AfrLog.from(o) : null;
+    if (!afr.log) { afr.log = afrMigrate(ys, xs); if (afr.log) afr.dirty = true; else afr.log = new T.AfrLog(ys.length, xs.length); }
     if (curTab === 'AFR') renderAfr();
   }
   window.addEventListener('jetvehicle', () => afrAxesChanged(true));         // another vehicle / redline / dial range → axes follow (each axis set keeps its own log)
@@ -263,15 +287,28 @@
     if (!afr.log) afrAxesChanged();
     const L = afr.log, xs = afr.xs, ys = afr.ys;
     const I = afr.info;
-    let h = `<thead><tr><th class="corner">${cornerLab(I)}</th>${xs.map((x) => `<th>${colLab(I, x)}</th>`).join('')}</tr></thead><tbody>`;
+    let h = `<thead><tr><th class="corner">${cornerLab(I).replace(' / ', '<br>')}</th>${xs.map((x) => `<th>${colLab(I, x)}</th>`).join('')}</tr></thead><tbody>`;
     for (let r = 0; r < ys.length; r++) {
       h += `<tr><th class="yh">${rowLab(I, ys[r])}</th>`;
       for (let c = 0; c < xs.length; c++) { const a = L.get(r, c); h += a ? `<td data-r="${r}" data-c="${c}" style="background:${afrColor(a.avg)};opacity:${Math.min(1, 0.45 + a.n / 10)}">${a.avg.toFixed(LD())}</td>` : `<td data-r="${r}" data-c="${c}" class="empty"></td>`; }
       h += '</tr>';
     }
     $('#atab').innerHTML = h + '</tbody>';
-    afrInfo(); afrLiveMark(true);
+    fitAfr(); afrInfo(); afrLiveMark(true);
   }
+  // the whole grid always fits the box (no scrolling): the table takes the box size, the text size follows the cell size
+  function fitAfr() {
+    const w = $('#atab').parentElement, t = $('#atab'), R = t.rows.length, C = R ? t.rows[0].cells.length : 0;
+    if (!R || !w.clientWidth || !w.clientHeight) return;
+    const W = w.clientWidth - 2, H = w.clientHeight - 2, rowH = H / R;
+    const fs = Math.max(6, Math.min(13, rowH * 0.72, W / (C - 1 + 1.8) / 2.3));          // value "14.7" ≈ 2.3 em wide; row label column ≈ 1.8 cells
+    const lab = Math.min(W * 0.2, fs * 4.3);                                              // row-label column ("11,000")
+    t.classList.add('fit'); t.style.width = W + 'px'; t.style.height = H + 'px'; t.style.fontSize = fs + 'px';
+    t.rows[0].cells[0].style.width = lab + 'px';
+    t.dataset.fit = W + 'x' + H;
+  }
+  if (window.ResizeObserver) new ResizeObserver(() => { const t = $('#atab'), w = t.parentElement; if (curTab === 'AFR' && t.dataset.fit !== (w.clientWidth - 2) + 'x' + (w.clientHeight - 2)) fitAfr(); }).observe($('#atab').parentElement);
+  window.addEventListener('resize', () => { if (curTab === 'AFR') fitAfr(); });
   function afrInfo() {
     const K = LK(), live = last[K] != null && Date.now() - (last.t || 0) < 3000;
     $('#aInfo').textContent = `${afr.ys.length}×${afr.xs.length} · แกนจาก "${afr.title}" · บันทึกแล้ว ${afr.log ? afr.log.filled() : 0} ช่อง · ${live ? K + ' สด ' + (+last[K]).toFixed(LD()) : 'ยังไม่มีข้อมูลสด (ต่อเกจ/เปิด DEMO)'}`;

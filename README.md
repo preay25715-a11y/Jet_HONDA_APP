@@ -181,6 +181,13 @@ android/           แอป Android (MainActivity + JetBridge: USB OTG / BLE / 
 ## v1.3.2
 - Version badge (e.g. `v1.3.3`) placed after "By เปรียวจูนเนอร์" in the header and on the licence screen.
 
+## v1.6.5 — AFR / CRP LOG grid 20 × 13, fits the screen without scrolling
+- **Grid:** 20 RPM rows × 13 TPS columns (was 26 × 23, which had to be scrolled up/down and left/right).
+- **Evenly spaced axes:** RPM rows are spread evenly from idle to the redline (rounded to 50 / 100 rpm; before, they were bunched at the low end); TPS columns are twelfths of 0–100 % (0, 8, 17, 25, 33, 42, 50, 58, 67, 75, 83, 92, 100).
+- **Fits the screen:** the table always takes the whole box and the text size follows the cell size (portrait, landscape, tablet; it re-fits when the phone is turned). On a small phone in landscape the cells are small (about 7 px text) — portrait is easier to read.
+- **Old log kept:** an AFR / CRP log recorded on the old 26 × 23 grid (same RPM range) is carried over to the new grid when it is first opened — counts, averages, min and max are summed into the nearest new cell; the old copy stays stored.
+- Tests: browser suite for the new grid (7 screen sizes without scrolling, even axes, old-log carry-over with totals checked, CRP log, turning the phone, live recording / cursor / tap detail, English) + all earlier suites re-run.
+
 ## v1.6.4 — WiFi OBD2 (ELM327 WiFi) for testing, next to the Bluetooth search
 - **Setup → "📡 ค้นหา WiFi OBD2" button beside "📶 ค้นหาบลูทูธ".** For WiFi ELM327 adapters (e.g. "WIFI SUPER OBD MINI V1.5"). Everything after the connection is the same as Bluetooth: same ELM327 driver, same LIVE values, same per-adapter memory, same automatic reconnect and gentle mode after drops.
 - **How it works:** the phone joins the adapter's own WiFi (open network, name like `WiFi_OBDII` / `OBDII` / `V-LINK`), the app opens a TCP connection to the adapter (usually `192.168.0.10`, port `35000`). The search checks the gateway of the WiFi the phone is on plus the usual adapter addresses and shows the ones that answer an `ATI`. If the phone is not on the adapter's WiFi, the nearby WiFi names are listed (needs the Location permission) and Android 10+ can join one from inside the app (the system asks to confirm); on older Android the app opens the WiFi settings. "ใส่ IP เอง" accepts any `IP:port`.
