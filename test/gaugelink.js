@@ -87,6 +87,14 @@ console.log('✔ no data / unsupported');
   emu.feed(Array.from('AT Z\r', (c) => c.charCodeAt(0))); assert.strictEqual(emu.echo, true, 'ATZ resets echo'); }
 console.log('✔ byte-wise input');
 
+// 5b) what the screen asked for is counted (shown in the app's "data synced with the screen" panel)
+{ emu.stats(); fresh = true; vals.RPM = 2500; ask('010C0D1'); ask('010C1'); ask('01061'); ask('01231'); ask('03'); ask('0902'); ask('0902');
+  assert.strictEqual(emu.hits[0x0C].n, 2); assert.strictEqual(emu.hits[0x0C].ok, 2); assert.strictEqual(emu.hits[0x0D].n, 1);
+  fresh = false; ask('010C1'); assert.strictEqual(emu.hits[0x0C].n, 3); assert.strictEqual(emu.hits[0x0C].ok, 2, 'asked but no value is not counted as sent'); fresh = true;
+  assert.strictEqual(emu.miss['PID 06'].n, 1); assert.strictEqual(emu.miss['PID 23'].n, 1); assert.strictEqual(emu.miss['เลข VIN / ข้อมูล ECU'].n, 2); assert(emu.miss['อ่านโค้ดเสีย (DTC)'].n === 1);
+  assert(emu.n >= 8); emu.stats(); assert.strictEqual(emu.n, 0); assert.deepStrictEqual(emu.hits, {}); }
+console.log('✔ request statistics');
+
 // 6) the app's own ELM327 client talks to it end to end (a second, independent reader of the same protocol)
 (async () => {
   const { Elm327 } = require('../src/elm.js');

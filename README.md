@@ -182,6 +182,12 @@ android/           แอป Android (MainActivity + JetBridge: USB OTG / BLE / 
 ## v1.3.2
 - Version badge (e.g. `v1.3.3`) placed after "By เปรียวจูนเนอร์" in the header and on the licence screen.
 
+## v1.6.9 — Smart Gauge link: "syncing" icon and a panel with all the data synced with the screen
+- **Header icon** (next to GAUGE; only while the screen link is on): **📺 READY** (waiting for the screen) · **📺⇄ SYNC** green, pulsing while the screen is asking for values · **📺 IDLE** yellow (screen connected but no request for ~3 s). Phones in landscape show the icon only. Tap it to open the panel.
+- **Panel "ข้อมูลที่ซิงค์กับจอ Smart Gauge"** (also from Setup → 📋 ดูข้อมูลที่ซิงค์กับจอ), refreshed twice a second: status line (screen name, number of requests, requests per second, how long it has been connected) and one row per value the app offers — name, PID, **the value being sent to the screen right now** (or "no value" when the app has no fresh one), how many times the screen asked for it and when last. Below: what the screen asked for that the app **cannot** give (fault codes, VIN, freeze frame, other PIDs). Counters start again with every new connection. English and Thai.
+- It is a one-way sync: the app sends the values it reads from the car; the screen sends nothing back, and an icon **on the screen itself** would need a change in the screen firmware (not done — the screen is unchanged).
+- Tests: node (request counters), browser suite (icon states, panel rows / values / misses, English, restart of counters).
+
 ## v1.6.8 — link to the Smart Gauge screen of the Jet_SmartGauge_CAR project (no change to the screen)
 - The ESP32 CYD screen (firmware v1.0.x) looks for an **ELM327 OBD-II adapter over Bluetooth** and asks it for values; it has no input for a phone. So the **phone now presents itself as such an adapter** and answers the screen with the values the app is reading from the car. Nothing to flash or update on the screen, no wires.
 - **Setup → "📺 ลิงก์จอ Smart Gauge" → เปิดลิงก์จอ.** Then on the screen: SETUP → Bluetooth → pick the Bluetooth name of the phone (it is listed as an OBD adapter; a screen that has no adapter chosen yet picks it by itself when it is the only one nearby). The Setup text shows the state: waiting for the screen / screen connected + how many requests it made / no car values yet. The setting is remembered and the link comes back on when the app starts.

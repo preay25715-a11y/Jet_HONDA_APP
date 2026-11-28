@@ -13,26 +13,28 @@
 
   // the OBD-II PIDs the phone offers: app value key(s) (first one that has a fresh value wins) + the SAE J1979 encoding
   const OFFER = {
-    0x04: { k: ['LOAD'], f: (v) => u8(v * 255 / 100) },
-    0x05: { k: ['ECT'], f: (v) => u8(v + 40) },
-    0x0B: { k: ['MAP'], f: (v) => u8(v) },
-    0x0C: { k: ['RPM'], f: (v) => u16(v * 4) },
-    0x0D: { k: ['SPD', 'GPS'], f: (v) => u8(v) },
-    0x0E: { k: ['IGN'], f: (v) => u8((v + 64) * 2) },
-    0x0F: { k: ['IAT'], f: (v) => u8(v + 40) },
-    0x10: { k: ['MAF'], f: (v) => u16(v * 100) },
-    0x11: { k: ['TPS'], f: (v) => u8(v * 255 / 100) },
-    0x24: { k: ['LAMBDA'], f: (v) => u16(clamp(v, 0.3, 1.999) * 32768).concat([0x80, 0x00]) },   // lambda (A B) + sensor current 0 mA (C D)
-    0x33: { k: ['BARO'], f: (v) => u8(v) },
-    0x42: { k: ['BATT'], f: (v) => u16(v * 1000) },
-    0x46: { k: ['AMB'], f: (v) => u8(v + 40) },
-    0x5C: { k: ['EOT'], f: (v) => u8(v + 40) },
+    0x04: { k: ['LOAD'], nm: 'โหลดเครื่อง', u: '%', dg: 0, f: (v) => u8(v * 255 / 100) },
+    0x05: { k: ['ECT'], nm: 'น้ำหล่อเย็น', u: '°C', dg: 0, f: (v) => u8(v + 40) },
+    0x0B: { k: ['MAP'], nm: 'แรงดันท่อไอดี (MAP)', u: 'kPa', dg: 0, f: (v) => u8(v) },
+    0x0C: { k: ['RPM'], nm: 'รอบเครื่อง', u: 'rpm', dg: 0, f: (v) => u16(v * 4) },
+    0x0D: { k: ['SPD', 'GPS'], nm: 'ความเร็ว', u: 'km/h', dg: 0, f: (v) => u8(v) },
+    0x0E: { k: ['IGN'], nm: 'ไทมิ่ง', u: '°', dg: 1, f: (v) => u8((v + 64) * 2) },
+    0x0F: { k: ['IAT'], nm: 'อากาศเข้า', u: '°C', dg: 0, f: (v) => u8(v + 40) },
+    0x10: { k: ['MAF'], nm: 'ปริมาณอากาศ (MAF)', u: 'g/s', dg: 1, f: (v) => u16(v * 100) },
+    0x11: { k: ['TPS'], nm: 'คันเร่ง (TPS)', u: '%', dg: 0, f: (v) => u8(v * 255 / 100) },
+    0x24: { k: ['LAMBDA'], nm: 'AFR (ส่งเป็นค่า lambda)', u: 'λ', dg: 2, f: (v) => u16(clamp(v, 0.3, 1.999) * 32768).concat([0x80, 0x00]) },   // lambda (A B) + sensor current 0 mA (C D)
+    0x33: { k: ['BARO'], nm: 'ความดันบรรยากาศ', u: 'kPa', dg: 0, f: (v) => u8(v) },
+    0x42: { k: ['BATT'], nm: 'แรงดันแบต', u: 'V', dg: 1, f: (v) => u16(v * 1000) },
+    0x46: { k: ['AMB'], nm: 'อากาศภายนอก', u: '°C', dg: 0, f: (v) => u8(v + 40) },
+    0x5C: { k: ['EOT'], nm: 'น้ำมันเครื่อง', u: '°C', dg: 0, f: (v) => u8(v + 40) },
   };
+  const MODE_NAME = { 2: 'ค่าตอนเกิดปัญหา (freeze frame)', 3: 'อ่านโค้ดเสีย (DTC)', 4: 'ลบโค้ดเสีย', 7: 'โค้ดเสียที่รอยืนยัน', 9: 'เลข VIN / ข้อมูล ECU', 10: 'โค้ดเสียถาวร' };
   const hex2 = (n) => (n < 16 ? '0' : '') + n.toString(16).toUpperCase();
 
   class ElmEmu {
     /** opt.value(key) -> number | null (fresh value or nothing) · opt.out(text) -> send text to the screen */
-    constructor(opt) { this.value = opt.value; this.out = opt.out; this.n = 0; this.reset(); }
+    constructor(opt) { this.value = opt.value; this.out = opt.out; this.n = 0; this.hits = {}; this.miss = {}; this.reset(); }
+    stats() { this.hits = {}; this.miss = {}; this.n = 0; }
     reset() { this.echo = true; this.spaces = true; this.buf = ''; }
     feed(u) {
       for (let i = 0; i < u.length; i++) {
@@ -70,21 +72,23 @@
       }
       return m;
     }
+    _miss(label) { const m = this.miss[label] || (this.miss[label] = { n: 0, t: 0 }); m.n++; m.t = Date.now(); }
     _fmt(bytes) { return bytes.map(hex2).join(this.spaces ? ' ' : ''); }
     _obd(c) {
       if (!/^[0-9A-F]+$/.test(c) || c.length < 2) return ['?'];
       const mode = parseInt(c.slice(0, 2), 16);
       let rest = c.slice(2);
-      if (mode !== 1) return mode >= 2 && mode <= 10 ? ['NO DATA'] : ['?'];   // codes / VIN etc.: not offered
+      if (mode !== 1) { if (mode >= 2 && mode <= 10) this._miss(MODE_NAME[mode] || 'โหมด ' + mode); return mode >= 2 && mode <= 10 ? ['NO DATA'] : ['?']; }   // codes / VIN etc.: not offered
       if (rest.length % 2) rest = rest.slice(0, -1);                      // the trailing "number of replies" digit (010C1)
       if (!rest.length) return ['?'];
       const out = [0x41];
       for (let i = 0; i + 1 < rest.length && i < 12; i += 2) {
         const id = parseInt(rest.substr(i, 2), 16);
         if (id % 32 === 0 && id <= 0xC0) { out.push(id, ...this._map(id)); continue; }
-        const o = OFFER[id]; if (!o) continue;
+        const o = OFFER[id]; if (!o) { this._miss('PID ' + hex2(id)); continue; }
         let v = null; for (const k of o.k) { const x = this.value(k); if (x != null) { v = x; break; } }
-        if (v != null) out.push(id, ...o.f(v));
+        const h = this.hits[id] || (this.hits[id] = { n: 0, ok: 0, t: 0 }); h.n++; h.t = Date.now();
+        if (v != null) { out.push(id, ...o.f(v)); h.ok++; }
       }
       return out.length > 1 ? [this._fmt(out)] : ['NO DATA'];
     }
@@ -114,7 +118,7 @@
   function setState(state, msg, dev) {
     const was = GL.state;
     GL.state = state; GL.msg = msg || ''; GL.dev = dev || GL.dev;
-    if (state === 'conn' && was !== 'conn') { emu.reset(); emu.n = 0; }                  // a new connection starts as a fresh adapter
+    if (state === 'conn' && was !== 'conn') { emu.reset(); emu.stats(); GL.hist = []; GL.since = Date.now(); }                  // a new connection starts as a fresh adapter
     if (state !== 'conn') GL.dev = '';
     try { if (root.JetApp) root.JetApp.keepScreen(state === 'conn'); } catch (e) {}        // the phone must stay awake while the screen is linked
     render();
@@ -134,6 +138,48 @@
     setState('off', '');
   }
   const hasData = () => ['RPM', 'SPD', 'TPS', 'ECT'].some((k) => fresh(k) != null);
+  // how busy the screen is: requests per second over the last ~3 s, and whether it asked recently (the header icon pulses while it does)
+  GL.hist = [];
+  function rate() {
+    const now = Date.now(), h = GL.hist; h.push([now, emu.n]); while (h.length > 2 && now - h[0][0] > 3200) h.shift();
+    const a = h[0], dt = (now - a[0]) / 1000; return dt > 0.4 ? (emu.n - a[1]) / dt : 0;
+  }
+  const flowing = () => GL.state === 'conn' && GL.rate > 0.3;
+  function chip() {
+    const b = $('#pSync'), t = $('#tSync'); if (!b || !t) return;
+    const on = GL.state === 'adv' || GL.state === 'conn';
+    b.hidden = !on; if (!on) return;
+    const f = flowing(), c = GL.state === 'conn';
+    b.className = 'chipst' + (c ? (f ? ' on sync' : ' mid') : '');
+    t.innerHTML = (f ? '📺⇄' : '📺') + '<span class="sw"> ' + (c ? (f ? 'SYNC' : 'IDLE') : 'READY') + '</span>';   // landscape phones show the icon only (CSS)
+  }
+  const fmtV = (v, dg) => (Math.round(v * Math.pow(10, dg)) / Math.pow(10, dg)).toFixed(dg);
+  function ago(t) { if (!t) return '—'; const d = Math.round((Date.now() - t) / 1000); return d < 2 ? 'ตอนนี้' : d + ' วิที่แล้ว'; }
+  function renderSync() {
+    const m = $('#mSync'); if (!m || !m.classList.contains('show')) return;
+    const c = GL.state === 'conn', r = GL.rate || 0;
+    $('#syInfo').innerHTML = c
+      ? '🟢 <b>กำลังซิงค์กับจอ</b> ' + esc(GL.dev || 'Smart Gauge') + ' · จอถามค่า: ' + emu.n + ' · ' + r.toFixed(1) + ' ครั้ง/วินาที · ต่ออยู่นาน ' + Math.max(0, Math.round((Date.now() - (GL.since || Date.now())) / 1000)) + ' วินาที'
+      : GL.state === 'adv' ? '🟡 พร้อมให้จอต่อ — ยังไม่มีจอมาต่อ' : '⚪ ลิงก์จอปิดอยู่';
+    const sto = (st.t && st.t.stoich) || 14.7;
+    let h = '';
+    for (const id of Object.keys(OFFER).map(Number).sort((a, b) => a - b)) {
+      const o = OFFER[id], x = emu.hits[id] || { n: 0, ok: 0, t: 0 };
+      let v = null; for (const k of o.k) { const y = fresh(k); if (y != null) { v = y; break; } }
+      const val = v == null ? '<span class="mut">— ไม่มีค่า</span>' : id === 0x24 ? 'AFR ' + fmtV(v * sto, 1) + ' <span class="mut">(λ ' + fmtV(v, 2) + ')</span>' : fmtV(v, o.dg) + ' <span class="mut">' + o.u + '</span>';
+      h += '<tr' + (x.t && Date.now() - x.t < 1500 ? ' class="hot"' : '') + '><td>' + esc(o.nm) + '</td><td class="mut">' + hex2(id) + '</td><td>' + val + '</td><td class="mut">' + x.n + (x.t ? ' · ' + ago(x.t) : '') + '</td></tr>';
+    }
+    $('#syBody').innerHTML = h;
+    const miss = Object.keys(emu.miss).map((k) => esc(k) + ' ×' + emu.miss[k].n);
+    $('#syMiss').innerHTML = miss.length ? 'จอขอแต่แอปไม่มีให้: ' + miss.join(' · ') : 'จอยังไม่ได้ขอค่าที่แอปไม่มีให้';
+  }
+  function tick() {
+    GL.rate = GL.state === 'conn' ? rate() : 0;
+    chip(); renderSync();
+    if (GL.state === 'conn' && $('#mSet') && $('#mSet').classList.contains('show')) render();
+  }
+  if ($('#pSync')) $('#pSync').onclick = () => { C.modal('#mSync', true); renderSync(); };
+  if ($('#jlSync')) $('#jlSync').onclick = () => { C.modal('#mSync', true); renderSync(); };
   function render() {
     const info = $('#jlInfo'), btn = $('#jlBtn');
     if (!info || !btn) return;
@@ -148,10 +194,12 @@
     else if (s === 'conn') h = '🟢 จอต่ออยู่: ' + esc(GL.dev || 'Smart Gauge') + ' · จอถามค่า: ' + emu.n + ' · ' + (hasData() ? 'ส่งค่าจากรถให้จออยู่' : 'ยังไม่มีค่าจากรถ — เชื่อมรถแล้วกด LIVE');
     else h = '🔴 ' + esc(GL.msg || 'ลิงก์จอไม่สำเร็จ');
     info.innerHTML = h;
+    const sb = $('#jlSync'); if (sb) sb.hidden = !(s === 'adv' || s === 'conn');
+    chip();
   }
   if ($('#jlBtn')) $('#jlBtn').onclick = () => { if (GL.state === 'off' || GL.state === 'fail') start(false); else stop(); };
-  setInterval(() => { const m = $('#mSet'); if (GL.state === 'conn' && m && m.classList.contains('show')) render(); }, 1000);
-  root.JetGaugeLink = { start, stop, state: () => GL.state, emu };
+  setInterval(tick, 500);
+  root.JetGaugeLink = { start, stop, state: () => GL.state, emu, tick };
   render();
   if (S.jlink && N && N.jlinkStart) setTimeout(() => start(true), 2500);                // it was on last time
 })(typeof window !== 'undefined' ? window : globalThis);
