@@ -109,9 +109,11 @@
   GL.emu = emu;
   (root.JetHooks = root.JetHooks || []).push((d) => {
     const now = Date.now(), v = GL.vals;
-    for (const k in d) { const x = d[k]; if (typeof x === 'number' && isFinite(x)) { v[k] = x; GL.keyT[k] = now; } }
+    const gk = d.gk || {};                                                  // values that came FROM the screen (v1.6.10) are not sent back to it (they would never expire)
+    for (const k in d) { const x = d[k]; if (typeof x === 'number' && isFinite(x) && !gk[k]) { v[k] = x; GL.keyT[k] = now; } }
     const t = st.t, sto = (t && t.stoich) || 14.7;
-    if (typeof d.AFR === 'number' && isFinite(d.AFR) && d.AFR > 0) { v.LAMBDA = d.AFR / sto; GL.keyT.LAMBDA = now; }      // the AFR the app shows, as lambda
+    if (gk.AFR || gk.LAMB) { /* the screen's own wideband: nothing to send back */ }
+    else if (typeof d.AFR === 'number' && isFinite(d.AFR) && d.AFR > 0) { v.LAMBDA = d.AFR / sto; GL.keyT.LAMBDA = now; }      // the AFR the app shows, as lambda
     else if (typeof d.LAMB === 'number' && isFinite(d.LAMB)) { v.LAMBDA = d.LAMB; GL.keyT.LAMBDA = now; }
   });
 
@@ -147,9 +149,10 @@
   const flowing = () => GL.state === 'conn' && GL.rate > 0.3;
   function chip() {
     const b = $('#pSync'), t = $('#tSync'); if (!b || !t) return;
-    const on = GL.state === 'adv' || GL.state === 'conn';
+    const gf = root.JetGaugeFeed, usb = !!(gf && gf.active() && gf.state() !== 'old'), uf = usb && gf.flowing();         // v1.6.10: the USB cable that brings the screen's values into the app lights the same chip
+    const on = GL.state === 'adv' || GL.state === 'conn' || usb;
     b.hidden = !on; if (!on) return;
-    const f = flowing(), c = GL.state === 'conn';
+    const f = flowing() || uf, c = GL.state === 'conn' || usb;
     b.className = 'chipst' + (c ? (f ? ' on sync' : ' mid') : '');
     t.innerHTML = (f ? '📺⇄' : '📺') + '<span class="sw"> ' + (c ? (f ? 'SYNC' : 'IDLE') : 'READY') + '</span>';   // landscape phones show the icon only (CSS)
   }
@@ -178,7 +181,7 @@
     chip(); renderSync();
     if (GL.state === 'conn' && $('#mSet') && $('#mSet').classList.contains('show')) render();
   }
-  if ($('#pSync')) $('#pSync').onclick = () => { C.modal('#mSync', true); renderSync(); };
+  if ($('#pSync')) $('#pSync').onclick = () => { if (GL.state === 'adv' || GL.state === 'conn') { C.modal('#mSync', true); renderSync(); } else if ($('#bSet')) $('#bSet').click(); };      // the USB feed has no panel of its own: its status is in Setup
   if ($('#jlSync')) $('#jlSync').onclick = () => { C.modal('#mSync', true); renderSync(); };
   function render() {
     const info = $('#jlInfo'), btn = $('#jlBtn');

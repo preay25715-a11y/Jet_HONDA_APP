@@ -427,3 +427,7 @@ table.mtab{border-collapse:separate;border-spacing:0;font-family:var(--disp);fon
 
 #pkGrid button.na{opacity:.38}
 #updRepo[readonly]{opacity:.7;border-style:dashed;cursor:not-allowed;-webkit-user-select:none;user-select:none}
+
+/* v1.6.10: values received from the Smart Gauge screen (Setup) */
+.gfvals{display:flex;flex-wrap:wrap;gap:6px}
+.gfvals .gfv{background:var(--card);border:1px solid var(--line);border-radius:8px;padding:3px 8px;font-size:.82em;white-space:nowrap}

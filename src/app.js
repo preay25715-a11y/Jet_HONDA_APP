@@ -93,8 +93,9 @@
   /* ---------------- status pills ---------------- */
   function pills() {
     const t = st.t;
-    $('#dLink').className = 'dot' + (t ? ' on' : '');
-    $('#tLink').textContent = t ? t.name : 'OFFLINE · แตะเพื่อเชื่อมต่อ';
+    const gf = !t && window.JetGaugeFeed && JetGaugeFeed.active();           // v1.6.10: only the screen's USB cable is connected (its values feed the Dash)
+    $('#dLink').className = 'dot' + (t || gf ? ' on' : '');
+    $('#tLink').textContent = t ? t.name : gf ? 'GAUGE USB' : 'OFFLINE · แตะเพื่อเชื่อมต่อ';
     const s = st.ecu ? st.ecu.state : null;
     const good = s === 'OK' || s === 'SECURE' || s === 'READ';
     $('#tEcu').className = 'chipst' + (good ? ' on' : s && s !== 'OFF' ? ' mid' : '');
@@ -301,8 +302,10 @@
         const via = kind === 'gauge-only-usb' ? 'usb' : 'ble';
         if (via === 'usb' && window.JetApp && st.t && st.t.kind === 'usb') throw new Error('มือถือมีพอร์ต USB เดียว (ใช้กับสาย K-line อยู่) — ต่อเกจด้วย Bluetooth แทน');
         if (st.gauge && st.gauge !== st.t) { try { await st.gauge.close(); } catch (e) {} }
-        const g = new GaugeLink(via); if (dev && dev.addr) g.addr = dev.addr; await g.open(); st.gauge = g; g.onLost = () => { if (st.gauge === g) st.gauge = null; pills(); toast('เกจหลุดการเชื่อมต่อ'); };
-        log('info', 'เชื่อมเกจแล้ว ' + (g.fw || '')); toast('เชื่อมเกจแล้ว'); pills(); return;
+        const g = new GaugeLink(via); if (dev && dev.addr) g.addr = dev.addr; await g.open(); st.gauge = g; g.onLost = () => { if (st.gauge === g) st.gauge = null; if (window.JetGaugeFeed) JetGaugeFeed.stop(); pills(); toast('เกจหลุดการเชื่อมต่อ'); };
+        log('info', 'เชื่อมเกจแล้ว ' + (g.fw || '')); toast(via === 'usb' ? 'เชื่อมจอ Smart Gauge แล้ว — รับค่าจากจอ' : 'เชื่อมเกจแล้ว');
+        if (via === 'usb' && window.JetGaugeFeed) JetGaugeFeed.start(g);        // v1.6.10: the screen's own values (rpm, speed, AFR ...) feed the Dash and the AFR LOG
+        pills(); return;
       }
       await disconnect();
       let t;
@@ -477,13 +480,17 @@
   }
   async function mergeSensors(d) {
     const s = st.sens;
-    if (s && st.gauge && Date.now() - s.t < 1500) { if (s.afrOk) d.AFR = s.afr; if (s.eotOk) d.EOT = s.eot; if (s.o2Ok) d.O2 = s.o2; if (s.crpOk) d.CRP = s.crp; if (s.gearOk) d.GEAR = s.gear; if (s.obd) Object.assign(d, s.obd); }
+    if (s && st.gauge && Date.now() - s.t < 1500) {
+      if (s.afrOk) d.AFR = s.afr; if (s.eotOk) d.EOT = s.eot; if (s.o2Ok) d.O2 = s.o2; if (s.crpOk) d.CRP = s.crp; if (s.gearOk) d.GEAR = s.gear; if (s.obd) Object.assign(d, s.obd);
+      const gk = d.gk || (d.gk = {}); if (s.afrOk) gk.AFR = 1; if (s.eotOk) gk.EOT = 1; if (s.o2Ok) gk.O2 = 1; if (s.crpOk) gk.CRP = 1;      // from the screen: never sent back to it
+    }
     const g = window.JetGps && JetGps.current();
     if (g) { d.GPS = g.spd; d.gpsSrc = g.src; }
     if (d.GEAR == null && !S.cvt) {
       const sp = d.SPD != null ? d.SPD : d.GPS, g = P.computeGear(d.RPM, sp, P.parseRatios(S.gearRatios || DEF_RATIOS));
       if (g != null) d.GEAR = g;
     }
+    if (window.JetGaugeFeed) JetGaugeFeed.fill(d);                    // v1.6.10: values the OBD / K-line sample lacks come from the Smart Gauge screen (LIVE)
     d.t = Date.now();
     (window.JetDeriveHooks || []).forEach((f) => { try { f(d); } catch (e) { console.error(e); } });
     return d;
@@ -526,7 +533,7 @@
   }
   function startLive() { if (!st.ecu || st.live || !window.JetLic || !JetLic.ok()) return; st.live = true; $('#bLive').textContent = '■ STOP'; $('#bLive').classList.add('on'); liveLoop(); }
   function stopLive() { st.live = false; $('#bLive').textContent = '▶ LIVE'; $('#bLive').classList.remove('on'); }
-  $('#bLive').onclick = () => { if (!st.ecu) return toast('ยังไม่ได้เชื่อมต่อ'); st.live ? stopLive() : startLive(); };
+  $('#bLive').onclick = () => { if (!st.ecu) return toast(window.JetGaugeFeed && JetGaugeFeed.active() ? 'กำลังรับค่าสดจากจอ Smart Gauge อยู่แล้ว' : 'ยังไม่ได้เชื่อมต่อ'); st.live ? stopLive() : startLive(); };
   /* ---------------- DTC ---------------- */
   const dtcHtml = (l) => l.length ? l.map((k) => `<div class="dtc"><b>${k}</b><span>${esc(P.dtcText(k))}</span></div>`).join('') : '<div class="okc">ไม่มีโค้ด ✔</div>';
   const showDtc = (r) => { $('#dtcCur').innerHTML = dtcHtml(r.current); $('#dtcPast').innerHTML = dtcHtml(r.past); };
@@ -657,7 +664,7 @@
 
   /* ---------------- API for ui-extra.js ---------------- */
   window.JetCore = { resetTiles, tilesNow, CH, chText, chVal, pick, DEF_RATIOS, renderTiles, st, S, saveS, $, $$, P, toast, ask, askText, dlg, op, go, pageOf, fbytes, addFile, refreshFiles, log, esc, kb, download, modal,
-    startLive, stopLive, renderHex, mergeSensors, emitLive, models, parseHex };
+    startLive, stopLive, renderHex, mergeSensors, emitLive, models, parseHex, connect, showLive, pills };
 
   /* ---------------- boot ---------------- */
   (async () => {

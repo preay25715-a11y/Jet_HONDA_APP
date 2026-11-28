@@ -51,6 +51,7 @@
     for (;;) {
       await P.sleep(150);
       if (st.live || st.busy || !st.gauge || !st.gauge.sensors || st.liveRunning) continue;
+      if (window.JetGaugeFeed && JetGaugeFeed.active() && JetGaugeFeed.state() !== 'old') continue;          // the gauge feed (v1.6.10) reads LIVE + sensors itself
       try { const d = {}; await C.mergeSensors(d); if (d.AFR != null || d.GPS != null) C.emitLive(d); } catch (e) { /* ignore */ }
     }
   })();
@@ -261,6 +262,16 @@
   const afr = { xs: AX0.xs, ys: AX0.ys, title: 'ตามรอบเครื่อง', sig: '', log: null, dirty: false, rec: S.afrRec !== false, mode: S.logMode === 'crp' ? 'crp' : 'afr' };
   const isCrp = () => afr.mode === 'crp', LK = () => (isCrp() ? 'CRP' : 'AFR'), LD = () => (isCrp() ? 2 : 1);
   window.JetAfr = afr;
+  // v1.6.10: cells imported from the Smart Gauge's own AFR map: [{r, c, n, avg}] = n samples averaging avg in row r / column c
+  afr.addCells = (list) => {
+    if (!afr.log || !list) return;
+    for (const x of list) {
+      const k = x.r * afr.log.cols + x.c; if (x.r < 0 || x.c < 0 || x.r >= afr.log.rows || x.c >= afr.log.cols) continue;
+      const s = afr.log.c[k] || (afr.log.c[k] = { n: 0, sum: 0, min: 99, max: 0 });
+      s.n += x.n; s.sum += x.avg * x.n; s.min = Math.min(s.min, x.avg); s.max = Math.max(s.max, x.avg); afr.log.total += x.n;
+    }
+    afr.dirty = true; afrSave(); if (curTab === 'AFR') renderAfr();
+  };
   const afrColor = (v) => { if (isCrp()) return `hsl(${Math.round(240 - 240 * Math.max(0, Math.min(1, v / 5)))},72%,46%)`;
      const stops = [[10.5, [210, 40, 60]], [11.5, [225, 70, 55]], [12.8, [215, 150, 40]], [14.0, [70, 190, 110]], [14.7, [40, 175, 120]], [15.6, [40, 130, 200]], [16.5, [70, 90, 220]], [18, [110, 70, 210]]];
     if (v <= stops[0][0]) return `rgb(${stops[0][1]})`; for (let i = 1; i < stops.length; i++) if (v <= stops[i][0]) { const [a, ca] = stops[i - 1], [b, cb] = stops[i], k = (v - a) / (b - a); return `rgb(${ca.map((x, j) => Math.round(x + (cb[j] - x) * k))})`; } return `rgb(${stops[stops.length - 1][1]})`; };

@@ -143,6 +143,7 @@ src/app.js, style.css, index.html   UI
 build.py           รวมทุกไฟล์เป็น dist/Jet_Smart_Gauge.html
 test/test.js       node test/test.js (ทดสอบทั้ง workflow กับกล่องจำลอง)
 test/gaugelink.js  node test/gaugelink.js (โทรศัพท์เป็นอะแดปเตอร์ ELM327 ให้จอ Smart Gauge)
+test/gaugefeed.js  node test/gaugefeed.js (ค่าจากจอ Smart Gauge → แอป: LIVE / ตาราง AFR)
 android/           แอป Android (MainActivity + JetBridge: USB OTG / BLE / บันทึกไฟล์)
 .github/workflows/build-apk.yml   สร้าง APK อัตโนมัติบน GitHub
 ```
@@ -181,6 +182,16 @@ android/           แอป Android (MainActivity + JetBridge: USB OTG / BLE / 
 
 ## v1.3.2
 - Version badge (e.g. `v1.3.3`) placed after "By เปรียวจูนเนอร์" in the header and on the licence screen.
+
+## v1.6.10 — values from the Smart Gauge screen now feed the app (RPM, speed, AFR, AFR LOG ...)
+- The screen firmware **v1.0.15 / v1.0.16 already answers the app over its USB cable** (MFB-LINK, 115200 baud): `LIVE 0x21` (every live reading) and `LOG_GET 0x22` (its own AFR map). The app did not use them yet — now it does. **No change to the screen.** (The screen has no Bluetooth server, so this part is USB only: the screen's USB cable into the phone through OTG, or into a PC with Chrome / Edge.)
+- **How to use:** Connect → **"รับค่าสดจากจอ Smart Gauge ผ่านสาย USB"** (or Setup → 📥 → เชื่อมสาย USB รับค่าจากจอ). The header shows **GAUGE USB** and the 📺⇄ SYNC chip.
+- **What goes where (same path as an OBD sample, so everything that already works with OBD works with the screen):** RPM (rev arc), speed, throttle, MAP, coolant, intake, battery, ignition timing, injector, **AFR** + lambda, oil temperature, engine load, CRP volts, fuel rate → Dash tiles, Grid, Graph, Drag log and the **AFR LOG** (it records from the screen's RPM / throttle / AFR exactly as it does from OBD). Polled about 10–20 times a second; the oxygen-sensor volts come with SENSORS 0x20.
+- **If the app also has an OBD adapter / K-line:** the OBD value always wins; only a value OBD does not have (for example the screen's wideband AFR on a car whose OBD has none) is filled in from the screen. Values that came from the screen are never sent back to the screen over the Bluetooth link of v1.6.8 (they would never expire).
+- **Screen in DEMO mode** → its numbers are made up, so they are **not** taken into the app (the AFR LOG would learn them). A screen with nothing valid yet (not linked to the car) says so; a screen that stops answering shows a red message and recovers by itself; a firmware older than v1.0.15 says to update.
+- **Setup → "⬇ นำเข้า AFR LOG จากจอ"**: the screen logs by itself while the phone is away (7 throttle rows × 8 rpm columns, with sample counts). The import puts those samples into the app's AFR LOG at the matching rpm / throttle cell (middle of each band) and **only the new part** each time (the app remembers what it has taken; a cleared log on either side starts again). Only for the AFR log with a throttle axis (not CRP, not a MAP axis).
+- Tests: `node test/gaugefeed.js` (the decoders give the same result as the firmware repo's own `gauge_sync.js` on the same bytes; key mapping; AFR map import incl. incremental / cleared / motorcycle 2000 rpm columns / swapped axes); browser suite with a simulated screen over the USB bridge (connect, Dash, AFR LOG, OBD-wins fill-in, no feedback to the screen, import twice, DEMO, stall + recovery, old firmware, English, disconnect).
+- Not verified on a real phone + real screen (the Java side did not change; the USB driver and the screen's replies are the existing ones).
 
 ## v1.6.9 — Smart Gauge link: "syncing" icon and a panel with all the data synced with the screen
 - **Header icon** (next to GAUGE; only while the screen link is on): **📺 READY** (waiting for the screen) · **📺⇄ SYNC** green, pulsing while the screen is asking for values · **📺 IDLE** yellow (screen connected but no request for ~3 s). Phones in landscape show the icon only. Tap it to open the panel.
