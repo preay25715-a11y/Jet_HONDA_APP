@@ -280,5 +280,5 @@
   root.JetApp = NATIVE ? { saveFile: (name, u8, mime) => root.JetNative.saveFile(name, b64e(u8), mime || ''), keepScreen: (on) => root.JetNative.keepScreen(!!on) } : null;
   root.DirectKLine = DirectKLine;
   root.GaugeLink = GaugeLink;
-  root.JetBt = { btPick, openObdStream, NativeSpp, NativeBle, NativeTcp, wifiSearch, wifiJoin };
+  root.JetBt = { btPick, openObdStream, NativeSpp, NativeBle, NativeTcp, wifiSearch, wifiJoin, Bus, b64e, b64d };
 })(window);

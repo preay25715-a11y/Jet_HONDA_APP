@@ -363,5 +363,6 @@ const { SimTransport } = require('../src/sim.js');
   { const f = new FakeElm({ carOffMs: 60000 }), e = new Elm327(f); try { await e.init(); } catch (x) { /* NOECU */ }
     const t0 = Date.now(), pend = e.retryEcu(); setTimeout(() => e.abort(), 50); assert.strictEqual(await pend, false); assert(Date.now() - t0 < 2000, 'returned quickly'); const n = f.nreq; await e.retryEcu(); assert.strictEqual(f.nreq, n, 'no request after abort'); }
   console.log('v1.6.7 tests passed (wait for the car, battery dip recovery, key-off recovery, abort)');
+  require('./gaugelink.js');   // v1.6.8: the phone as an ELM327 for the Smart Gauge screen (runs on its own, exits non-zero on failure)
 
 })().catch((e) => { console.error(e); process.exit(1); });

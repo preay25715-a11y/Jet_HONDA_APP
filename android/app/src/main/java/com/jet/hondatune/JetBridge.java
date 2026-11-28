@@ -1052,6 +1052,167 @@ public class JetBridge {
         tcpOut = null;
     }
 
+    /* ======================= Smart Gauge link: this phone answers as an ELM327 BLE adapter =======================
+     * The Jet_SmartGauge_CAR screen looks for ELM327 adapters (BLE UART service FFF0) and asks them for OBD-II values. The phone advertises that
+     * service and hands every request to the page (event 'jlink-rx'); the page answers with the values the app has read from the car ('jlinkSend'). */
+    static final UUID JL_SVC = UUID.fromString("0000fff0-0000-1000-8000-00805f9b34fb");
+    static final UUID JL_TX = UUID.fromString("0000fff1-0000-1000-8000-00805f9b34fb");   // phone -> screen (notify)
+    static final UUID JL_RX = UUID.fromString("0000fff2-0000-1000-8000-00805f9b34fb");   // screen -> phone (write)
+    android.bluetooth.BluetoothGattServer jlSrv;
+    android.bluetooth.le.BluetoothLeAdvertiser jlAdv;
+    android.bluetooth.le.AdvertiseCallback jlAdvCb;
+    BluetoothGattCharacteristic jlTx;
+    BluetoothDevice jlDev;
+    volatile boolean jlOn = false;
+    int jlMtu = 23;
+    boolean jlBusy = false;
+    final java.util.ArrayDeque<byte[]> jlQ = new java.util.ArrayDeque<>();
+
+    void jlState(String state, String msg, String dev) {
+        emit("jlink-state", "{\"state\":" + q(state) + ",\"msg\":" + q(msg) + ",\"dev\":" + q(dev) + "}");
+    }
+
+    @JavascriptInterface
+    public void jlinkStart() {
+        ui.post(() -> {
+            try {
+                if (Build.VERSION.SDK_INT >= 31
+                        && (act.checkSelfPermission("android.permission.BLUETOOTH_ADVERTISE") != android.content.pm.PackageManager.PERMISSION_GRANTED
+                        || act.checkSelfPermission("android.permission.BLUETOOTH_CONNECT") != android.content.pm.PackageManager.PERMISSION_GRANTED)) {
+                    act.askPermissions();
+                    jlState("fail", "ต้องอนุญาต Bluetooth (อุปกรณ์ใกล้เคียง) ก่อน — กดอนุญาตแล้วกดเปิดลิงก์อีกครั้ง", "");
+                    return;
+                }
+                jlStop(false);
+                BluetoothManager bm = (BluetoothManager) act.getSystemService(Context.BLUETOOTH_SERVICE);
+                BluetoothAdapter ad = bm == null ? null : bm.getAdapter();
+                if (ad == null || !ad.isEnabled()) { jlState("fail", "เปิด Bluetooth ของโทรศัพท์ก่อน", ""); return; }
+                jlAdv = ad.getBluetoothLeAdvertiser();
+                if (jlAdv == null) { jlState("fail", "โทรศัพท์เครื่องนี้ไม่รองรับการประกาศตัวทาง Bluetooth LE (เป็นอะแดปเตอร์ให้จอไม่ได้)", ""); return; }
+                jlSrv = bm.openGattServer(act, jlCb);
+                if (jlSrv == null) { jlState("fail", "เปิดตัวรับ Bluetooth ไม่สำเร็จ", ""); return; }
+                BluetoothGattService svc = new BluetoothGattService(JL_SVC, BluetoothGattService.SERVICE_TYPE_PRIMARY);
+                jlTx = new BluetoothGattCharacteristic(JL_TX, BluetoothGattCharacteristic.PROPERTY_NOTIFY | BluetoothGattCharacteristic.PROPERTY_READ,
+                        BluetoothGattCharacteristic.PERMISSION_READ);
+                jlTx.addDescriptor(new BluetoothGattDescriptor(CCCD, BluetoothGattDescriptor.PERMISSION_READ | BluetoothGattDescriptor.PERMISSION_WRITE));
+                BluetoothGattCharacteristic rx = new BluetoothGattCharacteristic(JL_RX,
+                        BluetoothGattCharacteristic.PROPERTY_WRITE | BluetoothGattCharacteristic.PROPERTY_WRITE_NO_RESPONSE, BluetoothGattCharacteristic.PERMISSION_WRITE);
+                svc.addCharacteristic(jlTx);
+                svc.addCharacteristic(rx);
+                jlOn = true;
+                if (!jlSrv.addService(svc)) { jlOn = false; jlStop(false); jlState("fail", "เพิ่มบริการ Bluetooth ไม่สำเร็จ", ""); }
+            } catch (Exception e) {
+                jlOn = false; jlStop(false);
+                jlState("fail", "เปิดลิงก์จอไม่สำเร็จ: " + e.getMessage(), "");
+            }
+        });
+    }
+
+    void jlAdvertise() {
+        try {
+            if (!jlOn || jlAdv == null) return;
+            if (jlAdvCb != null) { try { jlAdv.stopAdvertising(jlAdvCb); } catch (Exception ignore) { } }
+            jlAdvCb = new android.bluetooth.le.AdvertiseCallback() {
+                @Override public void onStartSuccess(android.bluetooth.le.AdvertiseSettings s) { if (jlOn && jlDev == null) jlState("adv", "", ""); }
+                @Override public void onStartFailure(int code) { if (jlOn) jlState("fail", "ประกาศตัวทาง Bluetooth ไม่สำเร็จ (รหัส " + code + ")", ""); }
+            };
+            android.bluetooth.le.AdvertiseSettings st = new android.bluetooth.le.AdvertiseSettings.Builder()
+                    .setAdvertiseMode(android.bluetooth.le.AdvertiseSettings.ADVERTISE_MODE_LOW_LATENCY)
+                    .setTxPowerLevel(android.bluetooth.le.AdvertiseSettings.ADVERTISE_TX_POWER_HIGH)
+                    .setConnectable(true).setTimeout(0).build();
+            android.bluetooth.le.AdvertiseData data = new android.bluetooth.le.AdvertiseData.Builder()
+                    .setIncludeDeviceName(false).addServiceUuid(new ParcelUuid(JL_SVC)).build();
+            android.bluetooth.le.AdvertiseData resp = new android.bluetooth.le.AdvertiseData.Builder().setIncludeDeviceName(true).build();   // the name travels in the scan response
+            jlAdv.startAdvertising(st, data, resp, jlAdvCb);
+        } catch (Exception e) {
+            jlState("fail", "ประกาศตัวทาง Bluetooth ไม่สำเร็จ: " + e.getMessage(), "");
+        }
+    }
+
+    final android.bluetooth.BluetoothGattServerCallback jlCb = new android.bluetooth.BluetoothGattServerCallback() {
+        @Override public void onServiceAdded(int status, BluetoothGattService service) {
+            if (!jlOn) return;
+            if (status == BluetoothGatt.GATT_SUCCESS) ui.post(() -> jlAdvertise());
+            else jlState("fail", "เพิ่มบริการ Bluetooth ไม่สำเร็จ (" + status + ")", "");
+        }
+        @Override public void onConnectionStateChange(BluetoothDevice device, int status, int newState) {
+            if (newState == BluetoothProfile.STATE_CONNECTED) {
+                synchronized (jlQ) { jlDev = device; jlMtu = 23; jlBusy = false; jlQ.clear(); }
+                String nm = ""; try { nm = device.getName(); } catch (Exception ignore) { }
+                jlState("conn", "", nm == null || nm.isEmpty() ? device.getAddress() : nm);
+            } else if (newState == BluetoothProfile.STATE_DISCONNECTED) {
+                boolean mine;
+                synchronized (jlQ) { mine = device.equals(jlDev); if (mine) { jlDev = null; jlBusy = false; jlQ.clear(); } }
+                if (mine && jlOn) { jlState("adv", "", ""); ui.post(() -> jlAdvertise()); }       // a connection stops the advertising: start again for the next one
+            }
+        }
+        @Override public void onCharacteristicWriteRequest(BluetoothDevice device, int requestId, BluetoothGattCharacteristic ch, boolean prepared,
+                                                           boolean needResp, int offset, byte[] value) {
+            if (needResp && jlSrv != null) { try { jlSrv.sendResponse(device, requestId, BluetoothGatt.GATT_SUCCESS, offset, value); } catch (Exception ignore) { } }
+            if (value != null && value.length > 0 && JL_RX.equals(ch.getUuid())) emit("jlink-rx", "\"" + b64(value, value.length) + "\"");
+        }
+        @Override public void onDescriptorWriteRequest(BluetoothDevice device, int requestId, BluetoothGattDescriptor d, boolean prepared,
+                                                       boolean needResp, int offset, byte[] value) {
+            if (needResp && jlSrv != null) { try { jlSrv.sendResponse(device, requestId, BluetoothGatt.GATT_SUCCESS, offset, value); } catch (Exception ignore) { } }
+        }
+        @Override public void onDescriptorReadRequest(BluetoothDevice device, int requestId, int offset, BluetoothGattDescriptor d) {
+            if (jlSrv != null) { try { jlSrv.sendResponse(device, requestId, BluetoothGatt.GATT_SUCCESS, 0, new byte[]{0, 0}); } catch (Exception ignore) { } }
+        }
+        @Override public void onCharacteristicReadRequest(BluetoothDevice device, int requestId, int offset, BluetoothGattCharacteristic ch) {
+            if (jlSrv != null) { try { jlSrv.sendResponse(device, requestId, BluetoothGatt.GATT_SUCCESS, 0, new byte[0]); } catch (Exception ignore) { } }
+        }
+        @Override public void onMtuChanged(BluetoothDevice device, int mtu) { synchronized (jlQ) { jlMtu = mtu; } }
+        @Override public void onNotificationSent(BluetoothDevice device, int status) {
+            synchronized (jlQ) { jlBusy = false; }
+            jlPump();
+        }
+    };
+
+    /** the page's answer (base64): cut into notification-sized pieces and sent one by one (the next one goes out when the last was delivered) */
+    @JavascriptInterface
+    public boolean jlinkSend(String b64s) {
+        if (!jlOn) return false;
+        try {
+            byte[] d = unb64(b64s);
+            synchronized (jlQ) {
+                if (jlDev == null) return false;
+                int n = Math.max(20, Math.min(jlMtu - 3, 180));
+                for (int o = 0; o < d.length; o += n) jlQ.offer(java.util.Arrays.copyOfRange(d, o, Math.min(d.length, o + n)));
+                while (jlQ.size() > 200) jlQ.poll();       // the screen is not listening (no subscription): do not pile up
+            }
+            jlPump();
+            return true;
+        } catch (Exception e) { return false; }
+    }
+
+    void jlPump() {
+        byte[] c; BluetoothDevice dev; boolean ok;
+        synchronized (jlQ) {
+            if (jlBusy || jlDev == null || jlTx == null || jlSrv == null) return;
+            c = jlQ.poll();
+            if (c == null) return;
+            dev = jlDev; jlBusy = true;
+        }
+        try {
+            if (Build.VERSION.SDK_INT >= 33) ok = jlSrv.notifyCharacteristicChanged(dev, jlTx, false, c) == 0;
+            else { jlTx.setValue(c); ok = jlSrv.notifyCharacteristicChanged(dev, jlTx, false); }
+        } catch (Exception e) { ok = false; }
+        if (!ok) {             // not subscribed yet / stack busy: this piece is lost, the screen asks again
+            synchronized (jlQ) { jlBusy = false; }
+        }
+    }
+
+    void jlStop(boolean report) {
+        jlOn = false;
+        try { if (jlAdv != null && jlAdvCb != null) jlAdv.stopAdvertising(jlAdvCb); } catch (Exception ignore) { }
+        try { if (jlSrv != null) { if (jlDev != null) jlSrv.cancelConnection(jlDev); jlSrv.close(); } } catch (Exception ignore) { }
+        synchronized (jlQ) { jlSrv = null; jlAdv = null; jlAdvCb = null; jlTx = null; jlDev = null; jlBusy = false; jlQ.clear(); }
+        if (report) jlState("off", "", "");
+    }
+
+    @JavascriptInterface
+    public void jlinkStop() { ui.post(() -> jlStop(true)); }
+
     /* ======================= files ======================= */
 
     @JavascriptInterface

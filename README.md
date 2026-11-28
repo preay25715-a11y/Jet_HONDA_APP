@@ -142,6 +142,7 @@ src/app.js, style.css, index.html   UI
 
 build.py           รวมทุกไฟล์เป็น dist/Jet_Smart_Gauge.html
 test/test.js       node test/test.js (ทดสอบทั้ง workflow กับกล่องจำลอง)
+test/gaugelink.js  node test/gaugelink.js (โทรศัพท์เป็นอะแดปเตอร์ ELM327 ให้จอ Smart Gauge)
 android/           แอป Android (MainActivity + JetBridge: USB OTG / BLE / บันทึกไฟล์)
 .github/workflows/build-apk.yml   สร้าง APK อัตโนมัติบน GitHub
 ```
@@ -180,6 +181,14 @@ android/           แอป Android (MainActivity + JetBridge: USB OTG / BLE / 
 
 ## v1.3.2
 - Version badge (e.g. `v1.3.3`) placed after "By เปรียวจูนเนอร์" in the header and on the licence screen.
+
+## v1.6.8 — link to the Smart Gauge screen of the Jet_SmartGauge_CAR project (no change to the screen)
+- The ESP32 CYD screen (firmware v1.0.x) looks for an **ELM327 OBD-II adapter over Bluetooth** and asks it for values; it has no input for a phone. So the **phone now presents itself as such an adapter** and answers the screen with the values the app is reading from the car. Nothing to flash or update on the screen, no wires.
+- **Setup → "📺 ลิงก์จอ Smart Gauge" → เปิดลิงก์จอ.** Then on the screen: SETUP → Bluetooth → pick the Bluetooth name of the phone (it is listed as an OBD adapter; a screen that has no adapter chosen yet picks it by itself when it is the only one nearby). The Setup text shows the state: waiting for the screen / screen connected + how many requests it made / no car values yet. The setting is remembered and the link comes back on when the app starts.
+- **What the screen gets** (SAE J1979, protocol "CAN 11/500" so it asks several values in one request): RPM, speed (OBD speed, else phone GPS), coolant, intake air, MAP, throttle, engine load, timing, MAF, battery voltage, engine oil temperature, ambient / barometric pressure, and the **AFR the app shows as lambda** (PID 24, from the wideband / O2 value). The list of supported PIDs is fixed, so the screen sets itself up even before the car is read. Values older than 4 s are not sent (the screen shows "--"); the app must be connected to the car with LIVE running for the screen to have values. Fault codes, VIN and freeze frame are not offered (the screen shows "no data").
+- Android 12+: the app also asks for the new **Bluetooth "nearby devices"** permission (advertise). The phone stays awake while the screen is linked. Phones that cannot advertise over Bluetooth LE say so in Setup.
+- **Known limit:** Android changes the phone's Bluetooth LE address now and then, and the screen remembers the adapter by address — after a change pick the phone again on the screen (a screen firmware that finds the adapter by name would remove this; not done, the screen is unchanged).
+- Tests: `node test/gaugelink.js` replays what the screen firmware does (ATZ/ATE0/ATL0/ATS0/ATH0/ATSP, 0100, ATDPN, support bitmaps 0100/0120/0140, one and six PIDs per request with the trailing count digit, NO DATA) with a port of its reply parser, and the app's own ELM327 client reads the emulated adapter; a browser suite with a simulated native bridge covers the Setup section (start, advertising, screen connects, values, stop, missing permission, auto start, English). **Not tried with a real phone and a real screen yet** — the Android part (BLE server / advertising) is only compile-checked by the build.
 
 ## v1.6.7 — connecting while the engine runs / is started (WiFi and Bluetooth)
 - **The car does not answer when connecting** (key OFF, engine not started yet, engine cranking): the adapter now **stays connected and the app waits for the car** (asks again every ~1.5 s, up to 3 min; Setup shows "รอรถตอบ", **ตัดการเชื่อมต่อ** cancels). As soon as the car answers everything continues as normal. Before, the app gave up after one long search and had to be connected again by hand.

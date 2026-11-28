@@ -115,6 +115,7 @@ public class MainActivity extends Activity {
         if (Build.VERSION.SDK_INT >= 31) {
             need.add(Manifest.permission.BLUETOOTH_SCAN);
             need.add(Manifest.permission.BLUETOOTH_CONNECT);
+            need.add("android.permission.BLUETOOTH_ADVERTISE");   // the phone shows itself to the Smart Gauge screen
         }
         need.add(Manifest.permission.ACCESS_FINE_LOCATION);
         need.add(Manifest.permission.ACCESS_COARSE_LOCATION);   // Android 12+ ignores FINE alone
