@@ -95,7 +95,7 @@
     const t = st.t;
     const gf = !t && window.JetGaugeFeed && JetGaugeFeed.active();           // v1.6.10: only the screen's USB cable is connected (its values feed the Dash)
     $('#dLink').className = 'dot' + (t || gf ? ' on' : '');
-    $('#tLink').textContent = t ? t.name : gf ? 'GAUGE USB' : 'OFFLINE · แตะเพื่อเชื่อมต่อ';
+    $('#tLink').textContent = t ? t.name : gf ? (JetGaugeFeed.via() === 'ble' ? 'GAUGE BT' : 'GAUGE USB') : 'OFFLINE · แตะเพื่อเชื่อมต่อ';
     const s = st.ecu ? st.ecu.state : null;
     const good = s === 'OK' || s === 'SECURE' || s === 'READ';
     $('#tEcu').className = 'chipst' + (good ? ' on' : s && s !== 'OFF' ? ' mid' : '');
@@ -131,7 +131,7 @@
     pills(); renderGauge(); toast('ตัดการเชื่อมต่อเกจแล้ว');
   };
   if ($('#bDemo')) $('#bDemo').onclick = () => (st.t && st.t.kind === 'demo') ? disconnect() : connect('demo');
-  $$('#mConnect .opt').forEach((o) => o.onclick = () => { modal('#mConnect', false); o.dataset.c === 'obd' ? connectBt('obd') : connect(o.dataset.c); });
+  $$('#mConnect .opt').forEach((o) => o.onclick = () => { modal('#mConnect', false); o.dataset.c === 'obd' ? connectBt('obd') : o.dataset.c === 'gauge-live' ? (window.JetNative ? connectBt('gauge') : connect('gauge-only')) : connect(o.dataset.c); });
   $('#bDisc').onclick = () => { rcStop = true; modal('#mConnect', false); disconnect(); };
 
   let connAbort = false, connT = null, waitingCar = false;           // a connect that is still waiting for the car / retrying can be cancelled by the user
@@ -302,9 +302,10 @@
         const via = kind === 'gauge-only-usb' ? 'usb' : 'ble';
         if (via === 'usb' && window.JetApp && st.t && st.t.kind === 'usb') throw new Error('มือถือมีพอร์ต USB เดียว (ใช้กับสาย K-line อยู่) — ต่อเกจด้วย Bluetooth แทน');
         if (st.gauge && st.gauge !== st.t) { try { await st.gauge.close(); } catch (e) {} }
-        const g = new GaugeLink(via); if (dev && dev.addr) g.addr = dev.addr; await g.open(); st.gauge = g; g.onLost = () => { if (st.gauge === g) st.gauge = null; if (window.JetGaugeFeed) JetGaugeFeed.stop(); pills(); toast('เกจหลุดการเชื่อมต่อ'); };
-        log('info', 'เชื่อมเกจแล้ว ' + (g.fw || '')); toast(via === 'usb' ? 'เชื่อมจอ Smart Gauge แล้ว — รับค่าจากจอ' : 'เชื่อมเกจแล้ว');
-        if (via === 'usb' && window.JetGaugeFeed) JetGaugeFeed.start(g);        // v1.6.10: the screen's own values (rpm, speed, AFR ...) feed the Dash and the AFR LOG
+        const g = new GaugeLink(via); if (dev && dev.addr) g.addr = dev.addr; await g.open(); st.gauge = g; g.onLost = () => { if (st.gauge === g) st.gauge = null; if (window.JetGaugeFeed) JetGaugeFeed.lost(g); pills(); toast('เกจหลุดการเชื่อมต่อ'); };
+        log('info', 'เชื่อมเกจแล้ว ' + (g.fw || '')); const live = via === 'usb' || /JET SMART GAUGE/i.test(g.fw || '');          // the Smart Gauge screen (any cable); an older gauge over Bluetooth is only for files
+        toast(live ? 'เชื่อมจอ Smart Gauge แล้ว — รับค่าจากจอ' : 'เชื่อมเกจแล้ว');
+        if (live && window.JetGaugeFeed) JetGaugeFeed.start(g, dev);        // v1.6.10: the screen's own values (rpm, speed, AFR ...) feed the Dash and the AFR LOG
         pills(); return;
       }
       await disconnect();
@@ -664,7 +665,7 @@
 
   /* ---------------- API for ui-extra.js ---------------- */
   window.JetCore = { resetTiles, tilesNow, CH, chText, chVal, pick, DEF_RATIOS, renderTiles, st, S, saveS, $, $$, P, toast, ask, askText, dlg, op, go, pageOf, fbytes, addFile, refreshFiles, log, esc, kb, download, modal,
-    startLive, stopLive, renderHex, mergeSensors, emitLive, models, parseHex, connect, showLive, pills };
+    startLive, stopLive, renderHex, mergeSensors, emitLive, models, parseHex, connect, connectBt, showLive, pills };
 
   /* ---------------- boot ---------------- */
   (async () => {

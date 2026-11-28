@@ -89,4 +89,4 @@ const bad = G.decodeLog(mapBytes(10, TPS, [[{ n: 3, avg: 2.5 }]])); assert.stric
 // short / damaged table
 assert.strictEqual(G.decodeLog(mapBytes(10, TPS, []).slice(0, 40)), null);
 console.log('  AFR map import ok');
-console.log('v1.6.10 gauge -> app tests passed');
+console.log('v1.6.10 gauge -> app tests passed (decoders; the transport — USB or Bluetooth — is not part of them)');

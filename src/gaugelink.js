@@ -131,6 +131,9 @@
   }
   function start(silent) {
     if (!N || !N.jlinkStart) { setState('fail', 'ใช้ได้เฉพาะในแอป Android รุ่นใหม่ (v1.6.8 ขึ้นไป)'); return; }
+    if (root.JetGaugeFeed && JetGaugeFeed.bleActive()) {                                    // v1.6.11: the screen is already sending its values over Bluetooth: the other direction would collide with it
+      JetGaugeFeed.disconnect(); if (!silent) toast('ตัดการรับค่าจากจอทาง Bluetooth แล้ว — ลิงก์จอ (โทรศัพท์เป็นอะแดปเตอร์) ใช้บลูทูธทีละทิศทาง', 6500);
+    }
     S.jlink = 1; saveS(); setState('wait', ''); N.jlinkStart();
     if (!silent) toast('เปิดลิงก์จอ Smart Gauge แล้ว');
   }

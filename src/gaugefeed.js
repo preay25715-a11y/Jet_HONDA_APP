@@ -1,7 +1,7 @@
 /* ============================================================================
  * v1.6.10 — values from the Smart Gauge screen INTO the app (screen -> app)
  *
- * The screen (Jet_SmartGauge_CAR v1.0.15+) answers MFB-LINK over its USB cable (115200 baud):
+ * The screen (Jet_SmartGauge_CAR v1.0.15+) answers MFB-LINK over its USB cable (115200 baud), and from firmware v1.0.17 over Bluetooth LE too (Nordic UART, data only):
  *   LIVE 0x21     48 bytes with every live reading (rpm, speed, throttle, MAP, coolant, intake, battery, timing, injector, AFR, lambda, CRP, oil, load)
  *   LOG_GET 0x22  kind 2 = the screen's own AFR map (7 throttle rows x 8 rpm columns, with sample counts)
  * Here those readings are turned into the app's own keys (RPM, SPD, TPS, MAP, ECT, IAT, BATT, IGN, INJ, AFR, LAMB, CRP, EOT, LOAD, FRATE) and go through
@@ -92,7 +92,8 @@
   const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
   const FRESH = 1500;
   // state: off | conn (cable open, nothing yet) | flow | idle (screen has no values: car off / not linked) | demo | stall (no answer) | old (firmware without LIVE)
-  const F = { on: false, g: null, state: 'off', msg: '', last: null, t: 0, n: 0, fails: 0, hist: [], rate: 0, since: 0, info: null, run: 0 };
+  const F = { on: false, g: null, dev: null, state: 'off', msg: '', last: null, t: 0, n: 0, fails: 0, hist: [], rate: 0, since: 0, info: null, run: 0, retry: 0 };
+  const viaOf = () => (F.g && F.g.via === 'ble' ? 'ble' : 'usb');
   const ecuLive = () => !!(st.ecu && st.live);
   const flowing = () => F.on && F.state === 'flow' && F.rate > 0.3;
 
@@ -128,28 +129,52 @@
     if (F.run === run) { F.on = F.state === 'old' && st.gauge === g; if (!F.on) { F.state = 'off'; F.last = null; } }
     render();
   }
-  function start(g) {
+  function start(g, dev) {
     stop(); if (!g || !g.request) return;
-    F.on = true; F.g = g; F.state = 'conn'; F.last = null; F.n = 0; F.fails = 0; F.hist = []; F.rate = 0; F.since = Date.now(); F.info = null;
+    F.retry = 0; F.on = true; F.g = g; F.dev = dev || null; F.state = 'conn'; F.last = null; F.n = 0; F.fails = 0; F.hist = []; F.rate = 0; F.since = Date.now(); F.info = null;
+    if (g.via === 'ble' && root.JetGaugeLink && root.JetGaugeLink.state() !== 'off') {            // Bluetooth in both directions at once would collide: the phone is either the adapter of the screen or its receiver
+      root.JetGaugeLink.stop(); toast('ปิดลิงก์จอ (โทรศัพท์เป็นอะแดปเตอร์) แล้ว — รับค่าจากจอทาง Bluetooth ทีละทิศทางเพื่อไม่ให้สัญญาณชนกัน', 6500);
+    }
     const run = ++F.run; render(); loop(g, run);
   }
   function stop() { F.run++; F.on = false; F.g = null; F.state = 'off'; F.last = null; render(); }
+  // the link dropped (cable pulled, phone out of range): a Bluetooth link is looked for again for about a minute, a cable needs the person
+  function lost(g) {
+    const dev = F.g === g ? F.dev : null, ble = g && g.via === 'ble'; stop();
+    if (!ble || !dev || !dev.addr) return;                                                      // only the Android app knows the address to look for again; a browser needs a tap
+    const id = ++F.retry; toast('จอหลุดการเชื่อมต่อ — กำลังเชื่อม Bluetooth ใหม่…', 4000);
+    (async () => {
+      for (let i = 0; i < 10 && F.retry === id; i++) {
+        await sleep(6000); if (F.retry !== id || st.gauge) return;
+        try { await C.connect('gauge-only', dev); } catch (e) { /* tried again below */ }
+        if (st.gauge) return;
+      }
+      if (F.retry === id) { F.retry = 0; toast('เชื่อมจอใหม่ไม่สำเร็จ — กดเชื่อม Bluetooth ในหน้า Setup อีกครั้ง', 6000); }
+    })();
+  }
+  async function disconnect() {
+    const g = F.g; F.retry = 0; stop();
+    if (g) { try { await g.close(); } catch (e) { /* gone */ } if (st.gauge === g) st.gauge = null; st.sens = null; toast('ตัดการเชื่อมต่อจอแล้ว'); try { C.pills(); } catch (e) { /* ignore */ } }
+    render();
+  }
 
   /* ---------- status in Setup ---------- */
   const fmt = (k, d) => { const c = C.CH && C.CH[k]; return (c ? c.l : k) + ' ' + C.chText(d, k) + (c && c.u ? ' ' + c.u : ''); };
   function render() {
-    const info = $('#gfInfo'), btn = $('#gfBtn'), imp = $('#gfImp'), box = $('#gfVals'); if (!info || !btn) return;
-    const on = F.on && st.gauge === F.g, usb = !!(root.JetApp || ('serial' in navigator));
-    btn.textContent = on ? '⏹ ตัดสาย USB จอ' : '🔌 เชื่อมสาย USB รับค่าจากจอ'; btn.disabled = !usb;
+    const info = $('#gfInfo'), btn = $('#gfBtn'), bbtn = $('#gfBle'), imp = $('#gfImp'), box = $('#gfVals'); if (!info || !btn) return;
+    const on = F.on && st.gauge === F.g, via = viaOf(), usb = !!(root.JetApp || ('serial' in navigator)), ble = !!(root.JetNative || (typeof navigator !== 'undefined' && navigator.bluetooth));
+    btn.textContent = on && via === 'usb' ? '⏹ ตัดสาย USB จอ' : '🔌 เชื่อมสาย USB';
+    btn.disabled = !usb || (on && via === 'ble');
+    if (bbtn) { bbtn.textContent = on && via === 'ble' ? '⏹ ตัด Bluetooth จอ' : '📶 เชื่อม Bluetooth'; bbtn.disabled = !ble || (on && via === 'usb'); }
     if (imp) imp.hidden = !(on && F.state !== 'old' && F.state !== 'stall');
     let h;
-    if (!usb) h = 'เบราว์เซอร์นี้ไม่รองรับสาย USB — ใช้แอป Android หรือ Chrome / Edge';
-    else if (!on && F.state !== 'old') h = 'ยังไม่ได้เชื่อม — ต่อสาย USB ของจอ Smart Gauge เข้ามือถือ (OTG) แล้วกดเชื่อม';
-    else if (F.state === 'conn') h = '🟡 เปิดสาย USB แล้ว — รอจอส่งค่า…';
-    else if (F.state === 'flow') h = '🟢 รับค่าจากจอ ' + esc((F.g && (F.g.fw || F.g.name)) || 'Smart Gauge') + ' · ' + F.rate.toFixed(1) + ' ครั้ง/วินาที' + (ecuLive() ? ' · ใช้เติมค่าที่ OBD ไม่มี' : ' · ป้อนเข้า Dash / AFR LOG');
+    if (!usb && !ble) h = 'เบราว์เซอร์นี้ไม่รองรับ USB / Bluetooth — ใช้แอป Android หรือ Chrome / Edge';
+    else if (!on && F.state !== 'old') h = F.retry ? '🟡 จอหลุดการเชื่อมต่อ — กำลังเชื่อม Bluetooth ใหม่…' : 'ยังไม่ได้เชื่อม — เชื่อมจอ Smart Gauge ทางสาย USB (OTG) หรือ Bluetooth';
+    else if (F.state === 'conn') h = via === 'ble' ? '🟡 เชื่อม Bluetooth แล้ว — รอจอส่งค่า…' : '🟡 เปิดสาย USB แล้ว — รอจอส่งค่า…';
+    else if (F.state === 'flow') h = '🟢 รับค่าจากจอ ' + esc((F.g && (F.g.fw || F.g.name)) || 'Smart Gauge') + (via === 'ble' ? ' · Bluetooth' : ' · USB') + ' · ' + F.rate.toFixed(1) + ' ครั้ง/วินาที' + (ecuLive() ? ' · ใช้เติมค่าที่ OBD ไม่มี' : ' · ป้อนเข้า Dash / AFR LOG');
     else if (F.state === 'idle') h = '🟡 เชื่อมจอแล้ว แต่จอยังไม่มีค่า (จอยังไม่ได้ต่อรถ / กุญแจยังไม่ ON)';
     else if (F.state === 'demo') h = '🟠 จออยู่ในโหมดทดลอง (DEMO) — ค่าเป็นตัวเลขจำลอง จึงไม่นำเข้าแอป';
-    else if (F.state === 'stall') h = '🔴 จอไม่ตอบ — ตรวจสาย USB / เปิดจอไว้หรือไม่';
+    else if (F.state === 'stall') h = via === 'ble' ? '🔴 จอไม่ตอบ — อยู่ใกล้จอหรือไม่ / จอเปิดอยู่หรือไม่' : '🔴 จอไม่ตอบ — ตรวจสาย USB / เปิดจอไว้หรือไม่';
     else if (F.state === 'old') h = '🔴 เฟิร์มแวร์จอรุ่นเก่า ยังไม่มีคำสั่งส่งค่า — อัปเดตจอเป็น v1.0.15 ขึ้นไป';
     else h = '';
     info.innerHTML = h;
@@ -184,19 +209,18 @@
     toast('นำเข้า AFR LOG จากจอแล้ว · ' + plan.added.toLocaleString('en-US') + ' ตัวอย่าง · ' + plan.spots + ' ช่องในตาราง', 5000);
   }
 
-  if ($('#gfBtn')) $('#gfBtn').onclick = async () => {
-    if (F.on && F.g && st.gauge === F.g) {
-      const g = F.g; stop();
-      try { await g.close(); } catch (e) { /* gone */ }
-      if (st.gauge === g) st.gauge = null; st.sens = null;
-      toast('ตัดสาย USB จอแล้ว'); try { C.pills(); } catch (e) { /* ignore */ }
-      render(); return;
-    }
-    C.modal('#mSet', false); await C.connect('gauge-only-usb'); render();
+  const pressed = async (kind) => {
+    if (F.on && F.g && st.gauge === F.g) return disconnect();
+    F.retry = 0;                                                                                  // a press by hand replaces the automatic search
+    C.modal('#mSet', false);
+    if (kind === 'usb') await C.connect('gauge-only-usb'); else if (root.JetNative) await C.connectBt('gauge'); else await C.connect('gauge-only');
+    render();
   };
+  if ($('#gfBtn')) $('#gfBtn').onclick = () => pressed('usb');
+  if ($('#gfBle')) $('#gfBle').onclick = () => pressed('ble');
   if ($('#bSet')) $('#bSet').addEventListener('click', render);
   if ($('#gfImp')) $('#gfImp').onclick = () => importAfr().catch((e) => toast(e.message || String(e), 5000));
   render();
 
-  root.JetGaugeFeed = { start, stop, fill, state: () => F.state, active: () => F.on, flowing, importAfr, F };
+  root.JetGaugeFeed = { start, stop, lost, disconnect, fill, state: () => F.state, active: () => F.on, via: viaOf, bleActive: () => F.on && viaOf() === 'ble', flowing, importAfr, F };
 })(typeof window !== 'undefined' ? window : globalThis);
