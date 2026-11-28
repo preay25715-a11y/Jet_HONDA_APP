@@ -373,6 +373,7 @@
     d.TPS = x < 0.8 ? 0 : Math.max(0, Math.min(100, x / (full - z) * 100));
   };
   const hook = (d) => {
+    if (d.demo) { if (d.AFR != null && !d.afrSrc) d.afrSrc = 'gauge'; if (d.AFR != null && d.LAMB == null) d.LAMB = d.AFR / 14.7; return; }     // the screen's DEMO numbers: shown as they are, nothing learned from them (throttle, rev scale, distance)
     const now = d.t || Date.now();
     tpsHook(d);
     // a dial scale that is too small (bike not in the table): five samples in a row near the end of the scale -> widen it, remembered for this bike

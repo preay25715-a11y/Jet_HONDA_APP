@@ -289,7 +289,7 @@
   setInterval(afrSave, 5000);
   window.addEventListener('pagehide', afrSave);
   function afrRecord(d) {
-    if (!afr.rec || d[LK()] == null || d.RPM == null || !afr.log) return;
+    if (!afr.rec || d.demo || d[LK()] == null || d.RPM == null || !afr.log) return;      // d.demo: the Smart Gauge screen is in its DEMO mode (made-up numbers)
     const p = livePos(afr.info, afr.xs, afr.ys, d);
     if (!p) return;
     if (isCrp()) afr.log.add(p.fr, p.fc, d.CRP, 0, 5.5); else afr.log.add(p.fr, p.fc, d.AFR, undefined, st.t && st.t.kind === 'obd' && st.t.fuel === 'd' ? 90 : undefined); afr.dirty = true;

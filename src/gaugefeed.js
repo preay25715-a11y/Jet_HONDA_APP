@@ -92,7 +92,7 @@
   const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
   const FRESH = 1500;
   // state: off | conn (cable open, nothing yet) | flow | idle (screen has no values: car off / not linked) | demo | stall (no answer) | old (firmware without LIVE)
-  const F = { on: false, g: null, dev: null, state: 'off', msg: '', last: null, t: 0, n: 0, fails: 0, hist: [], rate: 0, since: 0, info: null, run: 0, retry: 0 };
+  const F = { on: false, g: null, dev: null, state: 'off', msg: '', last: null, t: 0, n: 0, fails: 0, hist: [], rate: 0, since: 0, info: null, run: 0, retry: 0, asked: 0 };
   const viaOf = () => (F.g && F.g.via === 'ble' ? 'ble' : 'usb');
   const ecuLive = () => !!(st.ecu && st.live);
   const flowing = () => F.on && F.state === 'flow' && F.rate > 0.3;
@@ -105,25 +105,27 @@
     return d;
   }
   async function ingest(L) {
-    if (L.demo) { F.state = 'demo'; F.last = null; return; }                                  // the screen is showing made-up numbers: not for the app (the AFR LOG would learn them)
     const { d, gk } = liveToD(L);
-    if (!Object.keys(d).length) { F.state = 'idle'; F.last = null; return; }
-    F.state = 'flow'; F.last = d; F.t = Date.now(); F.info = { mode: L.mode, bike: L.bike, diesel: L.diesel, mil: L.mil, tripKm: L.tripKm };
-    if (ecuLive()) return;                                                                    // the OBD loop is drawing: the screen only fills the gaps
-    const x = Object.assign({}, d); x.gk = Object.assign({}, gk); x.gsrc = 1;
+    if (!Object.keys(d).length) { F.state = L.demo ? 'demo' : 'idle'; F.last = null; return; }
+    F.info = { mode: L.mode, bike: L.bike, diesel: L.diesel, mil: L.mil, tripKm: L.tripKm }; F.t = Date.now(); F.last = d;
+    // v1.0.18 screens have a DEMO mode (bench test, no car): the numbers are made up. They ARE shown (that is what the mode is for: trying the app without a car) but
+    // marked `demo`, so nothing records or learns from them (AFR LOG, throttle / rev-scale learning, distance) and an OBD value is never replaced by them
+    F.state = L.demo ? 'demo' : 'flow';
+    if (ecuLive()) return;                                                                    // the OBD loop is drawing: the screen only fills the gaps (never with DEMO numbers)
+    const x = Object.assign({}, d); x.gk = Object.assign({}, gk); x.gsrc = 1; if (L.demo) x.demo = 1;
     await C.mergeSensors(x); C.showLive(x); C.emitLive(x);
   }
   async function loop(g, run) {
     let cyc = 0, shown = F.state;
     while (F.run === run && F.g === g && st.gauge === g && !g.lost) {
-      const r = await g.request(0x21, [], 700);
+      F.asked++; const r = await g.request(0x21, [], 700);
       if (F.run !== run) break;
       const L = r && r[0] === 0 ? decodeLive(Array.from(r.slice(1))) : null;
       if (L) { F.fails = 0; F.n++; try { await ingest(L); } catch (e) { console.error(e); } }
       else if (r && r[0] === 2) { F.state = 'old'; F.last = null; break; }                    // refused: firmware older than v1.0.15
       else if (++F.fails >= 3 && F.state !== 'stall') { F.state = 'stall'; F.last = null; }
-      if (++cyc % 5 === 0 && !g.noSensors) { try { const s = await g.sensors(); if (s && F.run === run) st.sens = s; } catch (e) { /* ignore */ } }   // O2 volts etc. that LIVE does not carry
-      if (F.state !== shown) { shown = F.state; render(); }
+      if (++cyc % 5 === 0 && !g.noSensors) { try { const s = await g.sensors(); if (s && F.run === run) st.sens = F.state === 'demo' ? null : s; } catch (e) { /* ignore */ } }   // O2 volts etc. that LIVE does not carry
+      if (F.state !== shown) { shown = F.state; render(); try { C.pills(); C.log(F.state === 'stall' || F.state === 'old' ? 'warn' : 'info', 'รับค่าจากจอ Smart Gauge (' + viaOf() + '): ' + F.state + ' · ' + (g.fw || '') + ' · ถามจอแล้ว ' + F.asked + ' ครั้ง · จอตอบ ' + F.n); } catch (e) { /* ignore */ } }
       await sleep(F.fails ? 500 : ecuLive() ? 500 : 50);
     }
     if (F.run === run) { F.on = F.state === 'old' && st.gauge === g; if (!F.on) { F.state = 'off'; F.last = null; } }
@@ -131,7 +133,7 @@
   }
   function start(g, dev) {
     stop(); if (!g || !g.request) return;
-    F.retry = 0; F.on = true; F.g = g; F.dev = dev || null; F.state = 'conn'; F.last = null; F.n = 0; F.fails = 0; F.hist = []; F.rate = 0; F.since = Date.now(); F.info = null;
+    F.retry = 0; F.on = true; F.g = g; F.dev = dev || null; F.state = 'conn'; F.last = null; F.n = 0; F.asked = 0; F.fails = 0; F.hist = []; F.rate = 0; F.since = Date.now(); F.info = null;
     if (g.via === 'ble' && root.JetGaugeLink && root.JetGaugeLink.state() !== 'off') {            // Bluetooth in both directions at once would collide: the phone is either the adapter of the screen or its receiver
       root.JetGaugeLink.stop(); toast('ปิดลิงก์จอ (โทรศัพท์เป็นอะแดปเตอร์) แล้ว — รับค่าจากจอทาง Bluetooth ทีละทิศทางเพื่อไม่ให้สัญญาณชนกัน', 6500);
     }
@@ -166,20 +168,21 @@
     btn.textContent = on && via === 'usb' ? '⏹ ตัดสาย USB จอ' : '🔌 เชื่อมสาย USB';
     btn.disabled = !usb || (on && via === 'ble');
     if (bbtn) { bbtn.textContent = on && via === 'ble' ? '⏹ ตัด Bluetooth จอ' : '📶 เชื่อม Bluetooth'; bbtn.disabled = !ble || (on && via === 'usb'); }
-    if (imp) imp.hidden = !(on && F.state !== 'old' && F.state !== 'stall');
+    if (imp) imp.hidden = !(on && F.state !== 'old' && F.state !== 'stall' && F.state !== 'demo');
     let h;
     if (!usb && !ble) h = 'เบราว์เซอร์นี้ไม่รองรับ USB / Bluetooth — ใช้แอป Android หรือ Chrome / Edge';
     else if (!on && F.state !== 'old') h = F.retry ? '🟡 จอหลุดการเชื่อมต่อ — กำลังเชื่อม Bluetooth ใหม่…' : 'ยังไม่ได้เชื่อม — เชื่อมจอ Smart Gauge ทางสาย USB (OTG) หรือ Bluetooth';
     else if (F.state === 'conn') h = via === 'ble' ? '🟡 เชื่อม Bluetooth แล้ว — รอจอส่งค่า…' : '🟡 เปิดสาย USB แล้ว — รอจอส่งค่า…';
     else if (F.state === 'flow') h = '🟢 รับค่าจากจอ ' + esc((F.g && (F.g.fw || F.g.name)) || 'Smart Gauge') + (via === 'ble' ? ' · Bluetooth' : ' · USB') + ' · ' + F.rate.toFixed(1) + ' ครั้ง/วินาที' + (ecuLive() ? ' · ใช้เติมค่าที่ OBD ไม่มี' : ' · ป้อนเข้า Dash / AFR LOG');
     else if (F.state === 'idle') h = '🟡 เชื่อมจอแล้ว แต่จอยังไม่มีค่า (จอยังไม่ได้ต่อรถ / กุญแจยังไม่ ON)';
-    else if (F.state === 'demo') h = '🟠 จออยู่ในโหมดทดลอง (DEMO) — ค่าเป็นตัวเลขจำลอง จึงไม่นำเข้าแอป';
+    else if (F.state === 'demo') h = '🟠 จออยู่ในโหมดทดลอง (DEMO) — แสดงค่าจำลองบน Dash ให้ลองแอปได้ แต่ไม่บันทึกลง AFR LOG และไม่ปรับค่าที่แอปจำไว้';
     else if (F.state === 'stall') h = via === 'ble' ? '🔴 จอไม่ตอบ — อยู่ใกล้จอหรือไม่ / จอเปิดอยู่หรือไม่' : '🔴 จอไม่ตอบ — ตรวจสาย USB / เปิดจอไว้หรือไม่';
     else if (F.state === 'old') h = '🔴 เฟิร์มแวร์จอรุ่นเก่า ยังไม่มีคำสั่งส่งค่า — อัปเดตจอเป็น v1.0.15 ขึ้นไป';
     else h = '';
+    if (on && (F.state === 'conn' || F.state === 'idle' || F.state === 'stall')) h += ' · ถามจอแล้ว ' + F.asked + ' ครั้ง · จอตอบ ' + F.n;       // what to read out when the values do not show
     info.innerHTML = h;
     if (box) {
-      const d = F.state === 'flow' && F.last ? F.last : null;
+      const d = (F.state === 'flow' || F.state === 'demo') && F.last ? F.last : null;
       box.hidden = !d;
       if (d) box.innerHTML = Object.keys(d).map((k) => '<span class="gfv">' + esc(fmt(k, d)) + '</span>').join('');
     }
@@ -194,6 +197,7 @@
   /* ---------- the screen's AFR map -> the app's AFR LOG ---------- */
   async function importAfr() {
     const g = F.g, A = root.JetAfr; if (!F.on || !g || st.gauge !== g) return toast('ยังไม่ได้เชื่อมจอ');
+    if (F.state === 'demo') return toast('จออยู่ในโหมด DEMO — ตาราง AFR เป็นของจำลอง ไม่นำเข้า', 5000);
     if (!A || !A.log || !A.info) return toast('เปิดหน้า AFR LOG ก่อน');
     if (A.mode === 'crp') return toast('AFR LOG อยู่ในโหมด CRP — สลับเป็น AFR ก่อนนำเข้า', 5000);
     if (A.info.load !== 'TPS') return toast('ตาราง AFR LOG ใช้ MAP เป็นแกน — นำเข้าจากจอไม่ได้ (จอเก็บตาม TPS)', 5000);

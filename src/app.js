@@ -95,7 +95,7 @@
     const t = st.t;
     const gf = !t && window.JetGaugeFeed && JetGaugeFeed.active();           // v1.6.10: only the screen's USB cable is connected (its values feed the Dash)
     $('#dLink').className = 'dot' + (t || gf ? ' on' : '');
-    $('#tLink').textContent = t ? t.name : gf ? (JetGaugeFeed.via() === 'ble' ? 'GAUGE BT' : 'GAUGE USB') : 'OFFLINE · แตะเพื่อเชื่อมต่อ';
+    $('#tLink').textContent = t ? t.name : gf ? (JetGaugeFeed.state() === 'demo' ? 'DEMO · ' : 'GAUGE ') + (JetGaugeFeed.via() === 'ble' ? 'BT' : 'USB') : 'OFFLINE · แตะเพื่อเชื่อมต่อ';
     const s = st.ecu ? st.ecu.state : null;
     const good = s === 'OK' || s === 'SECURE' || s === 'READ';
     $('#tEcu').className = 'chipst' + (good ? ' on' : s && s !== 'OFF' ? ' mid' : '');
