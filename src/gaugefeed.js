@@ -92,7 +92,7 @@
   const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
   const FRESH = 1500;
   // state: off | conn (cable open, nothing yet) | flow | idle (screen has no values: car off / not linked) | demo | stall (no answer) | old (firmware without LIVE)
-  const F = { on: false, g: null, dev: null, state: 'off', msg: '', last: null, t: 0, n: 0, fails: 0, hist: [], rate: 0, since: 0, info: null, run: 0, retry: 0, asked: 0 };
+  const F = { on: false, g: null, dev: null, state: 'off', msg: '', last: null, t: 0, n: 0, fails: 0, hist: [], rate: 0, since: 0, info: null, run: 0, retry: 0, asked: 0, pend: 0 };
   const viaOf = () => (F.g && F.g.via === 'ble' ? 'ble' : 'usb');
   const ecuLive = () => !!(st.ecu && st.live);
   const flowing = () => F.on && F.state === 'flow' && F.rate > 0.3;
@@ -134,9 +134,6 @@
   function start(g, dev) {
     stop(); if (!g || !g.request) return;
     F.retry = 0; F.on = true; F.g = g; F.dev = dev || null; F.state = 'conn'; F.last = null; F.n = 0; F.asked = 0; F.fails = 0; F.hist = []; F.rate = 0; F.since = Date.now(); F.info = null;
-    if (g.via === 'ble' && root.JetGaugeLink && root.JetGaugeLink.state() !== 'off') {            // Bluetooth in both directions at once would collide: the phone is either the adapter of the screen or its receiver
-      root.JetGaugeLink.stop(); toast('ปิดลิงก์จอ (โทรศัพท์เป็นอะแดปเตอร์) แล้ว — รับค่าจากจอทาง Bluetooth ทีละทิศทางเพื่อไม่ให้สัญญาณชนกัน', 6500);
-    }
     const run = ++F.run; render(); loop(g, run);
   }
   function stop() { F.run++; F.on = false; F.g = null; F.state = 'off'; F.last = null; render(); }
@@ -144,14 +141,14 @@
   function lost(g) {
     const dev = F.g === g ? F.dev : null, ble = g && g.via === 'ble'; stop();
     if (!ble || !dev || !dev.addr) return;                                                      // only the Android app knows the address to look for again; a browser needs a tap
-    const id = ++F.retry; toast('จอหลุดการเชื่อมต่อ — กำลังเชื่อม Bluetooth ใหม่…', 4000);
+    const id = ++F.retry; chip(); toast('จอหลุดการเชื่อมต่อ — กำลังเชื่อม Bluetooth ใหม่…', 4000);
     (async () => {
       for (let i = 0; i < 10 && F.retry === id; i++) {
         await sleep(6000); if (F.retry !== id || st.gauge) return;
         try { await C.connect('gauge-only', dev); } catch (e) { /* tried again below */ }
         if (st.gauge) return;
       }
-      if (F.retry === id) { F.retry = 0; toast('เชื่อมจอใหม่ไม่สำเร็จ — กดเชื่อม Bluetooth ในหน้า Setup อีกครั้ง', 6000); }
+      if (F.retry === id) { F.retry = 0; chip(); toast('เชื่อมจอใหม่ไม่สำเร็จ — กดเชื่อม Bluetooth ในหน้า Setup อีกครั้ง', 6000); }
     })();
   }
   async function disconnect() {
@@ -163,6 +160,7 @@
   /* ---------- status in Setup ---------- */
   const fmt = (k, d) => { const c = C.CH && C.CH[k]; return (c ? c.l : k) + ' ' + C.chText(d, k) + (c && c.u ? ' ' + c.u : ''); };
   function render() {
+    chip();
     const info = $('#gfInfo'), btn = $('#gfBtn'), bbtn = $('#gfBle'), imp = $('#gfImp'), box = $('#gfVals'); if (!info || !btn) return;
     const on = F.on && st.gauge === F.g, via = viaOf(), usb = !!(root.JetApp || ('serial' in navigator)), ble = !!(root.JetNative || (typeof navigator !== 'undefined' && navigator.bluetooth));
     btn.textContent = on && via === 'usb' ? '⏹ ตัดสาย USB จอ' : '🔌 เชื่อมสาย USB';
@@ -187,12 +185,29 @@
       if (d) box.innerHTML = Object.keys(d).map((k) => '<span class="gfv">' + esc(fmt(k, d)) + '</span>').join('');
     }
   }
+  // the header chip (the 📺 next to GPS): what the link to the Smart Gauge screen is doing right now
+  const CHIP = {
+    search: ['wait mid', '📺', 'CONNECT'], retry: ['wait mid', '📺', 'RETRY'], conn: ['mid', '📺', 'WAIT'], idle: ['mid', '📺', 'NO DATA'],
+    flow: ['on sync', '📺⇄', 'SYNC', 1], demo: ['mid sync', '📺⇄', 'DEMO'], stall: ['bad', '📺', 'NO REPLY'], old: ['bad', '📺', 'OLD FW'],      // [style, icon, word, 1 = the word is left out on a narrow phone: the green pulsing icon says it]
+  };
+  function chip() {
+    const b = $('#pGauge'), t = $('#tGauge'); if (!b || !t) return;
+    const live = F.on && st.gauge === F.g, k = live ? F.state : F.pend ? 'search' : F.retry ? 'retry' : null, c = k && CHIP[k];
+    if (!c) { b.className = 'chipst' + (st.gauge ? ' on' : ''); t.textContent = st.gauge ? 'GAUGE ✓' : 'GAUGE'; b.title = 'Smart Gauge'; return; }
+    b.className = 'chipst ' + c[0];
+    t.innerHTML = c[1] + '<span class="sw' + (c[3] ? ' nn' : '') + '"> ' + c[2] + '</span>';                // landscape phones show the icon only, a narrow portrait phone too when all is well (CSS)
+    const via = k === 'search' ? F.pend : k === 'retry' ? 'ble' : viaOf();
+    b.title = 'Smart Gauge · ' + (via === 'ble' ? 'Bluetooth' : 'USB') + ' · ' + c[2] + (k === 'flow' ? ' · ' + F.rate.toFixed(1) + '/s' : '');
+  }
+  function pending(via) { F.pend = via || 0; chip(); }
   function tick() {
     const now = Date.now(), h = F.hist; h.push([now, F.n]); while (h.length > 2 && now - h[0][0] > 3200) h.shift();
     const a = h[0], dt = (now - a[0]) / 1000; F.rate = F.on && dt > 0.4 ? (F.n - a[1]) / dt : 0;
+    chip();
     if ($('#mSet') && $('#mSet').classList.contains('show')) render();
   }
   setInterval(tick, 500);
+
 
   /* ---------- the screen's AFR map -> the app's AFR LOG ---------- */
   async function importAfr() {
@@ -226,5 +241,5 @@
   if ($('#gfImp')) $('#gfImp').onclick = () => importAfr().catch((e) => toast(e.message || String(e), 5000));
   render();
 
-  root.JetGaugeFeed = { start, stop, lost, disconnect, fill, state: () => F.state, active: () => F.on, via: viaOf, bleActive: () => F.on && viaOf() === 'ble', flowing, importAfr, F };
+  root.JetGaugeFeed = { start, stop, lost, disconnect, chip, pending, fill, state: () => F.state, active: () => F.on, via: viaOf, bleActive: () => F.on && viaOf() === 'ble', flowing, importAfr, F };
 })(typeof window !== 'undefined' ? window : globalThis);

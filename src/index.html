@@ -34,8 +34,6 @@
       <button class="status" id="bConnect" title="เชื่อมต่อ"><span class="dot" id="dLink"></span><span id="tLink">OFFLINE</span></button>
       <span class="chipst" id="tEcu">ECU —</span>
       <span class="chipst" id="tGps">GPS</span>
-      <button class="chipst" id="pGauge" style="background:none;cursor:pointer"><span id="tGauge">GAUGE</span></button>
-      <button class="chipst" id="pSync" hidden style="background:none;cursor:pointer" title="ข้อมูลที่ซิงค์กับจอ Smart Gauge"><span id="tSync">📺 READY</span></button>
       <span class="dot" id="dEcu" hidden></span><span class="dot" id="dGauge" hidden></span>
     </div>
     <div class="brand" id="brand" title="Jet Smart Gauge By เปรียวจูนเนอร์">
@@ -45,6 +43,7 @@
       <div class="logo">Jet Smart Gauge<small>By เปรียวจูนเนอร์</small><span class="ver">v@@VERSION@@</span></div></span>
     </div>
     <div class="hr">
+      <button class="chipst" id="pGauge" style="background:none;cursor:pointer"><span id="tGauge">GAUGE</span></button>
       <button class="mini" id="bLive">▶ LIVE</button>
       <!--DEVBTN-->
       <span class="clock" id="clock">--:--</span>
@@ -178,14 +177,8 @@
     <div class="mut" id="gfInfo" style="margin-bottom:8px"></div>
     <div id="gfVals" class="gfvals" hidden></div>
     <div class="mut" style="margin:8px 0;font-size:.82em">รอบเครื่อง ความเร็ว คันเร่ง AFR อุณหภูมิ แบตเตอรี่ ฯลฯ จากจอจะเข้า Dash กราฟ และ AFR LOG ของแอป · Bluetooth (เฟิร์มแวร์จอ v1.0.17 ขึ้นไป · ชื่อ "Jet Smart Gauge" · ปุ่ม BLE ในจอ SETUP → MORE ต้องเปิดอยู่) ไม่ต้องต่อสาย · สาย USB ใช้พอร์ตเดียวกับที่แฟลช (OTG) · ถ้าแอปต่อ OBD อยู่ด้วย ค่าจาก OBD ใช้ก่อน ค่าที่ OBD ไม่มีจะเติมจากจอ · ลองแอปโดยไม่ต่อรถ: เปิด DEMO บนจอ (SETUP → MORE → DEMO) แอปจะแสดงค่าจำลอง แต่ไม่บันทึกลง AFR LOG</div>
-    <div class="mut" style="margin:8px 0;font-size:.82em">ไม่ให้สัญญาณชนกัน: ให้ตัวเดียวต่ออะแดปเตอร์ OBD — ถ้าจอต่ออยู่ มือถือรับค่าจากจอ (อย่าต่อมือถือเข้าอะแดปเตอร์ตัวเดียวกัน เพราะอะแดปเตอร์รับได้ทีละเครื่อง) ถ้ามือถือต่ออะแดปเตอร์เอง ให้ใช้ "ลิงก์จอ" ด้านล่างส่งค่าให้จอแทน · Bluetooth ใช้ทีละทิศทาง แอปจึงปิดอีกทางให้เองเมื่อเปิดอีกทาง</div>
+    <div class="mut" style="margin:8px 0;font-size:.82em">ไม่ให้สัญญาณชนกัน: ให้ตัวเดียวต่ออะแดปเตอร์ OBD คือจอ — จอต่อรถ แล้วมือถือรับค่าจากจอ (อย่าต่อมือถือเข้าอะแดปเตอร์ตัวเดียวกัน เพราะอะแดปเตอร์รับได้ทีละเครื่อง) · ช่องทางจอ → มือถือเป็นการอ่านอย่างเดียว ไม่แตะสาย K-line / CAN จึงไม่รบกวนการอ่านรถของจอ</div>
     <div class="row"><button class="btn pri" id="gfBle">📶 เชื่อม Bluetooth</button><button class="btn" id="gfBtn">🔌 เชื่อมสาย USB</button><button class="btn" id="gfImp" hidden>⬇ นำเข้า AFR LOG จากจอ</button></div>
-  </div>
-  <h3 style="margin-top:16px">📺 ลิงก์จอ Smart Gauge</h3>
-  <div class="gsect">
-    <div class="mut" id="jlInfo" style="margin-bottom:8px"></div>
-    <div class="mut" style="margin-bottom:8px;font-size:.82em">แอปทำตัวเป็นอะแดปเตอร์ OBD ให้จอ Smart Gauge (โปรเจ็ก Jet_SmartGauge_Car) ต่อทางบลูทูธ — จอได้ค่ารอบ ความเร็ว น้ำ อากาศเข้า MAP คันเร่ง แบต ไทมิ่ง และ AFR ที่แอปอ่านจากรถอยู่ ไม่ต้องแก้หรืออัปเดตจอ</div>
-    <div class="row"><button class="btn pri" id="jlBtn">📺 เปิดลิงก์จอ Smart Gauge</button><button class="btn" id="jlSync" hidden>📋 ดูข้อมูลที่ซิงค์กับจอ</button></div>
   </div>
   <div class="row" style="margin-top:12px"><button class="btn red" id="sReset">คืนค่าเริ่มต้น</button><div class="sp"></div><button class="btn" data-close>ปิด</button><button class="btn grn" id="sSave">บันทึก</button></div>
 </div></div>
@@ -242,15 +235,6 @@
   <div class="mut" id="wfInfo" style="margin-bottom:10px"></div>
   <div id="wfList" style="max-height:48vh;overflow:auto"></div>
   <div class="row" style="margin-top:12px"><button class="btn" id="wfAgain">🔄 ค้นหาใหม่</button><button class="btn" id="wfManual">✎ ใส่ IP เอง</button><button class="btn" id="wfSet">⚙ ตั้งค่า WiFi</button><div class="sp"></div><button class="btn" data-close>ปิด</button></div>
-</div></div>
-
-<div class="modal" id="mSync"><div class="card" style="max-width:600px">
-  <h2>📺⇄📱 ข้อมูลที่ซิงค์กับจอ Smart Gauge</h2>
-  <div class="mut" id="syInfo" style="margin-bottom:10px"></div>
-  <table class="syncT"><thead><tr><th>ค่า</th><th>PID</th><th>ที่ส่งให้จอตอนนี้</th><th>จอถามแล้ว</th></tr></thead><tbody id="syBody"></tbody></table>
-  <div class="mut" id="syMiss" style="margin-top:10px;font-size:.85em"></div>
-  <div class="mut" style="margin-top:6px;font-size:.85em">ซิงค์ทางเดียว: แอปส่งค่าที่อ่านจากรถให้จอ จอไม่ได้ส่งค่าอะไรกลับมาที่แอป</div>
-  <div class="row" style="margin-top:12px"><div class="sp"></div><button class="btn" data-close>ปิด</button></div>
 </div></div>
 
 <!-- in-app dialog -->

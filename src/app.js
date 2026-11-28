@@ -100,8 +100,7 @@
     const good = s === 'OK' || s === 'SECURE' || s === 'READ';
     $('#tEcu').className = 'chipst' + (good ? ' on' : s && s !== 'OFF' ? ' mid' : '');
     $('#tEcu').textContent = 'ECU ' + (s === 'NOECU' ? 'WAIT' : s || '—');
-    $('#pGauge').className = 'chipst' + (st.gauge ? ' on' : '');
-    $('#tGauge').textContent = st.gauge ? 'GAUGE ✓' : 'GAUGE';
+    if (window.JetGaugeFeed) JetGaugeFeed.chip(); else { $('#pGauge').className = 'chipst' + (st.gauge ? ' on' : ''); $('#tGauge').textContent = st.gauge ? 'GAUGE ✓' : 'GAUGE'; }
     const bd = $('#bDemo'); if (bd) bd.classList.toggle('on', !!(t && t.kind === 'demo'));
   }
 
@@ -302,7 +301,7 @@
         const via = kind === 'gauge-only-usb' ? 'usb' : 'ble';
         if (via === 'usb' && window.JetApp && st.t && st.t.kind === 'usb') throw new Error('มือถือมีพอร์ต USB เดียว (ใช้กับสาย K-line อยู่) — ต่อเกจด้วย Bluetooth แทน');
         if (st.gauge && st.gauge !== st.t) { try { await st.gauge.close(); } catch (e) {} }
-        const g = new GaugeLink(via); if (dev && dev.addr) g.addr = dev.addr; await g.open(); st.gauge = g; g.onLost = () => { if (st.gauge === g) st.gauge = null; if (window.JetGaugeFeed) JetGaugeFeed.lost(g); pills(); toast('เกจหลุดการเชื่อมต่อ'); };
+        const g = new GaugeLink(via); if (dev && dev.addr) g.addr = dev.addr; if (window.JetGaugeFeed) JetGaugeFeed.pending(via); try { await g.open(); } finally { if (window.JetGaugeFeed) JetGaugeFeed.pending(0); } st.gauge = g; g.onLost = () => { if (st.gauge === g) st.gauge = null; if (window.JetGaugeFeed) JetGaugeFeed.lost(g); pills(); toast('เกจหลุดการเชื่อมต่อ'); };
         log('info', 'เชื่อมเกจแล้ว ' + (g.fw || '')); const live = via === 'usb' || /JET SMART GAUGE/i.test(g.fw || '');          // the Smart Gauge screen (any cable); an older gauge over Bluetooth is only for files
         toast(live ? 'เชื่อมจอ Smart Gauge แล้ว — รับค่าจากจอ' : 'เชื่อมเกจแล้ว');
         if (live && window.JetGaugeFeed) JetGaugeFeed.start(g, dev);        // v1.6.10: the screen's own values (rpm, speed, AFR ...) feed the Dash and the AFR LOG
